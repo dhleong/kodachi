@@ -1,0 +1,15 @@
+[package]
+name = "kodachi"
+version = "0.1.0"
+authors = ["Daniel Leong <me@dhleong.net>"]
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.15.0", features = ["io-util", "io-std", "macros", "rt"] }
+
+telnet = "0.1.4"
+url = "2.2.2"
+native-tls = "0.2.8"
+
+delegate = "0.6.1"
+regex = "1.5.4"
