@@ -40,8 +40,9 @@ async fn main() -> io::Result<()> {
         ))
         .await??;
     } else {
-        let stdin = StdinReader(io::stdin());
-        tokio::spawn(daemon::daemon(stdin)).await??;
+        let input = StdinReader(io::stdin());
+        let response = io::stderr();
+        tokio::spawn(daemon::daemon(input, response)).await??;
     }
     Ok(())
 }
