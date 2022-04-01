@@ -21,16 +21,14 @@ impl Daemon {
 }
 
 pub async fn daemon<TInput: BufRead, TResponse: Write>(
-    mut input: TInput,
+    input: TInput,
     mut response: TResponse,
 ) -> io::Result<()> {
     let daemon = Daemon {};
 
-    loop {
-        let mut read = String::new();
-        input.read_line(&mut read)?;
-
-        let request: Request = serde_json::from_str(&read).unwrap();
+    for read in input.lines() {
+        let raw_json = read?;
+        let request: Request = serde_json::from_str(&raw_json).unwrap();
         let channel = Channel::new(request.id, &mut response);
 
         match request.payload {
