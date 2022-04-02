@@ -1,7 +1,9 @@
 use serde::Serialize;
 
+use crate::app::Id;
+
 #[derive(Serialize)]
 #[serde(tag = "type")]
 pub enum DaemonResponse {
-    Connected { id: u64 },
+    Connecting { id: Id },
 }

@@ -3,6 +3,8 @@ use std::{
     io::{self, BufRead, Read, Stdin},
 };
 
+use connection::Uri;
+
 mod app;
 mod connection;
 mod daemon;
@@ -35,11 +37,8 @@ async fn main() -> io::Result<()> {
     let mut args = env::args_os().skip(1);
     let uri = args.next();
     if let Some(uri) = uri {
-        tokio::spawn(connection::connection(
-            uri.to_string_lossy().to_string(),
-            5656,
-        ))
-        .await??;
+        let uri = Uri::from_string(&uri.to_string_lossy())?;
+        tokio::spawn(connection::run(uri)).await??;
     } else {
         let input = StdinReader(io::stdin());
         let response = io::stderr();

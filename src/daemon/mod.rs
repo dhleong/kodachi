@@ -22,17 +22,16 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
     for read in input.lines() {
         let raw_json = read?;
         let request: Request = serde_json::from_str(&raw_json).unwrap();
-        let channel = channels.create_with_request_id(request.id);
 
+        let channel = channels.create_with_request_id(request.id);
         let local_state = state.clone();
-        println!("post-clone");
 
         match request.payload {
             DaemonCommand::Quit => break,
             DaemonCommand::Connect(data) => {
-                tokio::spawn(handlers::connect::handle(channel, local_state, data));
+                tokio::spawn(handlers::connect::handle(channel, local_state, data))
             }
-        }
+        };
     }
 
     Ok(())

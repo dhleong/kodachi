@@ -4,7 +4,7 @@ use self::connections::Connections;
 
 mod connections;
 
-type Id = u64;
+pub type Id = u64;
 
 #[derive(Default)]
 pub struct State {
