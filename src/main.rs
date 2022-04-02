@@ -3,6 +3,7 @@ use std::{
     io::{self, BufRead, Read, Stdin},
 };
 
+mod app;
 mod connection;
 mod daemon;
 mod transport;
@@ -29,7 +30,7 @@ impl BufRead for StdinReader {
     }
 }
 
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main]
 async fn main() -> io::Result<()> {
     let mut args = env::args_os().skip(1);
     let uri = args.next();
@@ -42,7 +43,7 @@ async fn main() -> io::Result<()> {
     } else {
         let input = StdinReader(io::stdin());
         let response = io::stderr();
-        tokio::spawn(daemon::daemon(input, response)).await??;
+        daemon::daemon(input, response).await?;
     }
     Ok(())
 }

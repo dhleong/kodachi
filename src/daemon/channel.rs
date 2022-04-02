@@ -31,6 +31,7 @@ impl Channel {
 
         serde_json::to_writer(&mut self.writer, &response).expect("Failed to write response");
         self.writer.write_all(b"\n").unwrap();
+        self.writer.flush().unwrap();
     }
 }
 
