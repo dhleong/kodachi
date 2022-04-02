@@ -5,7 +5,7 @@ use std::{
 
 use super::{protocol::Response, responses::DaemonResponse};
 
-struct LockedWriter(Arc<Mutex<Box<dyn Write>>>);
+struct LockedWriter(Arc<Mutex<Box<dyn Write + Send>>>);
 
 impl Write for LockedWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
@@ -35,11 +35,11 @@ impl Channel {
 }
 
 pub struct ChannelSource {
-    writer: Arc<Mutex<Box<dyn Write>>>,
+    writer: Arc<Mutex<Box<dyn Write + Send>>>,
 }
 
 impl ChannelSource {
-    pub fn new(writer: Box<dyn Write>) -> Self {
+    pub fn new(writer: Box<dyn Write + Send>) -> Self {
         Self {
             writer: Arc::new(Mutex::new(writer)),
         }
