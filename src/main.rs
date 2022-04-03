@@ -1,12 +1,9 @@
-use std::{
-    env,
-    io::{self, BufRead, Read, Stdin},
-};
+use std::io::{self, BufRead, Read, Stdin};
 
-use app::State;
-use connection::Uri;
-
+use clap::StructOpt;
+use cli::{Cli, Commands};
 mod app;
+mod cli;
 mod connection;
 mod daemon;
 mod transport;
@@ -35,16 +32,15 @@ impl BufRead for StdinReader {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let mut args = env::args_os().skip(1);
-    let uri = args.next();
-    if let Some(uri) = uri {
-        let connection = State::default().connections.create();
-        let parsed = Uri::from_string(&uri.to_string_lossy())?;
-        tokio::spawn(connection::run(parsed, connection)).await??;
-    } else {
-        let input = StdinReader(io::stdin());
-        let response = io::stderr();
-        daemon::daemon(input, response).await?;
+    let cli = Cli::parse();
+
+    match &cli.command {
+        Commands::Stdio => {
+            let input = StdinReader(io::stdin());
+            let response = io::stderr();
+            daemon::daemon(input, response).await?;
+        }
     }
+
     Ok(())
 }
