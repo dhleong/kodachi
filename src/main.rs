@@ -1,4 +1,5 @@
-use std::io::{self, BufRead, Read, Stdin};
+use std::io::{self, BufReader};
+use std::os::unix::net::UnixStream;
 
 use clap::StructOpt;
 use cli::{Cli, Commands};
@@ -9,27 +10,7 @@ mod daemon;
 mod net;
 mod transport;
 
-struct StdinReader(Stdin);
-
-impl Read for StdinReader {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.0.lock().read(buf)
-    }
-}
-
-impl BufRead for StdinReader {
-    fn read_line(&mut self, buf: &mut String) -> io::Result<usize> {
-        self.0.lock().read_line(buf)
-    }
-
-    fn fill_buf(&mut self) -> io::Result<&[u8]> {
-        panic!("Not supported");
-    }
-
-    fn consume(&mut self, amt: usize) {
-        self.0.lock().consume(amt)
-    }
-}
+use cli::stdio::StdinReader;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -37,8 +18,18 @@ async fn main() -> io::Result<()> {
 
     match &cli.command {
         Commands::Stdio => {
-            let input = StdinReader(io::stdin());
+            let input = StdinReader::stdin();
             let response = io::stderr();
+            daemon::daemon(input, response).await?;
+        }
+
+        Commands::Unix { path } => {
+            let socket = match UnixStream::connect(path) {
+                Ok(socket) => socket,
+                Err(e) => panic!("Invalid unix socket: {}", e),
+            };
+            let input = BufReader::new(socket.try_clone().unwrap());
+            let response = socket;
             daemon::daemon(input, response).await?;
         }
     }
