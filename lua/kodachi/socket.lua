@@ -42,7 +42,6 @@ function M.create(name)
 
   from_app:bind(path)
   from_app:listen(16, function ()
-    print('Received connection...')
     from_app:accept(to_app)
     socket:_on_connected()
   end)
