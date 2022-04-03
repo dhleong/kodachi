@@ -26,7 +26,7 @@ pub async fn run(uri: Uri, mut connection: ConnectionReceiver) -> io::Result<()>
     let mut stdout = io::stdout();
 
     loop {
-        match transport.read_nonblocking()? {
+        match transport.read()? {
             TelnetEvent::Data(data) => {
                 stdout.write_all(&data)?;
             }
