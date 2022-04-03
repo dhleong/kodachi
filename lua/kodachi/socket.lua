@@ -1,14 +1,32 @@
 local Socket = {}
 
 function Socket:new(name, from_app, to_app)
-  local o = { name = name, from_app = from_app, to_app = to_app}
+  local o = {
+    name = name,
+    from_app = from_app,
+    to_app = to_app,
+    to_app_queue = {},
+  }
+
   setmetatable(o, self)
   self.__index = self
   return o
 end
 
 function Socket:write(data)
-  self.to_app:write(data)
+  if self.connected then
+    self.to_app:write(data)
+  else
+    table.insert(self.to_app_queue, data)
+  end
+end
+
+function Socket:_on_connected()
+  self.connected = true
+  for _, item in ipairs(self.to_app_queue) do
+    self:write(item)
+  end
+  self.to_app_queue = {}
 end
 
 local M = {}
@@ -24,8 +42,9 @@ function M.create(name)
 
   from_app:bind(path)
   from_app:listen(16, function ()
-    from_app:accept(to_app)
     print('Received connection...')
+    from_app:accept(to_app)
+    socket:_on_connected()
   end)
 
   return socket
