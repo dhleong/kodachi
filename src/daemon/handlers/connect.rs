@@ -1,10 +1,43 @@
-use std::io;
+use std::io::{self, Write};
+
+use telnet::TelnetEvent;
+use tokio::sync::mpsc;
 
 use crate::{
-    app::LockableState,
-    connection::{self, Uri},
+    app::{connections::ConnectionReceiver, LockableState},
+    connection::Uri,
     daemon::{channel::Channel, commands, responses::DaemonResponse},
+    transport::{telnet::TelnetTransport, Transport},
 };
+
+pub fn process_connection<T: Transport, W: Write>(
+    mut transport: T,
+    mut connection: ConnectionReceiver,
+    mut output: W,
+) -> io::Result<()> {
+    loop {
+        match transport.read()? {
+            TelnetEvent::Data(data) => {
+                output.write_all(&data)?;
+            }
+            TelnetEvent::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            _ => {}
+        };
+
+        match connection.outbox.try_recv() {
+            Ok(text) => {
+                transport.write(&text.as_bytes())?;
+                transport.write(b"\r\n")?;
+            }
+            Err(mpsc::error::TryRecvError::Empty) => {}
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
 
 pub async fn handle(
     mut channel: Channel,
@@ -17,7 +50,12 @@ pub async fn handle(
 
     channel.respond(DaemonResponse::Connecting { id });
 
-    connection::run(uri, connection).await?;
+    let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
+    let stdout = io::stdout();
+
+    // TODO notify connected
+
+    process_connection(transport, connection, stdout)?;
 
     state.lock().unwrap().connections.drop(id);
 
