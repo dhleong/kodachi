@@ -68,7 +68,11 @@ function M.buf_request(request)
 
   local socket = M.sockets[vim.b.kodachi.socket]
   socket:write(to_write)
-  -- vim.fn.chansend(vim.b.kodachi.job_id, to_write)
+end
+
+function M.buf_send(text)
+  -- TODO: Get the connection ID from the buffer
+  M.buf_request { type = "Send", connection = 0, text = text }
 end
 
 return M
