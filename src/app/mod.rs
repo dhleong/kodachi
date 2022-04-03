@@ -2,7 +2,7 @@ use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
 use self::connections::Connections;
 
-mod connections;
+pub mod connections;
 
 pub type Id = u64;
 

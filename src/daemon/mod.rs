@@ -16,7 +16,7 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
     input: TInput,
     response: TResponse,
 ) -> io::Result<()> {
-    let state = LockableState::default();
+    let shared_state = LockableState::default();
     let channels = ChannelSource::new(Box::new(response));
 
     for read in input.lines() {
@@ -24,12 +24,15 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
         let request: Request = serde_json::from_str(&raw_json).unwrap();
 
         let channel = channels.create_with_request_id(request.id);
-        let local_state = state.clone();
+        let state = shared_state.clone();
 
         match request.payload {
             DaemonCommand::Quit => break,
             DaemonCommand::Connect(data) => {
-                tokio::spawn(handlers::connect::handle(channel, local_state, data))
+                tokio::spawn(handlers::connect::handle(channel, state, data));
+            }
+            DaemonCommand::Send { connection, text } => {
+                tokio::spawn(handlers::send::handle(channel, state, connection, text));
             }
         };
     }

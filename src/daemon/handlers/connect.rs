@@ -11,12 +11,13 @@ pub async fn handle(
     mut state: LockableState,
     data: commands::Connect,
 ) -> io::Result<()> {
-    let id = state.lock().unwrap().connections.allocate_id();
+    let connection = state.lock().unwrap().connections.create();
     let uri = Uri::from_string(&data.uri)?;
+    let id = connection.id;
 
     channel.respond(DaemonResponse::Connecting { id });
 
-    tokio::spawn(connection::run(uri));
+    tokio::spawn(connection::run(uri, connection));
 
     Ok(())
 }

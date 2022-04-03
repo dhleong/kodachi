@@ -1,8 +1,9 @@
 use std::io::{self, Write};
 
 use telnet::TelnetEvent;
+use tokio::sync::mpsc;
 
-use crate::transport::telnet::TelnetTransport;
+use crate::{app::connections::ConnectionReceiver, transport::telnet::TelnetTransport};
 
 pub struct Uri {
     pub host: String,
@@ -20,7 +21,7 @@ impl Uri {
     }
 }
 
-pub async fn run(uri: Uri) -> io::Result<()> {
+pub async fn run(uri: Uri, mut connection: ConnectionReceiver) -> io::Result<()> {
     let mut transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
     let mut stdout = io::stdout();
 
@@ -31,8 +32,19 @@ pub async fn run(uri: Uri) -> io::Result<()> {
             }
             TelnetEvent::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
             _ => {}
+        };
+
+        match connection.outbox.try_recv() {
+            Ok(text) => {
+                transport.write(&text.as_bytes())?;
+                transport.write(b"\r\n")?;
+            }
+            Err(mpsc::error::TryRecvError::Empty) => {}
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                break;
+            }
         }
     }
 
-    // Ok(())
+    Ok(())
 }

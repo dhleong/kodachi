@@ -3,6 +3,7 @@ use std::{
     io::{self, BufRead, Read, Stdin},
 };
 
+use app::State;
 use connection::Uri;
 
 mod app;
@@ -37,8 +38,9 @@ async fn main() -> io::Result<()> {
     let mut args = env::args_os().skip(1);
     let uri = args.next();
     if let Some(uri) = uri {
-        let uri = Uri::from_string(&uri.to_string_lossy())?;
-        tokio::spawn(connection::run(uri)).await??;
+        let connection = State::default().connections.create();
+        let parsed = Uri::from_string(&uri.to_string_lossy())?;
+        tokio::spawn(connection::run(parsed, connection)).await??;
     } else {
         let input = StdinReader(io::stdin());
         let response = io::stderr();

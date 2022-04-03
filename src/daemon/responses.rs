@@ -6,4 +6,5 @@ use crate::app::Id;
 #[serde(tag = "type")]
 pub enum DaemonResponse {
     Connecting { id: Id },
+    SendResult { sent: bool },
 }
