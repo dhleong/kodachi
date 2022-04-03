@@ -1,5 +1,6 @@
 local local_path = debug.getinfo(1, 'S').source:sub(2)
 local kodachi_root = vim.fn.fnamemodify(local_path, ':h:h:h')
+local kodachi_tmux = kodachi_root .. '/config/tmux.conf'
 local kodachi_exe = kodachi_root .. '/target/release/kodachi'
 
 ---@alias KodachiRequest { type: string }
@@ -27,7 +28,7 @@ function M.buf_connect(uri)
 
   local state = { socket = socket.name }
   local cmd = vim.tbl_flatten {
-    'tmux', 'new-session', '-n', 'kodachi',
+    M.debug and {} or { 'tmux', 'new-session', '-f', kodachi_tmux, '-n', 'kodachi' },
     M.debug and { 'cargo', 'run', '--' } or kodachi_exe,
     'unix', socket.name,
   }
@@ -37,6 +38,9 @@ function M.buf_connect(uri)
     on_exit = function (_, _, _)
       state.exited = true
       vim.b[state.bufnr].kodachi = state
+
+      -- Clean up after ourselves
+      vim.fn.delete(socket.name)
     end,
   })
 
@@ -60,7 +64,6 @@ function M.buf_request(request)
 
   local socket = M.sockets[vim.b.kodachi.socket]
   socket:write(to_write)
-  print('wrote:', to_write)
   -- vim.fn.chansend(vim.b.kodachi.job_id, to_write)
 end
 
