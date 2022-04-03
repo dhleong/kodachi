@@ -3,6 +3,7 @@ use std::io::{self, BufRead, Write};
 mod channel;
 mod commands;
 mod handlers;
+mod notifications;
 mod protocol;
 mod responses;
 

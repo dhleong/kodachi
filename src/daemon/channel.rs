@@ -1,9 +1,11 @@
 use std::{
-    io::Write,
+    io::{self, Write},
     sync::{Arc, Mutex},
 };
 
-use super::{protocol::Response, responses::DaemonResponse};
+use serde::Serialize;
+
+use super::{notifications::DaemonNotification, protocol::Response, responses::DaemonResponse};
 
 struct LockedWriter(Arc<Mutex<Box<dyn Write + Send>>>);
 
@@ -23,15 +25,23 @@ pub struct Channel {
 }
 
 impl Channel {
+    pub fn notify(&mut self, payload: DaemonNotification) {
+        self.send(&payload).unwrap();
+    }
+
     pub fn respond(&mut self, payload: DaemonResponse) {
         let response = Response {
             request_id: self.request_id,
             payload,
         };
 
-        serde_json::to_writer(&mut self.writer, &response).expect("Failed to write response");
-        self.writer.write_all(b"\n").unwrap();
-        self.writer.flush().unwrap();
+        self.send(&response).unwrap();
+    }
+
+    fn send<V: ?Sized + Serialize>(&mut self, value: &V) -> io::Result<()> {
+        serde_json::to_writer(&mut self.writer, &value).expect("Failed to write response");
+        self.writer.write_all(b"\n")?;
+        self.writer.flush()
     }
 }
 

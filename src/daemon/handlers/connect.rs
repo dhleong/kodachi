@@ -5,7 +5,9 @@ use tokio::sync::mpsc;
 
 use crate::{
     app::{connections::ConnectionReceiver, LockableState},
-    daemon::{channel::Channel, commands, responses::DaemonResponse},
+    daemon::{
+        channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
+    },
     net::Uri,
     transport::{telnet::TelnetTransport, Transport},
 };
@@ -53,7 +55,7 @@ pub async fn handle(
     let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
     let stdout = io::stdout();
 
-    // TODO notify connected
+    channel.notify(DaemonNotification::Connected { id });
 
     process_connection(transport, connection, stdout)?;
 
