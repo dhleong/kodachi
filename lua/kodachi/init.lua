@@ -52,7 +52,11 @@ function M.buf_connect(uri)
   state.bufnr = vim.fn.bufnr('%')
   vim.b.kodachi = state
 
-  M.buf_request { type = 'Connect', uri = uri }
+  local request_id = M.buf_request { type = 'Connect', uri = uri }
+  socket:await_request_id(request_id, function (response)
+    state.connection_id = response.id
+    vim.b.kodachi = state
+  end)
 
   return job_id
 end
@@ -63,16 +67,30 @@ function M.buf_request(request)
     return
   end
 
-  request.id = 1 -- TODO
+  local socket = M.sockets[vim.b.kodachi.socket]
+  request.id = socket:next_request_id()
+
   local to_write = vim.fn.json_encode(request) .. '\n'
 
-  local socket = M.sockets[vim.b.kodachi.socket]
   socket:write(to_write)
+
+  return request.id
 end
 
 function M.buf_send(text)
   -- TODO: Get the connection ID from the buffer
-  M.buf_request { type = "Send", connection = 0, text = text }
+  if not vim.b.kodachi then
+    print('Not attached to any kodachi instance.')
+    return
+  end
+
+  local connection = vim.b.kodachi.connection_id
+  if not connection then
+    print('Not connected.')
+    return
+  end
+
+  M.buf_request { type = "Send", connection = connection, text = text }
 end
 
 return M
