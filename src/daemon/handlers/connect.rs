@@ -42,7 +42,7 @@ pub fn process_connection<T: Transport, W: Write>(
 }
 
 pub async fn handle(
-    mut channel: Channel,
+    channel: Channel,
     mut state: LockableState,
     data: commands::Connect,
 ) -> io::Result<()> {
@@ -50,12 +50,12 @@ pub async fn handle(
     let uri = Uri::from_string(&data.uri)?;
     let id = connection.id;
 
-    channel.respond(DaemonResponse::Connecting { id });
+    let mut notifier = channel.respond(DaemonResponse::Connecting { id });
 
     let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
     let stdout = io::stdout();
 
-    channel.notify(DaemonNotification::Connected { id });
+    notifier.notify(DaemonNotification::Connected { id });
 
     process_connection(transport, connection, stdout)?;
 
