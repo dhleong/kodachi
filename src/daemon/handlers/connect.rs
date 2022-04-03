@@ -17,7 +17,9 @@ pub async fn handle(
 
     channel.respond(DaemonResponse::Connecting { id });
 
-    tokio::spawn(connection::run(uri, connection));
+    connection::run(uri, connection).await?;
+
+    state.lock().unwrap().connections.drop(id);
 
     Ok(())
 }

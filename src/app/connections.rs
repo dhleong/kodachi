@@ -34,6 +34,10 @@ impl Connections {
         }
     }
 
+    pub fn drop(&mut self, id: Id) {
+        self.connections.remove(&id);
+    }
+
     pub fn get_outbox(&mut self, id: Id) -> Option<mpsc::Sender<String>> {
         if let Some(conn) = self.connections.get(&id) {
             Some(conn.outbox.clone())
