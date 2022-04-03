@@ -23,12 +23,16 @@ function M.buf_connect(uri)
     vim.cmd [[ enew ]]
   end
 
+  -- NOTE: Neovim does not correctly persist output if the window resizes smaller
+  -- than the width of the text, so we use tmux to save it
+  local tmux_wrap = vim.fn.has('nvim')
+
   local socket = require'kodachi.socket'.create()
   M.sockets[socket.name] = socket
 
   local state = { socket = socket.name }
   local cmd = vim.tbl_flatten {
-    M.debug and {} or { 'tmux', 'new-session', '-f', kodachi_tmux, '-n', 'kodachi' },
+    tmux_wrap and { 'tmux', '-f', kodachi_tmux, 'new-session', '-n', 'kodachi' } or {},
     M.debug and { 'cargo', 'run', '--' } or kodachi_exe,
     'unix', socket.name,
   }
