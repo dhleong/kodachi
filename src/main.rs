@@ -2,10 +2,11 @@ use std::io::{self, BufRead, Read, Stdin};
 
 use clap::StructOpt;
 use cli::{Cli, Commands};
+
 mod app;
 mod cli;
-mod connection;
 mod daemon;
+mod net;
 mod transport;
 
 struct StdinReader(Stdin);

@@ -5,8 +5,8 @@ use tokio::sync::mpsc;
 
 use crate::{
     app::{connections::ConnectionReceiver, LockableState},
-    connection::Uri,
     daemon::{channel::Channel, commands, responses::DaemonResponse},
+    net::Uri,
     transport::{telnet::TelnetTransport, Transport},
 };
 
