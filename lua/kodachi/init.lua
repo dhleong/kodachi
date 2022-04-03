@@ -4,7 +4,10 @@ local kodachi_exe = kodachi_root .. '/target/release/kodachi'
 
 ---@alias KodachiRequest { type: string }
 
-local M = {}
+local M = {
+  debug = true,
+  sockets = {},
+}
 
 ---@param uri string
 function M.buf_connect(uri)
@@ -19,13 +22,18 @@ function M.buf_connect(uri)
     vim.cmd [[ enew ]]
   end
 
-  local state = {}
-  -- local cmd = { 'tmux', 'new-session', '-n', 'kodachi', kodachi_exe }
-  local cmd = { kodachi_exe }
+  local socket = require'kodachi.socket'.create()
+  M.sockets[socket.name] = socket
+
+  local state = { socket = socket.name }
+  local cmd = vim.tbl_flatten {
+    'tmux', 'new-session', '-n', 'kodachi',
+    M.debug and { 'cargo', 'run', '--' } or kodachi_exe,
+    'unix', socket.name,
+  }
+
   local job_id = vim.fn.termopen(cmd, {
-    on_stderr = function (_, data)
-      print(data)
-    end,
+    cwd = kodachi_root,
     on_exit = function (_, _, _)
       state.exited = true
       vim.b[state.bufnr].kodachi = state
@@ -48,7 +56,12 @@ function M.buf_request(request)
   end
 
   request.id = 1 -- TODO
-  vim.fn.chansend(vim.b.kodachi.job_id, vim.fn.json_encode(request) .. '\n')
+  local to_write = vim.fn.json_encode(request) .. '\n'
+
+  local socket = M.sockets[vim.b.kodachi.socket]
+  socket:write(to_write)
+  print('wrote:', to_write)
+  -- vim.fn.chansend(vim.b.kodachi.job_id, to_write)
 end
 
 return M
