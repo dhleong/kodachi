@@ -1,4 +1,7 @@
-use std::io::{self, BufRead, Write};
+use std::{
+    future::Future,
+    io::{self, BufRead, Write},
+};
 
 mod channel;
 mod commands;
@@ -12,6 +15,17 @@ use commands::DaemonCommand;
 use crate::app::LockableState;
 
 use self::{channel::ChannelSource, protocol::Request};
+
+fn launch<T>(handler: T)
+where
+    T: Future<Output = io::Result<()>> + Send + 'static,
+{
+    tokio::spawn(async {
+        if let Err(e) = handler.await {
+            panic!("ERR: {}", e);
+        }
+    });
+}
 
 pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
     input: TInput,
@@ -30,7 +44,7 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
         match request.payload {
             DaemonCommand::Quit => break,
             DaemonCommand::Connect(data) => {
-                tokio::spawn(handlers::connect::handle(channel, state, data));
+                launch(handlers::connect::handle(channel, state, data));
             }
             DaemonCommand::Send { connection, text } => {
                 tokio::spawn(handlers::send::handle(channel, state, connection, text));
