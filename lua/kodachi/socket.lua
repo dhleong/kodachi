@@ -77,14 +77,21 @@ end
 
 function Socket:_on_read(chunk)
   self._received_data = self._received_data .. chunk
-  if vim.endswith(self._received_data, '\n') then
-    -- TODO: Dispatch
-    local parsed = vim.json.decode(self._received_data)
-    for _, receiver in ipairs(self._receivers) do
-      receiver(parsed)
+
+  while true do
+    local line_end, _ = string.find(self._received_data, '\n', 1, true)
+    if not line_end then
+      return
+    else
+      local to_parse = string.sub(self._received_data, 1, line_end)
+      self._received_data = string.sub(self._received_data, line_end + 1)
+
+      local parsed = vim.json.decode(to_parse)
+      for _, receiver in ipairs(self._receivers) do
+        receiver(parsed)
+      end
     end
   end
-  self._received_data = ''
 end
 
 local M = {}
