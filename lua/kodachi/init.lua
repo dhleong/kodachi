@@ -52,6 +52,8 @@ function M.buf_connect(uri)
   state.job_id = job_id
   state.bufnr = vim.fn.bufnr('%')
 
+  require'kodachi.ui.window'.configure_current()
+
   local request_id = M.buf_request { type = 'Connect', uri = uri }
   socket:await_request_id(request_id, function (response)
     state.connection_id = response.id
