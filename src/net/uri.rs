@@ -2,6 +2,7 @@ use std::io;
 
 use url::Url;
 
+#[derive(Debug)]
 pub struct Uri {
     pub host: String,
     pub port: u16,
