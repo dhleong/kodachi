@@ -4,14 +4,19 @@ use tokio::sync::mpsc;
 
 use super::Id;
 
+pub enum Outgoing {
+    Text(String),
+    Disconnect,
+}
+
 #[derive(Clone)]
 pub struct Connection {
-    pub outbox: mpsc::Sender<String>,
+    pub outbox: mpsc::Sender<Outgoing>,
 }
 
 pub struct ConnectionReceiver {
     pub id: Id,
-    pub outbox: mpsc::Receiver<String>,
+    pub outbox: mpsc::Receiver<Outgoing>,
 }
 
 #[derive(Default)]
@@ -38,7 +43,7 @@ impl Connections {
         self.connections.remove(&id);
     }
 
-    pub fn get_outbox(&mut self, id: Id) -> Option<mpsc::Sender<String>> {
+    pub fn get_outbox(&mut self, id: Id) -> Option<mpsc::Sender<Outgoing>> {
         if let Some(conn) = self.connections.get(&id) {
             Some(conn.outbox.clone())
         } else {

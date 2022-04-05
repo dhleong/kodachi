@@ -46,6 +46,9 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
             DaemonCommand::Connect(data) => {
                 launch(handlers::connect::handle(channel, state, data));
             }
+            DaemonCommand::Disconnect { connection } => {
+                tokio::spawn(handlers::disconnect::handle(state, connection));
+            }
             DaemonCommand::Send { connection, text } => {
                 tokio::spawn(handlers::send::handle(channel, state, connection, text));
             }

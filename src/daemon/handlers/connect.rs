@@ -4,7 +4,10 @@ use telnet::TelnetEvent;
 use tokio::sync::mpsc;
 
 use crate::{
-    app::{connections::ConnectionReceiver, LockableState},
+    app::{
+        connections::{ConnectionReceiver, Outgoing},
+        LockableState,
+    },
     daemon::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
@@ -27,9 +30,12 @@ pub fn process_connection<T: Transport, W: Write>(
         };
 
         match connection.outbox.try_recv() {
-            Ok(text) => {
+            Ok(Outgoing::Text(text)) => {
                 transport.write(&text.as_bytes())?;
                 transport.write(b"\r\n")?;
+            }
+            Ok(Outgoing::Disconnect) => {
+                break;
             }
             Err(mpsc::error::TryRecvError::Empty) => {}
             Err(mpsc::error::TryRecvError::Disconnected) => {

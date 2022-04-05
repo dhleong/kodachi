@@ -13,5 +13,6 @@ pub enum DaemonCommand {
     Quit,
 
     Connect(Connect),
+    Disconnect { connection: Id },
     Send { connection: Id, text: String },
 }
