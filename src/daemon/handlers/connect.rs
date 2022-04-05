@@ -59,6 +59,8 @@ pub async fn handle(
 
     process_connection(transport, connection, stdout)?;
 
+    notifier.notify(DaemonNotification::Disconnected { id });
+
     state.lock().unwrap().connections.drop(id);
 
     Ok(())

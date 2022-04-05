@@ -1,3 +1,7 @@
+---@class Socket
+---@field name string
+---@field _receivers any[]
+---@field to_app any
 local Socket = {}
 
 function Socket:new(name, from_app, to_app)
@@ -98,6 +102,7 @@ local M = {}
 
 ---@param name string|nil Preferred name of the unix domain socket; if not provided
 -- or nil, `tempname()` will be used
+---@return Socket
 function M.create(name)
   local path = name or vim.fn.tempname()
   local server = vim.loop.new_pipe(false)

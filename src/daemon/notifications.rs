@@ -6,4 +6,5 @@ use crate::app::Id;
 #[serde(tag = "type")]
 pub enum DaemonNotification {
     Connected { id: Id },
+    Disconnected { id: Id },
 }

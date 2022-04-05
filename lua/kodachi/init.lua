@@ -16,8 +16,7 @@ local M = {
 function M.buf_connect(uri)
   local existing = states.current { silent = true }
   if existing then
-    if not existing.exited then
-      -- TODO: Acutally, the *daemon* is live, but we could be disconnected
+    if not existing.exited and existing.connection_id then
       print('kodachi: A connection is already live in this buffer')
       return
     end
@@ -58,6 +57,14 @@ function M.buf_connect(uri)
   socket:await_request_id(request_id, function (response)
     state.connection_id = response.id
   end)
+  socket:listen_matched_once(
+    function (event)
+      return event.type == 'Disconnected' and event.connection_id == state.connection_id
+    end,
+    function ()
+      state.connection_id = nil
+    end
+  )
 
   return job_id
 end
