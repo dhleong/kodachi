@@ -8,21 +8,7 @@ function M.connect(uri)
     return
   end
 
-  state.socket:request(
-    { type = 'Connect', uri = uri },
-    function (response)
-      state.connection_id = response.id
-    end
-  )
-
-  state.socket:listen_matched_once(
-    function (event)
-      return event.type == 'Disconnected' and event.connection_id == state.connection_id
-    end,
-    function ()
-      state.connection_id = nil
-    end
-  )
+  require'kodachi.connection'.run(state, uri)
 
   return state
 end
