@@ -1,3 +1,5 @@
+---@alias KodachiRequest { type: string }
+
 ---@class Socket
 ---@field name string
 ---@field _receivers any[]
@@ -58,12 +60,14 @@ function Socket:await_request_id(id, handler)
 end
 
 ---Submit a table to be json-encoded and sent via the socket.
+---@param message KodachiRequest
 function Socket:notify(message)
   local to_write = vim.fn.json_encode(message) .. '\n'
   self:_write(to_write)
 end
 
 ---Submit a request and provide the request response to the provided cb (if any)
+---@param request KodachiRequest
 function Socket:request(request, cb)
   -- Assign the request ID
   request.id = self._next_request_id

@@ -1,4 +1,4 @@
----@alias KodachiState { exited:boolean|nil }
+---@alias KodachiState { exited:boolean|nil, socket:Socket }
 
 local M = {
   states = {},

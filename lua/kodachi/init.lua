@@ -1,14 +1,16 @@
 local states = require'kodachi.states'
 
----@alias KodachiRequest { type: string }
-
 local M = {}
 
+---Open a connection to the given URI in the current buffer
 ---@param uri string
 function M.buf_connect(uri)
   local state = require'kodachi.ui'.ensure_window()
+  if not state then
+    return
+  end
 
-  M.buf_request(
+  state.socket:request(
     { type = 'Connect', uri = uri },
     function (response)
       state.connection_id = response.id
@@ -27,23 +29,19 @@ function M.buf_connect(uri)
   return state
 end
 
----@param request KodachiRequest
-function M.buf_request(request, cb)
-  local state = states.current()
-  if not state then
-    return
-  end
-
-  state.socket:request(request, cb)
-end
-
+---Send text to the connection associated with the current buffer
+---@param text string
 function M.buf_send(text)
   local state = states.current_connected()
   if not state then
     return
   end
 
-  M.buf_request { type = "Send", connection = state.connection_id, text = text }
+  state.socket:request {
+    type = "Send",
+    connection = state.connection_id,
+    text = text,
+  }
 end
 
 return M
