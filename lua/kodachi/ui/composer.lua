@@ -1,5 +1,9 @@
 local states = require'kodachi.states'
 
+local MIN_HEIGHT = 2
+
+local M = {}
+
 ---Fetch the KodachiState instance associated with the current buffer *if* the current buffer is a
 --composer. Otherwise, returns nil
 ---@return KodachiState|nil
@@ -20,6 +24,7 @@ local function configure_current_as_composer()
   vim.bo.buftype = 'nofile'
   vim.bo.bufhidden = 'hide'
   vim.bo.swapfile = false
+  vim.wo.winfixheight = true
 
   -- Handle submitting
   vim.cmd [[ inoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr> ]]
@@ -28,22 +33,28 @@ local function configure_current_as_composer()
   -- Support inserting newlines
   vim.cmd [[ inoremap <buffer> <s-cr> <cr> ]]
   vim.cmd [[ inoremap <buffer> <a-cr> <cr> ]]
-
-  -- TODO: Auto-resize buffer as text is entered
-
-  -- Hide the window on leave
-  -- FIXME: This is not correct; with this method we will need to reconfigure this autogroup every
-  -- time we enter a different kodachi composer. We *probably* want to set a filetype and have a
-  -- global augroup for that filetype
-  vim.cmd [[
-    augroup KodachiComposers
-      autocmd!
-      autocmd BufLeave <buffer> hide
-    augroup KodachiComposers
-  ]]
 end
 
-local M = {}
+local function measure_line_width(linenr)
+  return vim.fn.virtcol { linenr, '$' } - 1
+end
+
+local function on_composer_buf_entered()
+  vim.cmd [[
+    augroup KodachiComposer
+      autocmd!
+
+      autocmd TextChanged <buffer> lua require'kodachi.ui.composer'.on_change()
+      autocmd TextChangedI <buffer> lua require'kodachi.ui.composer'.on_change()
+
+      " Hide the window on leave:
+      autocmd BufLeave <buffer> hide
+    augroup KodachiComposer
+  ]]
+
+  -- Resize based on text in buffer
+  M.on_change()
+end
 
 ---Jump to the composer window, if any is available in the current tabpage for the KodachiState
 --associated with the current buffer, else create a new composer and enter that. This function is a
@@ -74,8 +85,7 @@ function M.enter_or_create(opts)
     configure_current_as_composer()
   end
 
-  -- TODO: Resize based on text in buffer
-  vim.cmd [[ resize 1 ]]
+  on_composer_buf_entered()
 
   if config.insert then
     vim.cmd [[ startinsert ]]
@@ -96,6 +106,15 @@ function M.clear()
   end
 end
 
+function M.compute_height()
+  local win_width = vim.fn.winwidth(0)
+  local height = 0
+  for i=1, vim.fn.line('$') do
+    height = height + vim.fn.ceil(measure_line_width(i) / win_width)
+  end
+  return vim.fn.max { MIN_HEIGHT, height + 1 }
+end
+
 ---@param opts { clear:boolean }|nil
 function M.hide(opts)
   local state = state_composer()
@@ -108,6 +127,14 @@ function M.hide(opts)
     else
       vim.cmd [[ hide ]]
     end
+  end
+end
+
+function M.on_change()
+  -- Ensure the current window is sized based on the height of its text
+  local buf_height = M.compute_height()
+  if buf_height ~= vim.fn.winheight(0) then
+    vim.cmd('resize ' .. buf_height)
   end
 end
 
