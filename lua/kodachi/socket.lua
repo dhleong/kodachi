@@ -20,12 +20,6 @@ function Socket:new(name, from_app, to_app)
   return o
 end
 
-function Socket:next_request_id()
-  local id = self._next_request_id
-  self._next_request_id = id + 1
-  return id
-end
-
 function Socket:listen(handler)
   table.insert(self._receivers, handler)
 end
@@ -63,7 +57,30 @@ function Socket:await_request_id(id, handler)
   self:listen_matched_once(matcher, handler)
 end
 
-function Socket:write(data)
+---Submit a table to be json-encoded and sent via the socket.
+function Socket:notify(message)
+  local to_write = vim.fn.json_encode(message) .. '\n'
+  self:_write(to_write)
+end
+
+---Submit a request and provide the request response to the provided cb (if any)
+function Socket:request(request, cb)
+  -- Assign the request ID
+  request.id = self._next_request_id
+  self._next_request_id = request.id + 1
+
+  -- Submit the request:
+  self:notify(request)
+
+  if cb then
+    self:await_request_id(request.id, cb)
+  end
+
+  return request.id
+end
+
+---Raw, low-level data-writing method
+function Socket:_write(data)
   if self.connected then
     self.to_app:write(data)
   else
@@ -74,7 +91,7 @@ end
 function Socket:_on_connected()
   self.connected = true
   for _, item in ipairs(self._to_app_queue) do
-    self:write(item)
+    self:_write(item)
   end
   self._to_app_queue = {}
 end
