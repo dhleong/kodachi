@@ -122,7 +122,7 @@ function M.submit()
 
   M.clear()
 
-  require'kodachi'.buf_send(text)
+  state:send(text)
 end
 
 return M
