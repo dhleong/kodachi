@@ -32,9 +32,9 @@ function M.with_connection(uri, on_connection)
       function (message)
         return message.type == 'Connected'
       end,
-      function ()
+      vim.schedule_wrap(function ()
         on_connection(state)
-      end
+      end)
     )
   else
     -- Already connected to this URI
