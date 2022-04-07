@@ -1,5 +1,6 @@
 ---@class KodachiState
 ---@field connection_id number|nil
+---@field uri string|nil
 ---@field exited boolean|nil
 ---@field socket Socket
 local KodachiState = {}

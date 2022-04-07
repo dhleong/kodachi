@@ -12,8 +12,12 @@ function M.ensure_window()
       return
     end
 
-    -- Reuse the window
+    -- Reuse the window with a new buffer
     vim.cmd [[ enew ]]
+  elseif vim.bo.modified or vim.fn.bufname('%') ~= '' then
+    -- No existing state in this buffer, and the buffer is modified or associated
+    -- with a file on disk; go ahead and open a split
+    vim.cmd [[ vsplit | enew ]]
   end
 
   local socket = require'kodachi.socket'.create()
