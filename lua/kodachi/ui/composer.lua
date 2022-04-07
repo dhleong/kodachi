@@ -4,6 +4,12 @@ local MIN_HEIGHT = 2
 
 local M = {}
 
+local function feed_backspace()
+  -- Use backspace to ensure we're starting from scratch
+  local keys = vim.api.nvim_replace_termcodes('<bs>', true, false, true)
+  vim.api.nvim_feedkeys(keys, 'n', true)
+end
+
 ---Fetch the KodachiState instance associated with the current buffer *if* the current buffer is a
 --composer. Otherwise, returns nil
 ---@return KodachiState|nil
@@ -88,7 +94,8 @@ function M.enter_or_create(opts)
   on_composer_buf_entered()
 
   if config.insert then
-    vim.cmd [[ startinsert ]]
+    vim.cmd [[ startinsert! ]]
+    feed_backspace()
   end
 end
 
@@ -103,6 +110,10 @@ function M.clear()
       let &undolevels = old_undolevels
       unlet old_undolevels
     ]]
+
+    if vim.fn.mode() == 'i' then
+      feed_backspace()
+    end
   end
 end
 
