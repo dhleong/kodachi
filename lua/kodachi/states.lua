@@ -1,4 +1,4 @@
----@alias KodachiState { exited:boolean|nil, socket:Socket }
+local KodachiState = require'kodachi.state'
 
 local M = {
   states = {},
@@ -7,7 +7,7 @@ local M = {
 ---@param initial_state KodachiState
 ---@return KodachiState
 function M.create_for_buf(initial_state)
-  local state = initial_state or {}
+  local state = KodachiState:new(initial_state or {})
   rawset(M.states, vim.fn.bufnr('%'), state)
   return state
 end
