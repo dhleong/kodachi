@@ -20,15 +20,14 @@ end
 -- If called when a connection exists for another URI, this function is a nop
 -- (and the callback will not be called).
 function M.with_connection(uri, on_connection)
-  local state = require'kodachi.ui'.ensure_window()
-  if not state then
-    return
-  end
+  local state = require'kodachi.states'.current { silent = true }
 
-  if state.connection_id and state.uri and state.uri ~= uri then
+  if state and state.connection_id and state.uri and state.uri ~= uri then
+    -- Already connected, but to another URI
     return
-  elseif not state.connection_id then
-    M.connect(uri)
+  elseif not (state and state.connection_id) then
+    -- Not connected yet
+    state = M.connect(uri)
     state.socket:listen_matched_once(
       function (message)
         return message.type == 'Connected'
@@ -38,6 +37,7 @@ function M.with_connection(uri, on_connection)
       end
     )
   else
+    -- Already connected to this URI
     on_connection(state)
   end
 end
