@@ -8,7 +8,8 @@ local M = {
 ---@return KodachiState
 function M.create_for_buf(initial_state)
   local state = KodachiState:new(initial_state or {})
-  rawset(M.states, vim.fn.bufnr('%'), state)
+  state.bufnr = vim.fn.bufnr('%')
+  rawset(M.states, state.bufnr, state)
   return state
 end
 
