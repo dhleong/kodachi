@@ -1,5 +1,5 @@
 local local_path = debug.getinfo(1, 'S').source:sub(2)
-local kodachi_root = vim.fn.fnamemodify(local_path, ':h:h:h')
+local kodachi_root = vim.fn.fnamemodify(local_path, ':h:h:h:h')
 local kodachi_tmux = kodachi_root .. '/config/tmux.conf'
 local kodachi_exe = kodachi_root .. '/target/release/kodachi'
 
