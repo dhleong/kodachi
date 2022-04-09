@@ -1,9 +1,12 @@
+---@alias KodachiEvent 'connected'|'disconnected'
+
 ---@class KodachiState
 ---@field bufnr number
 ---@field connection_id number|nil
 ---@field uri string|nil
 ---@field exited boolean|nil
 ---@field socket Socket
+---@field _events any|nil
 ---@field _mappings any
 local KodachiState = {}
 
@@ -29,6 +32,31 @@ function KodachiState:map(lhs, rhs)
       silent = true,
     }
   )
+end
+
+---Register an event handler
+---@param event KodachiEvent
+function KodachiState:on(event, handler)
+  if not self._events then
+    self._events = {}
+    self.socket:listen(function (message)
+      local events = self._events[string.lower(message.type)]
+      if events then
+        vim.schedule(function ()
+          for _, saved_handler in ipairs(events) do
+            saved_handler(message)
+          end
+        end)
+      end
+    end)
+
+    -- Special cases:
+    if event == 'connected' and self.connection_id then
+      handler { id = self.connection_id }
+    end
+  end
+
+  self._events[event] = handler
 end
 
 ---Send some text to the connection associated with this state
