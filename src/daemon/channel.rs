@@ -8,10 +8,14 @@ use serde::Serialize;
 use super::{notifications::DaemonNotification, protocol::Response, responses::DaemonResponse};
 
 #[derive(Clone)]
-struct LockedWriter(Arc<Mutex<Box<dyn Write + Send>>>);
+struct LockedWriter(Arc<Mutex<Box<dyn Write + Send>>>, Arc<Mutex<()>>);
 
 impl LockedWriter {
     fn write_json<V: ?Sized + Serialize>(&mut self, value: &V) -> io::Result<()> {
+        // Lock the shared resource to write the entire value
+        let lock_clone = self.clone();
+        let _lock = lock_clone.1.lock().unwrap();
+
         serde_json::to_writer(&mut self.clone(), &value).expect("Failed to write response");
         self.write_all(b"\n")?;
         self.flush()
@@ -64,13 +68,13 @@ impl RespondedChannel {
 }
 
 pub struct ChannelSource {
-    writer: Arc<Mutex<Box<dyn Write + Send>>>,
+    writer: LockedWriter,
 }
 
 impl ChannelSource {
     pub fn new(writer: Box<dyn Write + Send>) -> Self {
         Self {
-            writer: Arc::new(Mutex::new(writer)),
+            writer: LockedWriter(Arc::new(Mutex::new(writer)), Arc::new(Mutex::new(()))),
         }
     }
 }
@@ -79,7 +83,7 @@ impl ChannelSource {
     pub fn create_with_request_id(&self, request_id: u64) -> Channel {
         Channel {
             request_id,
-            writer: LockedWriter(self.writer.clone()),
+            writer: self.writer.clone(),
         }
     }
 }
