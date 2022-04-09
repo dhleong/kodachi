@@ -111,9 +111,13 @@ function Socket:_on_read(chunk)
       local to_parse = string.sub(self._received_data, 1, line_end)
       self._received_data = string.sub(self._received_data, line_end + 1)
 
-      local parsed = vim.json.decode(to_parse)
-      for _, receiver in ipairs(self._receivers) do
-        receiver(parsed)
+      local ok, result = pcall(vim.json.decode, to_parse)
+      if ok then
+        for _, receiver in ipairs(self._receivers) do
+          receiver(result)
+        end
+      else
+        print('[kodachi] Failed to parse message:', to_parse, result)
       end
     end
   end
