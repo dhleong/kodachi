@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use telnet::TelnetEvent;
+use telnet::Event;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -22,10 +22,10 @@ pub fn process_connection<T: Transport, W: Write>(
 ) -> io::Result<()> {
     loop {
         match transport.read()? {
-            TelnetEvent::Data(data) => {
+            Event::Data(data) => {
                 output.write_all(&data)?;
             }
-            TelnetEvent::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
             _ => {}
         };
 

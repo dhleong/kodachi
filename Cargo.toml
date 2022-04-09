@@ -7,7 +7,7 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.15.0", features = ["io-util", "io-std", "macros", "rt-multi-thread", "sync"] }
 
-telnet = "0.1.4"
+telnet = "0.2.1"
 url = "2.2.2"
 native-tls = "0.2.8"
 

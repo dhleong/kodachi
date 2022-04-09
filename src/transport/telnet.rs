@@ -1,6 +1,6 @@
 use std::{io, net::TcpStream};
 
-use telnet::{Telnet, TelnetEvent};
+use telnet::{self, Telnet};
 
 use super::Transport;
 
@@ -18,7 +18,7 @@ impl TelnetTransport {
 }
 
 impl Transport for TelnetTransport {
-    fn read(&mut self) -> io::Result<TelnetEvent> {
+    fn read(&mut self) -> io::Result<telnet::Event> {
         self.telnet.read_nonblocking()
     }
 
