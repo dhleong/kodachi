@@ -23,7 +23,7 @@ function KodachiState:map(lhs, rhs)
   self._mappings[lhs] = rhs
   vim.api.nvim_buf_set_keymap(
     self.bufnr, 'n', lhs,
-    "<cmd>lua require'kodachi.states'[" .. self.bufnr .. "]:_perform_map('" .. lhs .. "')<cr>",
+    self:_state_method_cmd("_perform_map('" .. lhs .. "')"),
     {
       noremap = true,
       silent = true,
@@ -59,6 +59,14 @@ function KodachiState:_perform_map(lhs)
   elseif type(rhs) == 'function' then
     rhs(self)
   end
+end
+
+function KodachiState:_state_method_call(method_call)
+  return "require'kodachi.states'[" .. self.bufnr .. "]:" .. method_call
+end
+
+function KodachiState:_state_method_cmd(method_call)
+  return '<cmd>lua ' .. self:_state_method_call(method_call) .. '<cr>'
 end
 
 return KodachiState
