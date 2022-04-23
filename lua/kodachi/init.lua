@@ -40,6 +40,7 @@ function M.with_connection(uri, on_connection)
     )
   else
     -- Already connected to this URI
+    state:cleanup()
     on_connection(state)
   end
 end

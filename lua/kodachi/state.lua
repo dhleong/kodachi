@@ -1,4 +1,17 @@
+local Handlers = require 'kodachi.handlers'
+local matchers = require 'kodachi.matchers'
+
 ---@alias KodachiEvent 'connected'|'disconnected'
+
+---@param state KodachiState
+---@param handler fun(socket:Socket)
+local function with_socket(state, handler)
+  if not state.connection_id then
+    return false
+  end
+
+  return handler(state.socket)
+end
 
 ---@class KodachiState
 ---@field bufnr number
@@ -8,13 +21,19 @@
 ---@field socket Socket
 ---@field _events any|nil
 ---@field _mappings any
+---@field _triggers Handlers
 local KodachiState = {}
 
 function KodachiState:new(o)
   o._mappings = o._mappings or {}
+  o._triggers = o._triggers or Handlers:new()
   setmetatable(o, self)
   self.__index = self
   return o
+end
+
+function KodachiState:cleanup()
+  self._triggers:clear()
 end
 
 ---Create a keymapping in normal mode for the buffer associated with this state. These mappings
@@ -59,20 +78,29 @@ function KodachiState:on(event, handler)
   self._events[event] = handler
 end
 
+---@param matcher MatcherSpec|string
+function KodachiState:trigger(matcher, handler)
+  matcher = matchers.inflate(matcher)
+  return with_socket(self, function (socket)
+    local id = self._triggers:insert(handler)
+    socket:request {
+      type = "Trigger",
+      matcher = matcher,
+      handler_id = id,
+    }
+  end)
+end
+
 ---Send some text to the connection associated with this state
 ---@param text string
 function KodachiState:send(text)
-  if not self.connection_id then
-    return false
-  end
-
-  self.socket:request {
-    type = "Send",
-    connection = self.connection_id,
-    text = text,
-  }
-
-  return true
+  return with_socket(self, function (socket)
+    socket:request {
+      type = "Send",
+      connection = self.connection_id,
+      text = text,
+    }
+  end)
 end
 
 function KodachiState:_perform_map(lhs)
