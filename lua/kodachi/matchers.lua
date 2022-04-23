@@ -19,7 +19,7 @@ end
 ---@return MatcherSpec
 function M.regex(pattern)
   return {
-    type = 'regex',
+    type = 'Regex',
     source = pattern,
   }
 end
@@ -29,7 +29,7 @@ end
 ---@return MatcherSpec
 function M.simple(pattern)
   return {
-    type = 'simple',
+    type = 'Simple',
     source = pattern,
   }
 end
