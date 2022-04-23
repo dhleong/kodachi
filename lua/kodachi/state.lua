@@ -34,6 +34,12 @@ end
 function KodachiState:cleanup()
   if self._triggers then
     self._triggers:clear()
+    if self.socket and self.connection_id then
+      self.socket:notify {
+        type = "Clear",
+        connection = self.connection_id,
+      }
+    end
   end
 end
 
