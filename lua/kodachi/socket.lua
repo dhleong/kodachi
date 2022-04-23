@@ -22,6 +22,7 @@ function Socket:new(name, from_app, to_app)
   return o
 end
 
+---@param handler fun(message:KodachiRequest)
 function Socket:listen(handler)
   table.insert(self._receivers, handler)
 end

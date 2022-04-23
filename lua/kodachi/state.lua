@@ -21,19 +21,20 @@ end
 ---@field socket Socket
 ---@field _events any|nil
 ---@field _mappings any
----@field _triggers Handlers
+---@field _triggers Handlers|nil
 local KodachiState = {}
 
 function KodachiState:new(o)
   o._mappings = o._mappings or {}
-  o._triggers = o._triggers or Handlers:new()
   setmetatable(o, self)
   self.__index = self
   return o
 end
 
 function KodachiState:cleanup()
-  self._triggers:clear()
+  if self._triggers then
+    self._triggers:clear()
+  end
 end
 
 ---Create a keymapping in normal mode for the buffer associated with this state. These mappings
@@ -82,9 +83,23 @@ end
 function KodachiState:trigger(matcher, handler)
   matcher = matchers.inflate(matcher)
   return with_socket(self, function (socket)
+    if not self._triggers then
+      self._triggers = Handlers:new()
+      socket:listen(function (message)
+        if message.type == 'TriggerFired' then
+          local triggered_handler = self._triggers:get(message.trigger)
+          if triggered_handler then
+            vim.schedule(function ()
+              triggered_handler(message.value)
+            end)
+          end
+        end
+      end)
+    end
+
     local id = self._triggers:insert(handler)
     socket:request {
-      type = "Trigger",
+      type = "RegisterTrigger",
       matcher = matcher,
       handler_id = id,
     }
