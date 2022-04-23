@@ -86,7 +86,7 @@ function KodachiState:trigger(matcher, handler)
     if not self._triggers then
       self._triggers = Handlers:new()
       socket:listen(function (message)
-        if message.type == 'TriggerFired' then
+        if message.type == 'TriggerFired' and message.connection == self.connection_id then
           local triggered_handler = self._triggers:get(message.trigger)
           if triggered_handler then
             vim.schedule(function ()
@@ -100,6 +100,7 @@ function KodachiState:trigger(matcher, handler)
     local id = self._triggers:insert(handler)
     socket:request {
       type = "RegisterTrigger",
+      connection = self.connection_id,
       matcher = matcher,
       handler_id = id,
     }
