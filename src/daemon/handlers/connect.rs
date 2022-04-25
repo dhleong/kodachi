@@ -1,5 +1,6 @@
 use std::io::{self, Write};
 
+use bytes::BytesMut;
 use telnet::Event;
 use tokio::sync::mpsc;
 
@@ -9,7 +10,10 @@ use crate::{
         LockableState,
     },
     daemon::{
-        channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
+        channel::{Channel, RespondedChannel},
+        commands,
+        notifications::DaemonNotification,
+        responses::DaemonResponse,
     },
     net::Uri,
     transport::{telnet::TelnetTransport, Transport},
@@ -18,12 +22,20 @@ use crate::{
 pub fn process_connection<T: Transport, W: Write>(
     mut transport: T,
     mut connection: ConnectionReceiver,
+    mut notifier: RespondedChannel,
     mut output: W,
-) -> io::Result<()> {
+) -> io::Result<RespondedChannel> {
     loop {
         match transport.read()? {
             Event::Data(data) => {
-                output.write_all(&data)?;
+                let r: &[u8] = &data;
+                let wrapped = BytesMut::from(r);
+                let processed = connection.shared_state.lock().unwrap().processor.process(
+                    wrapped,
+                    connection.id,
+                    &mut notifier,
+                );
+                output.write_all(&processed)?;
             }
             Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
             _ => {}
@@ -44,7 +56,7 @@ pub fn process_connection<T: Transport, W: Write>(
         }
     }
 
-    Ok(())
+    Ok(notifier)
 }
 
 pub async fn handle(
@@ -63,7 +75,7 @@ pub async fn handle(
 
     notifier.notify(DaemonNotification::Connected { id });
 
-    process_connection(transport, connection, stdout)?;
+    notifier = process_connection(transport, connection, notifier, stdout)?;
 
     notifier.notify(DaemonNotification::Disconnected { id });
 

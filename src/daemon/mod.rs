@@ -3,7 +3,7 @@ use std::{
     io::{self, BufRead, Write},
 };
 
-mod channel;
+pub mod channel;
 mod commands;
 mod handlers;
 mod notifications;
@@ -51,6 +51,20 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
             }
             DaemonCommand::Send { connection, text } => {
                 tokio::spawn(handlers::send::handle(channel, state, connection, text));
+            }
+
+            DaemonCommand::Clear { connection } => {
+                // TODO
+            }
+
+            DaemonCommand::RegisterTrigger {
+                connection,
+                matcher,
+                handler_id,
+            } => {
+                tokio::spawn(handlers::register_trigger::handle(
+                    state, connection, matcher, handler_id,
+                ));
             }
         };
     }

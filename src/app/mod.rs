@@ -3,6 +3,8 @@ use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 use self::connections::Connections;
 
 pub mod connections;
+pub mod matchers;
+pub mod processing;
 
 pub type Id = u64;
 
