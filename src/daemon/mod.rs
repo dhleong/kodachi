@@ -63,7 +63,7 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
                 handler_id,
             } => {
                 tokio::spawn(handlers::register_trigger::handle(
-                    state, connection, matcher, handler_id,
+                    channel, state, connection, matcher, handler_id,
                 ));
             }
         };

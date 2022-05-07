@@ -1,6 +1,10 @@
-use crate::app::{matchers::MatcherSpec, Id, LockableState};
+use crate::{
+    app::{matchers::MatcherSpec, Id, LockableState},
+    daemon::{channel::Channel, responses::DaemonResponse},
+};
 
 pub async fn handle(
+    channel: Channel,
     mut state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
@@ -13,5 +17,16 @@ pub async fn handle(
             return;
         };
     let mut connection = connection_ref.lock().unwrap();
-    connection.processor.register(handler_id, matcher);
+
+    let compiled = match matcher.try_into() {
+        Ok(compiled) => compiled,
+        Err(e) => {
+            channel.respond(DaemonResponse::ErrorResult {
+                error: format!("{:?}", e).to_string(),
+            });
+            return;
+        }
+    };
+
+    connection.processor.register(handler_id, compiled);
 }

@@ -1,13 +1,12 @@
 use bytes::{BufMut, BytesMut};
 use crossterm::{
     cursor::{RestorePosition, SavePosition},
-    execute,
     terminal::{Clear, ClearType},
 };
 
 use crate::{
     app::{
-        matchers::{MatchResult, MatcherSpec},
+        matchers::{MatchResult, Matcher},
         Id,
     },
     daemon::channel::RespondedChannel,
@@ -18,7 +17,7 @@ use super::ansi::Ansi;
 const NEWLINE_BYTE: u8 = b'\n';
 
 struct RegisteredMatcher {
-    matcher: MatcherSpec, // TODO compiled Matcher
+    matcher: Matcher,
     handler: Id,
 }
 
@@ -88,14 +87,22 @@ impl TextProcessor {
         return result;
     }
 
-    // TODO compiled Matcher
-    pub fn register(&mut self, handler: Id, matcher: MatcherSpec) {
+    pub fn register(&mut self, handler: Id, matcher: Matcher) {
         self.matchers.push(RegisteredMatcher { matcher, handler })
     }
 
     fn perform_match(&mut self, mut to_match: Ansi) -> MatchResult {
-        // TODO: Do The Thing.
-        MatchResult::Ignored(to_match)
+        for m in &self.matchers {
+            to_match = match m.matcher.try_match(to_match) {
+                MatchResult::Ignored(ansi) => ansi,
+                consumed => {
+                    // TODO notify about the match
+                    return consumed;
+                }
+            }
+        }
+
+        return MatchResult::Ignored(to_match);
     }
 }
 
