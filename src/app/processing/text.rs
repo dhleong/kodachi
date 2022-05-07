@@ -52,10 +52,7 @@ impl TextProcessor {
             let mut to_emit = BytesMut::with_capacity(self.pending_line.len() + 8);
             if !self.saving_position {
                 self.saving_position = true;
-
-                let mut writer = to_emit.writer();
-                execute!(writer, SavePosition).expect("Failed to write ansi");
-                to_emit = writer.into_inner();
+                crate::write_ansi!(to_emit, SavePosition);
             }
             to_emit.put(self.pending_line.take());
             to_emit
@@ -74,10 +71,11 @@ impl TextProcessor {
                         self.saving_position = false;
 
                         let mut to_emit = BytesMut::with_capacity(remaining.len() + 8);
-                        let mut writer = to_emit.writer();
-                        execute!(writer, RestorePosition, Clear(ClearType::FromCursorDown))
-                            .expect("Failed to write ansi");
-                        to_emit = writer.into_inner();
+                        crate::write_ansi!(
+                            to_emit,
+                            RestorePosition,
+                            Clear(ClearType::FromCursorDown)
+                        );
                         to_emit.put(remaining.into_inner());
                         to_emit.into()
                     } else {
@@ -99,4 +97,14 @@ impl TextProcessor {
         // TODO: Do The Thing.
         MatchResult::Ignored(to_match)
     }
+}
+
+#[macro_export]
+macro_rules! write_ansi {
+    ($bytes:expr $(, $command:expr)* $(,)?) => {{
+        let mut writer = $bytes.writer();
+        ::crossterm::queue!(writer $(, $command)+)
+            .expect("Failed to write ansi");
+        $bytes = writer.into_inner();
+    }}
 }
