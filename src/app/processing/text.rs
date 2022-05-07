@@ -36,7 +36,7 @@ impl TextProcessor {
         _connection_id: Id, // TODO
         _notifier: &mut RespondedChannel,
     ) -> BytesMut {
-        // TODO: Read up until a newline from text; push that onto pending_line
+        // Read up until a newline from text; push that onto pending_line
         let has_full_line =
             if let Some(newline_pos) = text.iter().position(|ch| *ch == NEWLINE_BYTE) {
                 self.pending_line.put_slice(&text[0..newline_pos]);
