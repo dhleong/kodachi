@@ -28,6 +28,14 @@ impl Into<BytesMut> for Ansi {
 }
 
 impl Ansi {
+    pub fn from_bytes(bytes: BytesMut) -> Self {
+        Self(bytes)
+    }
+
+    pub fn into_inner(self) -> BytesMut {
+        self.0
+    }
+
     pub fn put_slice(&mut self, bytes: &[u8]) {
         self.0.put_slice(bytes)
     }
