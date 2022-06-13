@@ -2,6 +2,7 @@ use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
 use self::connections::Connections;
 
+pub mod clearable;
 pub mod connections;
 pub mod matchers;
 pub mod processing;

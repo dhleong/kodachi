@@ -54,7 +54,7 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
             }
 
             DaemonCommand::Clear { connection } => {
-                // TODO
+                tokio::spawn(handlers::clear::handle(state, connection));
             }
 
             DaemonCommand::RegisterTrigger {

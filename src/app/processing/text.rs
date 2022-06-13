@@ -6,6 +6,7 @@ use crossterm::{
 
 use crate::{
     app::{
+        clearable::Clearable,
         matchers::{MatchResult, Matcher},
         Id,
     },
@@ -103,6 +104,12 @@ impl TextProcessor {
         }
 
         return MatchResult::Ignored(to_match);
+    }
+}
+
+impl Clearable for TextProcessor {
+    fn clear(&mut self) {
+        self.matchers.clear();
     }
 }
 
