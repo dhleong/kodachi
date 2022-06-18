@@ -9,8 +9,8 @@ impl Deref for Ansi {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        // TODO Strip ANSI codes
-        ""
+        // TODO strip ANSI codes
+        std::str::from_utf8(&self.0).unwrap()
     }
 }
 
@@ -27,9 +27,19 @@ impl Into<BytesMut> for Ansi {
     }
 }
 
+impl From<&str> for Ansi {
+    fn from(source: &str) -> Self {
+        Self::from_bytes(BytesMut::from(source))
+    }
+}
+
 impl Ansi {
     pub fn from_bytes(bytes: BytesMut) -> Self {
         Self(bytes)
+    }
+
+    pub fn from<T: Into<BytesMut>>(bytes: T) -> Self {
+        Self::from_bytes(bytes.into())
     }
 
     pub fn into_inner(self) -> BytesMut {

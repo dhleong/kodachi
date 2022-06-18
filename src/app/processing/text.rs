@@ -82,6 +82,10 @@ impl TextProcessor {
                         remaining.into()
                     }
                 }
+
+                MatchResult::Matched { .. } => {
+                    todo!();
+                }
             }
         };
 
