@@ -11,6 +11,7 @@ use crate::{
         Id,
     },
     daemon::channel::RespondedChannel,
+    daemon::notifications::DaemonNotification,
 };
 
 use super::ansi::Ansi;
@@ -34,7 +35,7 @@ impl TextProcessor {
         &mut self,
         text: BytesMut,
         _connection_id: Id, // TODO
-        _notifier: &mut RespondedChannel,
+        notifier: &mut RespondedChannel,
     ) -> BytesMut {
         // Read up until a newline from text; push that onto pending_line
         let has_full_line =
@@ -64,7 +65,8 @@ impl TextProcessor {
 
             // TODO It might be better if we could avoid a dependency on RespondedChannel here, and
             // emit results rather than sending them directly...
-            match self.perform_match(Ansi::from_bytes(to_match)) {
+            let (handler, result) = self.perform_match(Ansi::from_bytes(to_match));
+            match result {
                 MatchResult::Ignored(to_emit) => to_emit.into(),
                 MatchResult::Consumed { remaining } => {
                     if self.saving_position {
@@ -83,8 +85,13 @@ impl TextProcessor {
                     }
                 }
 
-                MatchResult::Matched { .. } => {
-                    todo!();
+                MatchResult::Matched { remaining, .. } => {
+                    if let Some(handler) = handler {
+                        // TODO include variables
+                        notifier.notify(DaemonNotification::TriggerMatched { handler });
+                    }
+
+                    remaining.into()
                 }
             }
         };
@@ -96,18 +103,18 @@ impl TextProcessor {
         self.matchers.push(RegisteredMatcher { matcher, handler })
     }
 
-    fn perform_match(&mut self, mut to_match: Ansi) -> MatchResult {
+    fn perform_match(&mut self, mut to_match: Ansi) -> (Option<Id>, MatchResult) {
         for m in &self.matchers {
             to_match = match m.matcher.try_match(to_match) {
                 MatchResult::Ignored(ansi) => ansi,
-                consumed => {
+                matched => {
                     // TODO notify about the match
-                    return consumed;
+                    return (Some(m.handler), matched);
                 }
             }
         }
 
-        return MatchResult::Ignored(to_match);
+        return (None, MatchResult::Ignored(to_match));
     }
 }
 

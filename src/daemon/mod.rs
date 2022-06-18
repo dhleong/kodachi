@@ -6,7 +6,7 @@ use std::{
 pub mod channel;
 mod commands;
 mod handlers;
-mod notifications;
+pub mod notifications;
 mod protocol;
 mod responses;
 

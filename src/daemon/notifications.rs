@@ -7,4 +7,5 @@ use crate::app::Id;
 pub enum DaemonNotification {
     Connected { id: Id },
     Disconnected { id: Id },
+    TriggerMatched { handler: Id },
 }
