@@ -85,10 +85,9 @@ impl TextProcessor {
                     }
                 }
 
-                MatchResult::Matched { remaining, .. } => {
+                MatchResult::Matched { remaining, context } => {
                     if let Some(handler) = handler {
-                        // TODO include variables
-                        notifier.notify(DaemonNotification::TriggerMatched { handler });
+                        notifier.notify(DaemonNotification::TriggerMatched { handler, context });
                     }
 
                     remaining.into()

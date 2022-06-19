@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use regex::{Captures, Regex};
 use serde::Deserialize;
 
+use crate::daemon::notifications::{MatchContext, MatchedText};
+
 use super::processing::ansi::Ansi;
 
 #[derive(Debug, Default, Deserialize)]
@@ -26,19 +28,12 @@ pub enum MatcherSpec {
     },
 }
 
-#[derive(PartialEq, Eq, Hash)]
-pub enum MatchVariable {
-    Index(usize),
-    Name(String),
-}
-
 pub enum MatchResult {
     Ignored(Ansi),
 
     Matched {
         remaining: Ansi,
-        full_match: Ansi,
-        variables: HashMap<MatchVariable, Ansi>,
+        context: MatchContext,
     },
 
     /// Some (or all) of the input was consumed; [remaining] contains any remaining text
@@ -62,44 +57,36 @@ impl Matcher {
             }
 
             // TODO: Map pattern range back to Ansi bytes range
-            let full_match = Ansi::from(found.get(0).unwrap().as_str());
             let remaining = subject.clone();
+            let context = self.extract_match_context(found);
 
-            let variables = self.extract_match_variables(found);
-
-            return MatchResult::Matched {
-                remaining,
-                full_match,
-                variables,
-            };
+            return MatchResult::Matched { remaining, context };
         }
 
         println!("pattern {:?} did not find", self.pattern);
         MatchResult::Ignored(subject)
     }
 
-    fn extract_match_variables(&self, captures: Captures) -> HashMap<MatchVariable, Ansi> {
-        let mut result = HashMap::default();
+    fn extract_match_context(&self, captures: Captures) -> MatchContext {
+        let mut named = HashMap::default();
+        let mut indexed = HashMap::default();
 
         for i in 0..captures.len() {
-            result.insert(
-                MatchVariable::Index(i),
-                Ansi::from(captures.get(i).unwrap().as_str()),
+            indexed.insert(
+                i,
+                MatchedText::from_raw_ansi(captures.get(i).unwrap().as_str()),
             );
         }
 
         for name in self.pattern.capture_names() {
             if let Some(n) = name {
                 if let Some(captured) = captures.name(n) {
-                    result.insert(
-                        MatchVariable::Name(n.to_string()),
-                        Ansi::from(captured.as_str()),
-                    );
+                    named.insert(n.to_string(), MatchedText::from_raw_ansi(captured.as_str()));
                 }
             }
         }
 
-        return result;
+        return MatchContext { named, indexed };
     }
 }
 
@@ -138,16 +125,10 @@ mod tests {
         let input = "say 'anything'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched {
-            remaining,
-            full_match,
-            variables,
-        } = matcher.try_match(input.into())
-        {
+        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
             assert_eq!(&remaining[..], "say 'anything'");
-            assert_eq!(&full_match[..], "say 'anything'");
-            assert_eq!(&(variables[&MatchVariable::Index(0)])[..], "say 'anything'");
-            assert_eq!(&(variables[&MatchVariable::Index(1)])[..], "anything");
+            assert_eq!(&context.indexed[&0].plain, "say 'anything'");
+            assert_eq!(&context.indexed[&1].plain, "anything");
         } else {
             panic!("Expected {:?} to match... but it didn't", matcher);
         }
@@ -162,19 +143,10 @@ mod tests {
         let input = "say 'anything'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched {
-            remaining,
-            full_match,
-            variables,
-        } = matcher.try_match(input.into())
-        {
+        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
             assert_eq!(&remaining[..], "say 'anything'");
-            assert_eq!(&full_match[..], "say 'anything'");
-            assert_eq!(&(variables[&MatchVariable::Index(0)])[..], "say 'anything'");
-            assert_eq!(
-                &(variables[&MatchVariable::Name("message".to_string())])[..],
-                "anything"
-            );
+            assert_eq!(&context.indexed[&0].plain, "say 'anything'");
+            assert_eq!(&context.named[&"message".to_string()].plain, "anything");
         } else {
             panic!("Expected {:?} to match... but it didn't", matcher);
         }
