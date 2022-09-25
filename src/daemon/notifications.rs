@@ -11,12 +11,10 @@ pub struct MatchedText {
 }
 impl MatchedText {
     pub fn from_raw_ansi(text: &str) -> Self {
-        let as_ansi = Ansi::from(text);
+        let mut as_ansi: Ansi = text.into();
         return MatchedText {
-            plain: (&as_ansi).to_string(),
-            ansi: std::str::from_utf8(&as_ansi.into_inner())
-                .unwrap()
-                .to_string(),
+            ansi: (&as_ansi).to_string(),
+            plain: as_ansi.strip_ansi().to_string(),
         };
     }
 }

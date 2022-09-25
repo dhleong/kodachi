@@ -1,4 +1,4 @@
-use bytes::{BufMut, BytesMut};
+use bytes::{BufMut, Bytes, BytesMut};
 use crossterm::{
     cursor::{RestorePosition, SavePosition},
     terminal::{Clear, ClearType},
@@ -14,7 +14,7 @@ use crate::{
     daemon::notifications::DaemonNotification,
 };
 
-use super::ansi::Ansi;
+use super::ansi::{Ansi, AnsiMut};
 
 const NEWLINE_BYTE: u8 = b'\n';
 
@@ -26,7 +26,7 @@ struct RegisteredMatcher {
 #[derive(Default)]
 pub struct TextProcessor {
     matchers: Vec<RegisteredMatcher>,
-    pending_line: Ansi,
+    pending_line: AnsiMut,
     saving_position: bool,
 }
 
@@ -36,7 +36,7 @@ impl TextProcessor {
         text: BytesMut,
         _connection_id: Id, // TODO
         notifier: &mut RespondedChannel,
-    ) -> BytesMut {
+    ) -> Bytes {
         // Read up until a newline from text; push that onto pending_line
         let has_full_line =
             if let Some(newline_pos) = text.iter().position(|ch| *ch == NEWLINE_BYTE) {
@@ -55,8 +55,8 @@ impl TextProcessor {
                 self.saving_position = true;
                 crate::write_ansi!(to_emit, SavePosition);
             }
-            to_emit.put(self.pending_line.take());
-            to_emit
+            to_emit.put(self.pending_line.take_bytes());
+            to_emit.into()
         } else {
             // If we *do* have a full line in pending_line, pop it off and feed it to matchers;
             // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
@@ -65,7 +65,7 @@ impl TextProcessor {
 
             // TODO It might be better if we could avoid a dependency on RespondedChannel here, and
             // emit results rather than sending them directly...
-            let (handler, result) = self.perform_match(Ansi::from_bytes(to_match));
+            let (handler, result) = self.perform_match(to_match);
             match result {
                 MatchResult::Ignored(to_emit) => to_emit.into(),
                 MatchResult::Consumed { remaining } => {

@@ -49,11 +49,14 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn try_match(&self, subject: Ansi) -> MatchResult {
-        if let Some(found) = self.pattern.captures(&subject) {
+    pub fn try_match(&self, mut subject: Ansi) -> MatchResult {
+        let stripped = subject.strip_ansi();
+        if let Some(found) = self.pattern.captures(&stripped) {
             if self.options.consume {
                 // TODO: Consume
-                return MatchResult::Consumed { remaining: subject };
+                return MatchResult::Consumed {
+                    remaining: Ansi::empty(),
+                };
             }
 
             // TODO: Map pattern range back to Ansi bytes range
@@ -63,7 +66,6 @@ impl Matcher {
             return MatchResult::Matched { remaining, context };
         }
 
-        println!("pattern {:?} did not find", self.pattern);
         MatchResult::Ignored(subject)
     }
 
