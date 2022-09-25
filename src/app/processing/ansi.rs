@@ -140,14 +140,13 @@ fn strip_ansi(bytes: Bytes) -> AnsiStripped {
     for (index, ch) in raw.char_indices() {
         match (ch as u8, maybe_csi, in_csi) {
             // ESC
-            (0x1bu8, false, false) => {
+            (0x1b, false, false) => {
                 maybe_csi = true;
                 in_csi = false;
                 range_start = index;
             }
 
-            // [
-            (0x5Bu8, true, false) => {
+            (b'[', true, false) => {
                 maybe_csi = false;
                 in_csi = true;
             }
