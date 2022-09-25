@@ -14,10 +14,10 @@ pub enum DaemonCommand {
 
     Connect(Connect),
     Disconnect {
-        connection: Id,
+        connection_id: Id,
     },
     Send {
-        connection: Id,
+        connection_id: Id,
         text: String,
     },
 
@@ -25,7 +25,7 @@ pub enum DaemonCommand {
         connection: Id,
     },
     RegisterTrigger {
-        connection: Id,
+        connection_id: Id,
         matcher: MatcherSpec,
         handler_id: Id,
     },

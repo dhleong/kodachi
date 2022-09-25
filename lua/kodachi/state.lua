@@ -37,7 +37,7 @@ function KodachiState:cleanup()
     if self.socket and self.connection_id then
       self.socket:notify {
         type = "Clear",
-        connection = self.connection_id,
+        connection_id = self.connection_id,
       }
     end
   end
@@ -110,7 +110,7 @@ function KodachiState:trigger(matcher, handler)
     local id = self._triggers:insert(handler)
     socket:request {
       type = "RegisterTrigger",
-      connection = self.connection_id,
+      connection_id = self.connection_id,
       matcher = matcher,
       handler_id = id,
     }
@@ -123,7 +123,7 @@ function KodachiState:send(text)
   return with_socket(self, function(socket)
     socket:request {
       type = "Send",
-      connection = self.connection_id,
+      connection_id = self.connection_id,
       text = text,
     }
   end)
