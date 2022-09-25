@@ -7,6 +7,7 @@ use tokio::sync::mpsc;
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
+        processing::ansi::Ansi,
         LockableState,
     },
     daemon::{
@@ -29,9 +30,9 @@ pub fn process_connection<T: Transport, W: Write>(
         match transport.read()? {
             Event::Data(data) => {
                 let r: &[u8] = &data;
-                let wrapped = BytesMut::from(r);
+                let bytes = BytesMut::from(r);
                 let processed = connection.shared_state.lock().unwrap().processor.process(
-                    wrapped,
+                    Ansi::from(bytes.freeze()),
                     connection.id,
                     &mut notifier,
                 );

@@ -114,6 +114,10 @@ impl Ansi {
         self.bytes
     }
 
+    pub fn iter(&self) -> std::slice::Iter<u8> {
+        self.bytes.iter()
+    }
+
     pub fn strip_ansi(&mut self) -> AnsiStripped {
         if let Some(existing) = self.stripped.as_ref() {
             return existing.clone();

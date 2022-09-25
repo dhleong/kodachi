@@ -33,17 +33,18 @@ pub struct TextProcessor {
 impl TextProcessor {
     pub fn process(
         &mut self,
-        text: BytesMut,
+        text: Ansi,
         _connection_id: Id, // TODO
         notifier: &mut RespondedChannel,
     ) -> Bytes {
         // Read up until a newline from text; push that onto pending_line
         let has_full_line =
             if let Some(newline_pos) = text.iter().position(|ch| *ch == NEWLINE_BYTE) {
-                self.pending_line.put_slice(&text[0..newline_pos]);
+                self.pending_line
+                    .put_slice(&text.into_inner()[0..newline_pos]);
                 true
             } else {
-                self.pending_line.put_slice(&text);
+                self.pending_line.put_slice(&text.into_inner());
                 false
             };
 
