@@ -98,9 +98,12 @@ impl TextProcessor {
                 }
 
                 MatchResult::Matched { remaining, context } => {
-                    if let Some(handler) = handler {
+                    if let Some(handler_id) = handler {
                         output_chunks.push(ProcessorOutput::Notification(
-                            DaemonNotification::TriggerMatched { handler, context },
+                            DaemonNotification::TriggerMatched {
+                                handler_id,
+                                context,
+                            },
                         ))
                     }
 

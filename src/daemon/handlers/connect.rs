@@ -14,6 +14,7 @@ use crate::{
         channel::{Channel, RespondedChannel},
         commands,
         notifications::DaemonNotification,
+        protocol::Notification,
         responses::DaemonResponse,
     },
     net::Uri,
@@ -41,9 +42,11 @@ pub fn process_connection<T: Transport, W: Write>(
 
                 output_chunks.drain(..).try_for_each(|chunk| match chunk {
                     ProcessorOutput::Text(text) => output.write_all(&text.as_bytes()),
-                    ProcessorOutput::Notification(notif) => {
-                        // TODO Include connection.id, possibly via a wrapper type
-                        notifier.notify(notif);
+                    ProcessorOutput::Notification(notification) => {
+                        notifier.notify(crate::daemon::protocol::Notification::ForConnection {
+                            connection_id: connection.id,
+                            notification,
+                        });
                         Ok(())
                     }
                 })?;
@@ -77,20 +80,26 @@ pub async fn handle(
 ) -> io::Result<()> {
     let connection = state.lock().unwrap().connections.create();
     let uri = Uri::from_string(&data.uri)?;
-    let id = connection.id;
+    let connection_id = connection.id;
 
-    let mut notifier = channel.respond(DaemonResponse::Connecting { id });
+    let mut notifier = channel.respond(DaemonResponse::Connecting { connection_id });
 
     let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
     let stdout = io::stdout();
 
-    notifier.notify(DaemonNotification::Connected { id });
+    notifier.notify(Notification::ForConnection {
+        connection_id,
+        notification: DaemonNotification::Connected,
+    });
 
     notifier = process_connection(transport, connection, notifier, stdout)?;
 
-    notifier.notify(DaemonNotification::Disconnected { id });
+    notifier.notify(Notification::ForConnection {
+        connection_id,
+        notification: DaemonNotification::Disconnected,
+    });
 
-    state.lock().unwrap().connections.drop(id);
+    state.lock().unwrap().connections.drop(connection_id);
 
     Ok(())
 }

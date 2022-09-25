@@ -28,7 +28,10 @@ pub struct MatchContext {
 #[derive(Serialize)]
 #[serde(tag = "type")]
 pub enum DaemonNotification {
-    Connected { id: Id },
-    Disconnected { id: Id },
-    TriggerMatched { handler: Id, context: MatchContext },
+    Connected,
+    Disconnected,
+    TriggerMatched {
+        handler_id: Id,
+        context: MatchContext,
+    },
 }

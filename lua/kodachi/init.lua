@@ -3,13 +3,13 @@ local M = {}
 ---Open a connection to the given URI in the current buffer
 ---@param uri string
 function M.connect(uri)
-  local state = require'kodachi.ui'.ensure_window()
+  local state = require 'kodachi.ui'.ensure_window()
   if not state then
     return
   end
 
   state.uri = uri
-  require'kodachi.connection'.run(state, uri)
+  require 'kodachi.connection'.run(state, uri)
 
   return state
 end
@@ -20,7 +20,7 @@ end
 -- If called when a connection exists for another URI, this function is a nop
 -- (and the callback will not be called).
 function M.with_connection(uri, on_connection)
-  local state = require'kodachi.states'.current { silent = true }
+  local state = require 'kodachi.states'.current { silent = true }
 
   if state and state.connection_id and state.uri and state.uri ~= uri then
     -- Already connected, but to another URI
@@ -28,16 +28,18 @@ function M.with_connection(uri, on_connection)
   elseif not (state and state.connection_id) then
     -- Not connected yet
     state = M.connect(uri)
-    state.socket:listen_matched_once(
-      function (message)
-        return message.type == 'Connected'
-      end,
-      vim.schedule_wrap(function ()
-        state.just_connected = true
-        on_connection(state)
-        state.just_connected = nil
-      end)
-    )
+    if state then
+      state.socket:listen_matched_once(
+        function(message)
+          return message.type == 'Connected'
+        end,
+        vim.schedule_wrap(function()
+          state.just_connected = true
+          on_connection(state)
+          state.just_connected = nil
+        end)
+      )
+    end
   else
     -- Already connected to this URI
     state:cleanup()

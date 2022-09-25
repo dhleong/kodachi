@@ -7,6 +7,6 @@ use crate::app::Id;
 pub enum DaemonResponse {
     ErrorResult { error: String },
 
-    Connecting { id: Id },
+    Connecting { connection_id: Id },
     SendResult { sent: bool },
 }

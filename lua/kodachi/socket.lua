@@ -57,6 +57,7 @@ function Socket:await_request_id(id, handler)
   local function matcher(message)
     return message.request_id == id
   end
+
   self:listen_matched_once(matcher, handler)
 end
 
@@ -114,6 +115,7 @@ function Socket:_on_read(chunk)
 
       local ok, result = pcall(vim.json.decode, to_parse)
       if ok then
+        vim.g.last = result
         for _, receiver in ipairs(self._receivers) do
           receiver(result)
         end
@@ -137,11 +139,11 @@ function M.create(name)
   local socket = Socket:new(path, server, client)
 
   server:bind(path)
-  server:listen(16, function ()
+  server:listen(16, function()
     server:accept(client)
     socket:_on_connected()
 
-    client:read_start(function (err, chunk)
+    client:read_start(function(err, chunk)
       assert(not err, err) -- TODO: Handle errors better?
       if chunk then
         socket:_on_read(chunk)
