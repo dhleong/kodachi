@@ -52,11 +52,7 @@ impl AnsiMut {
     }
 
     pub fn take_bytes(&mut self) -> BytesMut {
-        let result = self.0.clone();
-
-        self.0.clear();
-
-        return result;
+        self.0.split()
     }
 
     pub fn take(&mut self) -> Ansi {
