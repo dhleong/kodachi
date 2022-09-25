@@ -8,7 +8,7 @@ mod commands;
 mod handlers;
 pub mod notifications;
 mod protocol;
-mod responses;
+pub mod responses;
 
 use commands::DaemonCommand;
 

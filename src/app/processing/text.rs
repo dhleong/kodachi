@@ -1,4 +1,4 @@
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, BytesMut};
 use crossterm::{
     cursor::{RestorePosition, SavePosition},
     terminal::{Clear, ClearType},
@@ -10,7 +10,6 @@ use crate::{
         matchers::{MatchResult, Matcher},
         Id,
     },
-    daemon::channel::RespondedChannel,
     daemon::notifications::DaemonNotification,
 };
 
@@ -30,24 +29,39 @@ pub struct TextProcessor {
     saving_position: bool,
 }
 
-impl TextProcessor {
-    pub fn process(
-        &mut self,
-        text: Ansi,
-        _connection_id: Id, // TODO
-        notifier: &mut RespondedChannel,
-    ) -> Bytes {
-        // Read up until a newline from text; push that onto pending_line
-        let has_full_line =
-            if let Some(newline_pos) = text.iter().position(|ch| *ch == NEWLINE_BYTE) {
-                self.pending_line
-                    .put_slice(&text.into_inner()[0..newline_pos]);
-                true
-            } else {
-                self.pending_line.put_slice(&text.into_inner());
-                false
-            };
+pub enum ProcessorOutput {
+    Text(Ansi),
+    Notification(DaemonNotification),
+}
 
+impl TextProcessor {
+    pub fn process(&mut self, text: Ansi, output_chunks: &mut Vec<ProcessorOutput>) {
+        let mut bytes = text.into_inner();
+
+        while bytes.has_remaining() {
+            // Read up until a newline from text; push that onto pending_line...
+            let (read, has_full_line) =
+                if let Some(newline_pos) = bytes.iter().position(|ch| *ch == NEWLINE_BYTE) {
+                    let end = newline_pos + 1;
+                    self.pending_line.put_slice(&bytes[0..end]);
+                    (end, true)
+                } else {
+                    self.pending_line.put_slice(&bytes);
+                    (bytes.len(), false)
+                };
+
+            // ... Then process the line
+            self.process_pending_line(has_full_line, output_chunks);
+
+            bytes.advance(read);
+        }
+    }
+
+    fn process_pending_line(
+        &mut self,
+        has_full_line: bool,
+        output_chunks: &mut Vec<ProcessorOutput>,
+    ) {
         let result = if !has_full_line {
             // If we *don't* have a full line (and, if we don't already have a SavePosition
             // set, IE from a previous partial line, emit SavePosition) emit the pending
@@ -63,9 +77,6 @@ impl TextProcessor {
             // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
             // emit RestorePosition + Clear
             let to_match = self.pending_line.take();
-
-            // TODO It might be better if we could avoid a dependency on RespondedChannel here, and
-            // emit results rather than sending them directly...
             let (handler, result) = self.perform_match(to_match);
             match result {
                 MatchResult::Ignored(to_emit) => to_emit.into(),
@@ -82,21 +93,23 @@ impl TextProcessor {
                         to_emit.put(remaining.into_inner());
                         to_emit.into()
                     } else {
-                        remaining.into()
+                        remaining
                     }
                 }
 
                 MatchResult::Matched { remaining, context } => {
                     if let Some(handler) = handler {
-                        notifier.notify(DaemonNotification::TriggerMatched { handler, context });
+                        output_chunks.push(ProcessorOutput::Notification(
+                            DaemonNotification::TriggerMatched { handler, context },
+                        ))
                     }
 
-                    remaining.into()
+                    remaining
                 }
             }
         };
 
-        return result;
+        output_chunks.push(ProcessorOutput::Text(result));
     }
 
     pub fn register(&mut self, handler: Id, matcher: Matcher) {
@@ -132,4 +145,36 @@ macro_rules! write_ansi {
             .expect("Failed to write ansi");
         $bytes = writer.into_inner();
     }}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_text_eq(value: &ProcessorOutput, expected: &str) {
+        match value {
+            ProcessorOutput::Text(text) => assert_eq!(&text[..], expected),
+            _ => panic!("Expected text output"),
+        }
+    }
+
+    #[test]
+    fn text_processor_full_line() {
+        let mut processor = TextProcessor::default();
+        let mut outputs = vec![];
+        processor.process("Everything is fine\n".into(), &mut outputs);
+        assert_text_eq(&outputs[0], "Everything is fine\n");
+    }
+
+    #[test]
+    fn text_processor_multi_lines() {
+        let mut processor = TextProcessor::default();
+        let mut outputs = vec![];
+        processor.process("\nEverything\nIs".into(), &mut outputs);
+        assert_eq!(outputs.len(), 3);
+        assert_text_eq(&outputs[0], "\n");
+        assert_text_eq(&outputs[1], "Everything\n");
+
+        // NOTE: The third line of output should have a "save position" control + "Is"
+    }
 }

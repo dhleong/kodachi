@@ -7,7 +7,7 @@ use tokio::sync::mpsc;
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
-        processing::ansi::Ansi,
+        processing::{ansi::Ansi, text::ProcessorOutput},
         LockableState,
     },
     daemon::{
@@ -26,17 +26,27 @@ pub fn process_connection<T: Transport, W: Write>(
     mut notifier: RespondedChannel,
     mut output: W,
 ) -> io::Result<RespondedChannel> {
+    let mut output_chunks = vec![];
     loop {
         match transport.read()? {
             Event::Data(data) => {
                 let r: &[u8] = &data;
                 let bytes = BytesMut::from(r);
-                let processed = connection.shared_state.lock().unwrap().processor.process(
-                    Ansi::from(bytes.freeze()),
-                    connection.id,
-                    &mut notifier,
-                );
-                output.write_all(&processed)?;
+                connection
+                    .shared_state
+                    .lock()
+                    .unwrap()
+                    .processor
+                    .process(Ansi::from(bytes.freeze()), &mut output_chunks);
+
+                output_chunks.drain(..).try_for_each(|chunk| match chunk {
+                    ProcessorOutput::Text(text) => output.write_all(&text.as_bytes()),
+                    ProcessorOutput::Notification(notif) => {
+                        // TODO Include connection.id, possibly via a wrapper type
+                        notifier.notify(notif);
+                        Ok(())
+                    }
+                })?;
             }
             Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
             _ => {}

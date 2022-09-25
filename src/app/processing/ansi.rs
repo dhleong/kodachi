@@ -88,6 +88,12 @@ impl From<&str> for Ansi {
     }
 }
 
+impl From<BytesMut> for Ansi {
+    fn from(source: BytesMut) -> Self {
+        Ansi::from_bytes(source.into())
+    }
+}
+
 impl Into<Bytes> for Ansi {
     fn into(self) -> Bytes {
         self.bytes
@@ -110,12 +116,12 @@ impl Ansi {
         Self::from_bytes(bytes.into())
     }
 
-    pub fn into_inner(self) -> Bytes {
-        self.bytes
+    pub fn as_bytes(&self) -> Bytes {
+        self.bytes.clone()
     }
 
-    pub fn iter(&self) -> std::slice::Iter<u8> {
-        self.bytes.iter()
+    pub fn into_inner(self) -> Bytes {
+        self.bytes
     }
 
     pub fn strip_ansi(&mut self) -> AnsiStripped {
