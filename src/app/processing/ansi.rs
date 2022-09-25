@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 
 use bytes::{BufMut, Bytes, BytesMut};
 
@@ -119,52 +119,65 @@ impl Ansi {
             return existing.clone();
         }
 
-        // TODO Use Bytes ranges from self.bytes to avoid excessive copying
-        let raw = std::str::from_utf8(&self.bytes).unwrap();
-        let mut without_ansi = String::new();
-        let mut maybe_csi = false;
-        let mut in_csi = false;
-
-        for ch in raw.chars() {
-            match (ch as u8, maybe_csi, in_csi) {
-                // ESC
-                (0x1bu8, false, false) => {
-                    maybe_csi = true;
-                    in_csi = false;
-                }
-
-                // [
-                (0x5Bu8, true, false) => {
-                    maybe_csi = false;
-                    in_csi = true;
-                }
-
-                // Detect ending
-                (as_byte, false, true) => {
-                    if (0x40..0x7E).contains(&as_byte) {
-                        in_csi = false;
-                    }
-                }
-
-                _ => {
-                    without_ansi.push(ch);
-                }
-            };
-        }
-
         // Cache the result:
-        let stripped = AnsiStripped {
-            value: Bytes::from(without_ansi),
-        };
+        let stripped = strip_ansi(self.bytes.clone());
         self.stripped = Some(stripped.clone());
         return stripped;
+    }
+}
+
+fn strip_ansi(bytes: Bytes) -> AnsiStripped {
+    // NOTE: It'd be nice if we could reuse Bytes ranges from self.bytes to avoid excessive
+    // copying---esp if there is actually no Ansi in self.bytes
+    let raw = std::str::from_utf8(&bytes).unwrap();
+    let mut without_ansi = String::new();
+    let mut ansi_ranges = Vec::new();
+
+    let mut maybe_csi = false;
+    let mut in_csi = false;
+    let mut range_start = 0usize;
+
+    for (index, ch) in raw.char_indices() {
+        match (ch as u8, maybe_csi, in_csi) {
+            // ESC
+            (0x1bu8, false, false) => {
+                maybe_csi = true;
+                in_csi = false;
+                range_start = index;
+            }
+
+            // [
+            (0x5Bu8, true, false) => {
+                maybe_csi = false;
+                in_csi = true;
+            }
+
+            // Detect ending
+            (as_byte, false, true) => {
+                if (0x40..0x7E).contains(&as_byte) {
+                    in_csi = false;
+                    ansi_ranges.push(range_start..index + 1);
+                }
+            }
+
+            _ => {
+                without_ansi.push(ch);
+            }
+        };
+    }
+
+    AnsiStripped {
+        value: Bytes::from(without_ansi),
+        original: bytes,
+        ansi_ranges,
     }
 }
 
 #[derive(Clone)]
 pub struct AnsiStripped {
     value: Bytes,
-    // TODO Ranges for mapping back to Ansi bytes
+    original: Bytes,
+    ansi_ranges: Vec<Range<usize>>,
 }
 
 impl Deref for AnsiStripped {
@@ -172,6 +185,31 @@ impl Deref for AnsiStripped {
 
     fn deref(&self) -> &Self::Target {
         std::str::from_utf8(&self.value).unwrap()
+    }
+}
+
+impl AnsiStripped {
+    pub fn get_original(&self, range: Range<usize>) -> Ansi {
+        // TODO: It *may* behoove us to grab any ANSI ranges preceeding the `mapped`
+        // range, to ensure that the resulting slice is styled as expected...
+        let mapped = self.get_original_range(range);
+        Ansi::from_bytes(self.original.slice(mapped))
+    }
+
+    pub fn get_original_range(&self, range: Range<usize>) -> Range<usize> {
+        let mut start = range.start;
+        let mut end = range.end;
+        for candidate in &self.ansi_ranges {
+            if candidate.start < start {
+                start += candidate.len();
+                end += candidate.len();
+            } else if candidate.start <= end {
+                end += candidate.len();
+            } else {
+                break;
+            }
+        }
+        start..end
     }
 }
 
@@ -189,5 +227,44 @@ mod tests {
     fn but_only_strip_ansi() {
         let mut ansi = Ansi::from("say ['anything']");
         assert_eq!(&ansi.strip_ansi()[..], "say ['anything']");
+    }
+
+    #[cfg(test)]
+    mod striped_ansi {
+        use super::*;
+
+        #[test]
+        fn maps_back_to_original_at_ansi() {
+            let mut ansi = Ansi::from("\x1b[32mEverything\x1b[m is \x1b[32mFine\x1b[m");
+            let stripped = ansi.strip_ansi();
+            assert_eq!(stripped.get_original_range(0..10), 0..18);
+
+            let original = stripped.get_original(0..10);
+            assert_eq!(&original[..], "\x1b[32mEverything\x1b[m");
+        }
+
+        #[test]
+        fn maps_back_to_original_after_ansi() {
+            let mut ansi = Ansi::from("\x1b[32mEverything\x1b[m is \x1b[32mFine\x1b[m");
+            let stripped = ansi.strip_ansi();
+            assert_eq!(stripped.get_original_range(1..10), 6..18);
+
+            let original = stripped.get_original(1..10);
+            assert_eq!(&original[..], "verything\x1b[m");
+        }
+
+        #[test]
+        fn fully_maps_back_to_original() {
+            let mut ansi = Ansi::from("\x1b[32mEverything\x1b[m is \x1b[32mFine\x1b[m");
+            let stripped = ansi.strip_ansi();
+            assert_eq!(&stripped[..], "Everything is Fine");
+            assert_eq!(stripped.get_original_range(0..18), 0..34);
+
+            let original = stripped.get_original(0..18);
+            assert_eq!(
+                &original[..],
+                "\x1b[32mEverything\x1b[m is \x1b[32mFine\x1b[m"
+            );
+        }
     }
 }

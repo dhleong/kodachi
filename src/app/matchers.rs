@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::daemon::notifications::{MatchContext, MatchedText};
 
-use super::processing::ansi::Ansi;
+use super::processing::ansi::{Ansi, AnsiStripped};
 
 #[derive(Debug, Default, Deserialize)]
 pub struct MatcherOptions {
@@ -61,7 +61,7 @@ impl Matcher {
 
             // TODO: Map pattern range back to Ansi bytes range
             let remaining = subject.clone();
-            let context = self.extract_match_context(found);
+            let context = self.extract_match_context(&stripped, found);
 
             return MatchResult::Matched { remaining, context };
         }
@@ -69,21 +69,20 @@ impl Matcher {
         MatchResult::Ignored(subject)
     }
 
-    fn extract_match_context(&self, captures: Captures) -> MatchContext {
+    fn extract_match_context(&self, stripped: &AnsiStripped, captures: Captures) -> MatchContext {
         let mut named = HashMap::default();
         let mut indexed = HashMap::default();
 
         for i in 0..captures.len() {
-            indexed.insert(
-                i,
-                MatchedText::from_raw_ansi(captures.get(i).unwrap().as_str()),
-            );
+            let original = stripped.get_original(captures.get(i).unwrap().range());
+            indexed.insert(i, MatchedText::from(original));
         }
 
         for name in self.pattern.capture_names() {
             if let Some(n) = name {
                 if let Some(captured) = captures.name(n) {
-                    named.insert(n.to_string(), MatchedText::from_raw_ansi(captured.as_str()));
+                    let original = stripped.get_original(captured.range());
+                    named.insert(n.to_string(), MatchedText::from(original));
                 }
             }
         }
@@ -137,6 +136,26 @@ mod tests {
     }
 
     #[test]
+    fn indexed_ansi_matches_test() {
+        let spec = MatcherSpec::Regex {
+            options: Default::default(),
+            source: "say '(.*)'".to_string(),
+        };
+        let input = "say '\x1b[32manything\x1b[m'";
+
+        let matcher: Matcher = spec.try_into().unwrap();
+        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
+            assert_eq!(&remaining[..], "say '\x1b[32manything\x1b[m'");
+            assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
+            assert_eq!(&context.indexed[&1].ansi, "\x1b[32manything\x1b[m");
+            assert_eq!(&context.indexed[&0].plain, "say 'anything'");
+            assert_eq!(&context.indexed[&1].plain, "anything");
+        } else {
+            panic!("Expected {:?} to match... but it didn't", matcher);
+        }
+    }
+
+    #[test]
     fn named_matches_test() {
         let spec = MatcherSpec::Regex {
             options: Default::default(),
@@ -149,6 +168,29 @@ mod tests {
             assert_eq!(&remaining[..], "say 'anything'");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.named[&"message".to_string()].plain, "anything");
+        } else {
+            panic!("Expected {:?} to match... but it didn't", matcher);
+        }
+    }
+
+    #[test]
+    fn named_ansi_matches_test() {
+        let spec = MatcherSpec::Regex {
+            options: Default::default(),
+            source: "say '(?P<message>.*)'".to_string(),
+        };
+        let input = "say '\x1b[32manything\x1b[m'";
+
+        let matcher: Matcher = spec.try_into().unwrap();
+        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
+            assert_eq!(&remaining[..], "say '\x1b[32manything\x1b[m'");
+            assert_eq!(&context.indexed[&0].plain, "say 'anything'");
+            assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
+            assert_eq!(&context.named[&"message".to_string()].plain, "anything");
+            assert_eq!(
+                &context.named[&"message".to_string()].ansi,
+                "\x1b[32manything\x1b[m"
+            );
         } else {
             panic!("Expected {:?} to match... but it didn't", matcher);
         }

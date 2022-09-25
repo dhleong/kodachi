@@ -9,12 +9,12 @@ pub struct MatchedText {
     pub plain: String,
     pub ansi: String,
 }
+
 impl MatchedText {
-    pub fn from_raw_ansi(text: &str) -> Self {
-        let mut as_ansi: Ansi = text.into();
+    pub fn from(mut ansi: Ansi) -> Self {
         return MatchedText {
-            ansi: (&as_ansi).to_string(),
-            plain: as_ansi.strip_ansi().to_string(),
+            ansi: (&ansi).to_string(),
+            plain: ansi.strip_ansi().to_string(),
         };
     }
 }
