@@ -59,7 +59,6 @@ impl Matcher {
                 };
             }
 
-            // TODO: Map pattern range back to Ansi bytes range
             let remaining = subject.clone();
             let context = self.extract_match_context(&stripped, found);
 
