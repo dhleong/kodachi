@@ -9,9 +9,7 @@ pub struct Connect {
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
-pub enum DaemonCommand {
-    Quit,
-
+pub enum ClientRequest {
     Connect(Connect),
     Disconnect {
         connection_id: Id,
@@ -21,12 +19,17 @@ pub enum DaemonCommand {
         text: String,
     },
 
-    Clear {
-        connection: Id,
-    },
     RegisterTrigger {
         connection_id: Id,
         matcher: MatcherSpec,
         handler_id: Id,
     },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+pub enum ClientNotification {
+    Quit,
+
+    Clear { connection_id: Id },
 }

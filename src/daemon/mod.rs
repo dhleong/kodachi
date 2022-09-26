@@ -10,11 +10,13 @@ pub mod notifications;
 mod protocol;
 pub mod responses;
 
-use commands::DaemonCommand;
-
 use crate::app::LockableState;
 
-use self::{channel::ChannelSource, protocol::Request};
+use self::{
+    channel::{Channel, ChannelSource},
+    commands::{ClientNotification, ClientRequest},
+    protocol::Request,
+};
 
 fn launch<T>(handler: T)
 where
@@ -37,42 +39,53 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
     for read in input.lines() {
         let raw_json = read?;
         let request: Request = serde_json::from_str(&raw_json).unwrap();
-
-        let channel = channels.create_with_request_id(request.id);
         let state = shared_state.clone();
 
-        match request.payload {
-            DaemonCommand::Quit => break,
-            DaemonCommand::Connect(data) => {
-                launch(handlers::connect::handle(channel, state, data));
-            }
-            DaemonCommand::Disconnect {
-                connection_id: connection,
+        match request {
+            Request::ForResponse {
+                id: request_id,
+                payload,
             } => {
-                tokio::spawn(handlers::disconnect::handle(state, connection));
-            }
-            DaemonCommand::Send {
-                connection_id: connection,
-                text,
-            } => {
-                tokio::spawn(handlers::send::handle(channel, state, connection, text));
+                let channel = channels.create_with_request_id(request_id);
+                dispatch_request(state, channel, payload);
             }
 
-            DaemonCommand::Clear { connection } => {
-                tokio::spawn(handlers::clear::handle(state, connection));
+            Request::Notification(ClientNotification::Clear { connection_id }) => {
+                tokio::spawn(handlers::clear::handle(state, connection_id));
             }
 
-            DaemonCommand::RegisterTrigger {
-                connection_id: connection,
-                matcher,
-                handler_id,
-            } => {
-                tokio::spawn(handlers::register_trigger::handle(
-                    channel, state, connection, matcher, handler_id,
-                ));
-            }
+            Request::Notification(ClientNotification::Quit) => break,
         };
     }
 
     Ok(())
+}
+
+fn dispatch_request(state: LockableState, channel: Channel, payload: ClientRequest) {
+    match payload {
+        ClientRequest::Connect(data) => {
+            launch(handlers::connect::handle(channel, state, data));
+        }
+        ClientRequest::Disconnect {
+            connection_id: connection,
+        } => {
+            tokio::spawn(handlers::disconnect::handle(state, connection));
+        }
+        ClientRequest::Send {
+            connection_id: connection,
+            text,
+        } => {
+            tokio::spawn(handlers::send::handle(channel, state, connection, text));
+        }
+
+        ClientRequest::RegisterTrigger {
+            connection_id: connection,
+            matcher,
+            handler_id,
+        } => {
+            tokio::spawn(handlers::register_trigger::handle(
+                channel, state, connection, matcher, handler_id,
+            ));
+        }
+    }
 }
