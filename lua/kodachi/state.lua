@@ -1,4 +1,17 @@
+local Handlers = require 'kodachi.handlers'
+local matchers = require 'kodachi.matchers'
+
 ---@alias KodachiEvent 'connected'|'disconnected'
+
+---@param state KodachiState
+---@param handler fun(socket:Socket)
+local function with_socket(state, handler)
+  if not state.connection_id then
+    return false
+  end
+
+  return handler(state.socket)
+end
 
 ---@class KodachiState
 ---@field bufnr number
@@ -8,6 +21,7 @@
 ---@field socket Socket
 ---@field _events any|nil
 ---@field _mappings any
+---@field _triggers Handlers|nil
 local KodachiState = {}
 
 function KodachiState:new(o)
@@ -15,6 +29,18 @@ function KodachiState:new(o)
   setmetatable(o, self)
   self.__index = self
   return o
+end
+
+function KodachiState:cleanup()
+  if self._triggers then
+    self._triggers:clear()
+    if self.socket and self.connection_id then
+      self.socket:notify {
+        type = "Clear",
+        connection_id = self.connection_id,
+      }
+    end
+  end
 end
 
 ---Create a keymapping in normal mode for the buffer associated with this state. These mappings
@@ -39,10 +65,10 @@ end
 function KodachiState:on(event, handler)
   if not self._events then
     self._events = {}
-    self.socket:listen(function (message)
+    self.socket:listen(function(message)
       local events = self._events[string.lower(message.type)]
       if events then
-        vim.schedule(function ()
+        vim.schedule(function()
           for _, saved_handler in ipairs(events) do
             saved_handler(message)
           end
@@ -59,20 +85,48 @@ function KodachiState:on(event, handler)
   self._events[event] = handler
 end
 
+---@param matcher MatcherSpec|string
+function KodachiState:trigger(matcher, handler)
+  matcher = matchers.inflate(matcher)
+  return with_socket(self, function(socket)
+    if not self._triggers then
+      self._triggers = Handlers:new()
+      socket:listen(function(message)
+        if message.type == 'TriggerMatched' and message.connection_id == self.connection_id then
+          local triggered_handler = self._triggers:get(message.handler_id)
+          if triggered_handler then
+            vim.schedule(function()
+              triggered_handler(message.context)
+            end)
+          else
+            vim.schedule(function()
+              print('WARNING: Trigger handler missing...')
+            end)
+          end
+        end
+      end)
+    end
+
+    local id = self._triggers:insert(handler)
+    socket:request {
+      type = "RegisterTrigger",
+      connection_id = self.connection_id,
+      matcher = matcher,
+      handler_id = id,
+    }
+  end)
+end
+
 ---Send some text to the connection associated with this state
 ---@param text string
 function KodachiState:send(text)
-  if not self.connection_id then
-    return false
-  end
-
-  self.socket:request {
-    type = "Send",
-    connection = self.connection_id,
-    text = text,
-  }
-
-  return true
+  return with_socket(self, function(socket)
+    socket:request {
+      type = "Send",
+      connection_id = self.connection_id,
+      text = text,
+    }
+  end)
 end
 
 function KodachiState:_perform_map(lhs)

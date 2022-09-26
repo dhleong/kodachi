@@ -5,7 +5,10 @@ use std::{
 
 use serde::Serialize;
 
-use super::{notifications::DaemonNotification, protocol::Response, responses::DaemonResponse};
+use super::{
+    protocol::{Notification, Response},
+    responses::DaemonResponse,
+};
 
 #[derive(Clone)]
 struct LockedWriter(Arc<Mutex<Box<dyn Write + Send>>>, Arc<Mutex<()>>);
@@ -39,7 +42,7 @@ pub struct Channel {
 
 impl Channel {
     #[allow(dead_code)]
-    pub fn notify(&mut self, payload: DaemonNotification) {
+    pub fn notify(&mut self, payload: Notification) {
         self.writer.write_json(&payload).unwrap();
     }
 
@@ -62,7 +65,7 @@ pub struct RespondedChannel {
 }
 
 impl RespondedChannel {
-    pub fn notify(&mut self, payload: DaemonNotification) {
+    pub fn notify(&mut self, payload: Notification) {
         self.writer.write_json(&payload).unwrap();
     }
 }

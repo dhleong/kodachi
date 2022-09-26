@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::app::Id;
+use crate::app::{matchers::MatcherSpec, Id};
 
 #[derive(Debug, Deserialize)]
 pub struct Connect {
@@ -9,10 +9,27 @@ pub struct Connect {
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
-pub enum DaemonCommand {
+pub enum ClientRequest {
+    Connect(Connect),
+    Disconnect {
+        connection_id: Id,
+    },
+    Send {
+        connection_id: Id,
+        text: String,
+    },
+
+    RegisterTrigger {
+        connection_id: Id,
+        matcher: MatcherSpec,
+        handler_id: Id,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+pub enum ClientNotification {
     Quit,
 
-    Connect(Connect),
-    Disconnect { connection: Id },
-    Send { connection: Id, text: String },
+    Clear { connection_id: Id },
 }

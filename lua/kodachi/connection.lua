@@ -7,16 +7,16 @@ local M = {}
 function M.run(state, uri)
   state.socket:request(
     { type = 'Connect', uri = uri },
-    function (response)
-      state.connection_id = response.id
+    function(response)
+      state.connection_id = response.connection_id
     end
   )
 
   state.socket:listen_matched_once(
-    function (event)
+    function(event)
       return event.type == 'Disconnected' and event.connection_id == state.connection_id
     end,
-    function ()
+    function()
       state.connection_id = nil
     end
   )
