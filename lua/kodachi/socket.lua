@@ -115,7 +115,6 @@ function Socket:_on_read(chunk)
 
       local ok, result = pcall(vim.json.decode, to_parse)
       if ok then
-        vim.g.last = result
         for _, receiver in ipairs(self._receivers) do
           receiver(result)
         end
