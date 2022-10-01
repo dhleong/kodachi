@@ -1,3 +1,7 @@
+use crossterm::{
+    cursor::{RestorePosition, SavePosition},
+    terminal::{Clear, ClearType},
+};
 use std::io::{self, Write};
 
 use bytes::BytesMut;
@@ -7,8 +11,8 @@ use tokio::sync::mpsc;
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
-        processing::{ansi::Ansi, text::ProcessorOutput},
-        LockableState,
+        processing::{ansi::Ansi, text::ProcessorOutputReceiver},
+        Id, LockableState,
     },
     daemon::{
         channel::{Channel, RespondedChannel},
@@ -21,13 +25,50 @@ use crate::{
     transport::{telnet::TelnetTransport, Transport},
 };
 
+struct WriteOutputReceiver<W: Write> {
+    connection_id: Id,
+    notifier: RespondedChannel,
+    output: W,
+}
+
+impl<W: Write> ProcessorOutputReceiver for WriteOutputReceiver<W> {
+    fn save_position(&mut self) -> io::Result<()> {
+        ::crossterm::queue!(self.output, SavePosition)
+    }
+
+    fn restore_position(&mut self) -> io::Result<()> {
+        ::crossterm::queue!(self.output, RestorePosition)
+    }
+
+    fn clear_from_cursor_down(&mut self) -> io::Result<()> {
+        ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
+    }
+
+    fn text(&mut self, text: Ansi) -> io::Result<()> {
+        self.output.write_all(&text.as_bytes())
+    }
+
+    fn notification(&mut self, notification: DaemonNotification) -> io::Result<()> {
+        self.notifier
+            .notify(crate::daemon::protocol::Notification::ForConnection {
+                connection_id: self.connection_id,
+                notification,
+            });
+        Ok(())
+    }
+}
+
 pub fn process_connection<T: Transport, W: Write>(
     mut transport: T,
     mut connection: ConnectionReceiver,
-    mut notifier: RespondedChannel,
-    mut output: W,
+    notifier: RespondedChannel,
+    output: W,
 ) -> io::Result<RespondedChannel> {
-    let mut output_chunks = vec![];
+    let mut receiver = WriteOutputReceiver {
+        connection_id: connection.id,
+        notifier,
+        output,
+    };
     loop {
         match transport.read()? {
             Event::Data(data) => {
@@ -38,18 +79,7 @@ pub fn process_connection<T: Transport, W: Write>(
                     .lock()
                     .unwrap()
                     .processor
-                    .process(Ansi::from(bytes.freeze()), &mut output_chunks);
-
-                output_chunks.drain(..).try_for_each(|chunk| match chunk {
-                    ProcessorOutput::Text(text) => output.write_all(&text.as_bytes()),
-                    ProcessorOutput::Notification(notification) => {
-                        notifier.notify(crate::daemon::protocol::Notification::ForConnection {
-                            connection_id: connection.id,
-                            notification,
-                        });
-                        Ok(())
-                    }
-                })?;
+                    .process(Ansi::from(bytes.freeze()), &mut receiver)?;
             }
             Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
             _ => {}
@@ -70,7 +100,7 @@ pub fn process_connection<T: Transport, W: Write>(
         }
     }
 
-    Ok(notifier)
+    Ok(receiver.notifier)
 }
 
 pub async fn handle(

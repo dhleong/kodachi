@@ -1,8 +1,6 @@
-use bytes::{Buf, BufMut, BytesMut};
-use crossterm::{
-    cursor::{RestorePosition, SavePosition},
-    terminal::{Clear, ClearType},
-};
+use std::io;
+
+use bytes::Buf;
 
 use crate::{
     app::{
@@ -29,13 +27,21 @@ pub struct TextProcessor {
     saving_position: bool,
 }
 
-pub enum ProcessorOutput {
-    Text(Ansi),
-    Notification(DaemonNotification),
+pub trait ProcessorOutputReceiver {
+    fn save_position(&mut self) -> io::Result<()>;
+    fn restore_position(&mut self) -> io::Result<()>;
+    fn clear_from_cursor_down(&mut self) -> io::Result<()>;
+
+    fn text(&mut self, text: Ansi) -> io::Result<()>;
+    fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
 }
 
 impl TextProcessor {
-    pub fn process(&mut self, text: Ansi, output_chunks: &mut Vec<ProcessorOutput>) {
+    pub fn process<R: ProcessorOutputReceiver>(
+        &mut self,
+        text: Ansi,
+        receiver: &mut R,
+    ) -> io::Result<()> {
         let mut bytes = text.into_inner();
 
         while bytes.has_remaining() {
@@ -51,68 +57,59 @@ impl TextProcessor {
                 };
 
             // ... Then process the line
-            self.process_pending_line(has_full_line, output_chunks);
+            self.process_pending_line(has_full_line, receiver)?;
 
             bytes.advance(read);
         }
+
+        Ok(())
     }
 
-    fn process_pending_line(
+    fn process_pending_line<R: ProcessorOutputReceiver>(
         &mut self,
         has_full_line: bool,
-        output_chunks: &mut Vec<ProcessorOutput>,
-    ) {
-        let result = if !has_full_line {
+        receiver: &mut R,
+    ) -> io::Result<()> {
+        if !has_full_line {
             // If we *don't* have a full line (and, if we don't already have a SavePosition
-            // set, IE from a previous partial line, emit SavePosition) emit the pending
-            let mut to_emit = BytesMut::with_capacity(self.pending_line.len() + 8);
+            // set, IE from a previous partial line, SavePosition first) then emit the pending
             if !self.saving_position {
                 self.saving_position = true;
-                crate::write_ansi!(to_emit, SavePosition);
+                receiver.save_position()?;
             }
-            to_emit.put(self.pending_line.take_bytes());
-            to_emit.into()
+            receiver.text(self.pending_line.take_bytes().into())?;
         } else {
             // If we *do* have a full line in pending_line, pop it off and feed it to matchers;
             // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
-            // emit RestorePosition + Clear
+            // emit RestorePosition + Clear first
             let to_match = self.pending_line.take();
             let (handler, result) = self.perform_match(to_match);
             match result {
-                MatchResult::Ignored(to_emit) => to_emit.into(),
+                MatchResult::Ignored(to_emit) => receiver.text(to_emit)?,
                 MatchResult::Consumed { remaining } => {
                     if self.saving_position {
                         self.saving_position = false;
 
-                        let mut to_emit = BytesMut::with_capacity(remaining.len() + 8);
-                        crate::write_ansi!(
-                            to_emit,
-                            RestorePosition,
-                            Clear(ClearType::FromCursorDown)
-                        );
-                        to_emit.put(remaining.into_inner());
-                        to_emit.into()
-                    } else {
-                        remaining
+                        receiver.restore_position()?;
+                        receiver.clear_from_cursor_down()?;
                     }
+                    receiver.text(remaining)?;
                 }
 
                 MatchResult::Matched { remaining, context } => {
                     if let Some(handler_id) = handler {
-                        output_chunks.push(ProcessorOutput::Notification(
-                            DaemonNotification::TriggerMatched {
-                                handler_id,
-                                context,
-                            },
-                        ))
+                        receiver.notification(DaemonNotification::TriggerMatched {
+                            handler_id,
+                            context,
+                        })?;
                     }
 
-                    remaining
+                    receiver.text(remaining)?;
                 }
             }
-        };
+        }
 
-        output_chunks.push(ProcessorOutput::Text(result));
+        Ok(())
     }
 
     pub fn register(&mut self, handler: Id, matcher: Matcher) {
@@ -140,43 +137,62 @@ impl Clearable for TextProcessor {
     }
 }
 
-#[macro_export]
-macro_rules! write_ansi {
-    ($bytes:expr $(, $command:expr)* $(,)?) => {{
-        let mut writer = $bytes.writer();
-        ::crossterm::queue!(writer $(, $command)+)
-            .expect("Failed to write ansi");
-        $bytes = writer.into_inner();
-    }}
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn assert_text_eq(value: &ProcessorOutput, expected: &str) {
-        match value {
-            ProcessorOutput::Text(text) => assert_eq!(&text[..], expected),
-            _ => panic!("Expected text output"),
+    #[derive(Default)]
+    struct TextReceiver {
+        outputs: Vec<Ansi>,
+    }
+
+    impl ProcessorOutputReceiver for TextReceiver {
+        fn save_position(&mut self) -> io::Result<()> {
+            Ok(())
         }
+
+        fn restore_position(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn clear_from_cursor_down(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn text(&mut self, text: Ansi) -> io::Result<()> {
+            self.outputs.push(text);
+            Ok(())
+        }
+
+        fn notification(&mut self, _notification: DaemonNotification) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn assert_text_eq(value: &Ansi, expected: &str) {
+        assert_eq!(&value[..], expected)
     }
 
     #[test]
     fn text_processor_full_line() {
         let mut processor = TextProcessor::default();
-        let mut outputs = vec![];
-        processor.process("Everything is fine\n".into(), &mut outputs);
-        assert_text_eq(&outputs[0], "Everything is fine\n");
+        let mut receiver = TextReceiver::default();
+        processor
+            .process("Everything is fine\n".into(), &mut receiver)
+            .unwrap();
+        assert_text_eq(&receiver.outputs[0], "Everything is fine\n");
     }
 
     #[test]
     fn text_processor_multi_lines() {
         let mut processor = TextProcessor::default();
-        let mut outputs = vec![];
-        processor.process("\nEverything\nIs".into(), &mut outputs);
-        assert_eq!(outputs.len(), 3);
-        assert_text_eq(&outputs[0], "\n");
-        assert_text_eq(&outputs[1], "Everything\n");
+        let mut receiver = TextReceiver::default();
+        processor
+            .process("\nEverything\nIs".into(), &mut receiver)
+            .unwrap();
+        assert_eq!(receiver.outputs.len(), 3);
+        assert_text_eq(&receiver.outputs[0], "\n");
+        assert_text_eq(&receiver.outputs[1], "Everything\n");
 
         // NOTE: The third line of output should have a "save position" control + "Is"
     }
