@@ -34,11 +34,7 @@ pub fn process_connection<T: Transport, W: Write>(
     notifier: RespondedChannel,
     output: W,
 ) -> io::Result<RespondedChannel> {
-    let mut receiver = AnsiTerminalWriteUI {
-        connection_id: connection.id,
-        notifier,
-        output,
-    };
+    let mut receiver = AnsiTerminalWriteUI::create(connection.id, notifier, output);
     loop {
         let mut idle = true;
         match transport.read()? {

@@ -1,6 +1,6 @@
 use crossterm::{
-    cursor::{RestorePosition, SavePosition},
-    terminal::{Clear, ClearType},
+    cursor::{MoveTo, MoveToNextLine, RestorePosition, SavePosition},
+    terminal::{Clear, ClearType, ScrollDown, ScrollUp},
 };
 use std::io::{self, Write};
 
@@ -20,23 +20,61 @@ pub struct AnsiTerminalWriteUI<W: Write> {
     pub connection_id: Id,
     pub notifier: RespondedChannel,
     pub output: W,
+
+    prompts: Vec<Ansi>,
+}
+
+impl<W: Write> AnsiTerminalWriteUI<W> {
+    pub fn create(connection_id: Id, notifier: RespondedChannel, output: W) -> Self {
+        Self {
+            connection_id,
+            notifier,
+            output,
+            prompts: vec![],
+        }
+    }
 }
 
 impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
     fn save_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, SavePosition)
+        ::crossterm::execute!(self.output, SavePosition)
     }
 
     fn restore_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, RestorePosition)
+        ::crossterm::execute!(self.output, RestorePosition)
     }
 
     fn clear_from_cursor_down(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
+        ::crossterm::execute!(self.output, Clear(ClearType::FromCursorDown))
     }
 
     fn text(&mut self, text: Ansi) -> io::Result<()> {
-        self.output.write_all(&text.as_bytes())
+        // Clear the prompts
+        let prompts_count = self.prompts.len() as u16;
+        ::crossterm::execute!(self.output, ScrollDown(prompts_count))?;
+
+        self.output.write_all(&text.as_bytes())?;
+
+        let (_, h) = ::crossterm::terminal::size()?;
+        let (x, y) = ::crossterm::cursor::position()?;
+
+        if !self.prompts.is_empty() {
+            ::crossterm::execute!(self.output, ScrollUp(prompts_count))?;
+            ::crossterm::execute!(self.output, MoveTo(0, h - (prompts_count - 1)))?;
+
+            // NOTE: This can be convenient for testing redraws:
+            // self.output
+            //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
+
+            for prompt in &self.prompts {
+                self.output.write_all(&prompt.as_bytes())?;
+                ::crossterm::execute!(self.output, MoveToNextLine(1))?;
+            }
+
+            ::crossterm::execute!(self.output, MoveTo(x, y),)?;
+        }
+
+        Ok(())
     }
 
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()> {
