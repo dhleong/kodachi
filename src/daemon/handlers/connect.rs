@@ -1,4 +1,8 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    thread::sleep,
+    time::Duration,
+};
 
 use bytes::BytesMut;
 use telnet::Event;
@@ -22,6 +26,8 @@ use crate::{
     transport::{telnet::TelnetTransport, Transport},
 };
 
+const IDLE_SLEEP_DURATION: Duration = Duration::from_millis(12);
+
 pub fn process_connection<T: Transport, W: Write>(
     mut transport: T,
     mut connection: ConnectionReceiver,
@@ -34,8 +40,11 @@ pub fn process_connection<T: Transport, W: Write>(
         output,
     };
     loop {
+        let mut idle = true;
         match transport.read()? {
             Event::Data(data) => {
+                idle = false;
+
                 let r: &[u8] = &data;
                 let bytes = BytesMut::from(r);
                 connection
@@ -51,6 +60,7 @@ pub fn process_connection<T: Transport, W: Write>(
 
         match connection.outbox.try_recv() {
             Ok(Outgoing::Text(text)) => {
+                idle = false;
                 transport.write(&text.as_bytes())?;
                 transport.write(b"\r\n")?;
             }
@@ -61,6 +71,10 @@ pub fn process_connection<T: Transport, W: Write>(
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 break;
             }
+        }
+
+        if idle {
+            sleep(IDLE_SLEEP_DURATION);
         }
     }
 
