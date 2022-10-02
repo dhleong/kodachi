@@ -28,6 +28,13 @@ pub struct TextProcessor {
 }
 
 pub trait ProcessorOutputReceiver {
+    fn begin_chunk(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+    fn end_chunk(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
     fn save_position(&mut self) -> io::Result<()>;
     fn restore_position(&mut self) -> io::Result<()>;
     fn clear_from_cursor_down(&mut self) -> io::Result<()>;

@@ -36,22 +36,26 @@ impl<W: Write> AnsiTerminalWriteUI<W> {
 }
 
 impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
+    fn end_chunk(&mut self) -> io::Result<()> {
+        self.output.flush()
+    }
+
     fn save_position(&mut self) -> io::Result<()> {
-        ::crossterm::execute!(self.output, SavePosition)
+        ::crossterm::queue!(self.output, SavePosition)
     }
 
     fn restore_position(&mut self) -> io::Result<()> {
-        ::crossterm::execute!(self.output, RestorePosition)
+        ::crossterm::queue!(self.output, RestorePosition)
     }
 
     fn clear_from_cursor_down(&mut self) -> io::Result<()> {
-        ::crossterm::execute!(self.output, Clear(ClearType::FromCursorDown))
+        ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
     }
 
     fn text(&mut self, text: Ansi) -> io::Result<()> {
         // Clear the prompts
         let prompts_count = self.prompts.len() as u16;
-        ::crossterm::execute!(self.output, ScrollDown(prompts_count))?;
+        ::crossterm::queue!(self.output, ScrollDown(prompts_count))?;
 
         self.output.write_all(&text.as_bytes())?;
 
@@ -59,19 +63,20 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         let (x, y) = ::crossterm::cursor::position()?;
 
         if !self.prompts.is_empty() {
-            ::crossterm::execute!(self.output, ScrollUp(prompts_count))?;
-            ::crossterm::execute!(self.output, MoveTo(0, h - (prompts_count - 1)))?;
-
-            // NOTE: This can be convenient for testing redraws:
-            // self.output
-            //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
+            ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
+            ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
 
             for prompt in &self.prompts {
                 self.output.write_all(&prompt.as_bytes())?;
-                ::crossterm::execute!(self.output, MoveToNextLine(1))?;
+
+                // NOTE: This can be convenient for testing redraws:
+                // self.output
+                //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
+
+                ::crossterm::queue!(self.output, MoveToNextLine(1))?;
             }
 
-            ::crossterm::execute!(self.output, MoveTo(x, y),)?;
+            ::crossterm::queue!(self.output, MoveTo(x, y),)?;
         }
 
         Ok(())

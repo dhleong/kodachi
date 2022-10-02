@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
-        processing::ansi::Ansi,
+        processing::{ansi::Ansi, text::ProcessorOutputReceiver},
         LockableState,
     },
     cli::ui::AnsiTerminalWriteUI,
@@ -41,6 +41,7 @@ pub fn process_connection<T: Transport, W: Write>(
             Event::Data(data) => {
                 idle = false;
 
+                receiver.begin_chunk()?;
                 let r: &[u8] = &data;
                 let bytes = BytesMut::from(r);
                 connection
@@ -49,6 +50,7 @@ pub fn process_connection<T: Transport, W: Write>(
                     .unwrap()
                     .processor
                     .process(Ansi::from(bytes.freeze()), &mut receiver)?;
+                receiver.end_chunk()?;
             }
             Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
             _ => {}
