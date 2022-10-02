@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Range};
 
 use serde::Serialize;
 
@@ -23,6 +23,7 @@ impl MatchedText {
 pub struct MatchContext {
     pub named: HashMap<String, MatchedText>,
     pub indexed: HashMap<usize, MatchedText>,
+    pub full_match_range: Range<usize>,
 }
 
 #[derive(Serialize)]

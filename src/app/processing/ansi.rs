@@ -1,6 +1,6 @@
-use std::ops::{Deref, Range};
+use std::ops::{Add, Deref, Range, RangeBounds};
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 
 #[derive(Clone, Default)]
 pub struct AnsiMut(BytesMut);
@@ -100,11 +100,24 @@ impl Into<Bytes> for Ansi {
     }
 }
 
-impl Ansi {
-    pub fn empty() -> Self {
-        Self::from_bytes(Bytes::default())
-    }
+impl Add for Ansi {
+    type Output = Ansi;
 
+    fn add(self, rhs: Self) -> Self::Output {
+        // Avoid copying if one or the other is empty
+        if self.bytes.len() == 0 {
+            rhs
+        } else if rhs.bytes.len() == 0 {
+            self
+        } else {
+            let len = self.bytes.len() + rhs.bytes.len();
+            let mut chain = self.bytes.chain(rhs.bytes);
+            Self::from_bytes(chain.copy_to_bytes(len))
+        }
+    }
+}
+
+impl Ansi {
     pub fn from_bytes(bytes: Bytes) -> Self {
         Self {
             bytes,
@@ -122,6 +135,10 @@ impl Ansi {
 
     pub fn into_inner(self) -> Bytes {
         self.bytes
+    }
+
+    pub fn slice(&mut self, range: impl RangeBounds<usize>) -> Ansi {
+        Ansi::from_bytes(self.bytes.slice(range))
     }
 
     pub fn strip_ansi(&mut self) -> AnsiStripped {

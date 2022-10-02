@@ -34,11 +34,9 @@ pub enum MatchResult {
     Matched {
         remaining: Ansi,
         context: MatchContext,
-    },
 
-    /// Some (or all) of the input was consumed; [remaining] contains any remaining text
-    Consumed {
-        remaining: Ansi,
+        // If `true` then some (possibly all) of the input was consumed.
+        consumed: bool,
     },
 }
 
@@ -52,17 +50,21 @@ impl Matcher {
     pub fn try_match(&self, mut subject: Ansi) -> MatchResult {
         let stripped = subject.strip_ansi();
         if let Some(found) = self.pattern.captures(&stripped) {
-            if self.options.consume {
-                // TODO: Consume
-                return MatchResult::Consumed {
-                    remaining: Ansi::empty(),
-                };
-            }
-
-            let remaining = subject.clone();
             let context = self.extract_match_context(&stripped, found);
 
-            return MatchResult::Matched { remaining, context };
+            let remaining = if self.options.consume {
+                let consumed_range = stripped.get_original_range(context.full_match_range.clone());
+                subject.slice(0..consumed_range.start)
+                    + subject.slice(consumed_range.end..subject.len())
+            } else {
+                subject
+            };
+
+            return MatchResult::Matched {
+                remaining,
+                context,
+                consumed: self.options.consume,
+            };
         }
 
         MatchResult::Ignored(subject)
@@ -86,7 +88,11 @@ impl Matcher {
             }
         }
 
-        return MatchContext { named, indexed };
+        return MatchContext {
+            named,
+            indexed,
+            full_match_range: captures.get(0).unwrap().range(),
+        };
     }
 }
 
@@ -125,7 +131,10 @@ mod tests {
         let input = "say 'anything'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
+        if let MatchResult::Matched {
+            remaining, context, ..
+        } = matcher.try_match(input.into())
+        {
             assert_eq!(&remaining[..], "say 'anything'");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.indexed[&1].plain, "anything");
@@ -143,7 +152,10 @@ mod tests {
         let input = "say '\x1b[32manything\x1b[m'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
+        if let MatchResult::Matched {
+            remaining, context, ..
+        } = matcher.try_match(input.into())
+        {
             assert_eq!(&remaining[..], "say '\x1b[32manything\x1b[m'");
             assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
             assert_eq!(&context.indexed[&1].ansi, "\x1b[32manything\x1b[m");
@@ -163,7 +175,10 @@ mod tests {
         let input = "say 'anything'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
+        if let MatchResult::Matched {
+            remaining, context, ..
+        } = matcher.try_match(input.into())
+        {
             assert_eq!(&remaining[..], "say 'anything'");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.named[&"message".to_string()].plain, "anything");
@@ -181,8 +196,73 @@ mod tests {
         let input = "say '\x1b[32manything\x1b[m'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched { remaining, context } = matcher.try_match(input.into()) {
+        if let MatchResult::Matched {
+            remaining, context, ..
+        } = matcher.try_match(input.into())
+        {
             assert_eq!(&remaining[..], "say '\x1b[32manything\x1b[m'");
+            assert_eq!(&context.indexed[&0].plain, "say 'anything'");
+            assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
+            assert_eq!(&context.named[&"message".to_string()].plain, "anything");
+            assert_eq!(
+                &context.named[&"message".to_string()].ansi,
+                "\x1b[32manything\x1b[m"
+            );
+        } else {
+            panic!("Expected {:?} to match... but it didn't", matcher);
+        }
+    }
+
+    #[test]
+    fn consume_full_line() {
+        let spec = MatcherSpec::Regex {
+            options: Default::default(),
+            source: "say '(?P<message>.*)'".to_string(),
+        };
+        let input = "say '\x1b[32manything\x1b[m'";
+
+        let mut matcher: Matcher = spec.try_into().unwrap();
+        matcher.options.consume = true;
+
+        if let MatchResult::Matched {
+            remaining,
+            context,
+            consumed,
+        } = matcher.try_match(input.into())
+        {
+            assert_eq!(consumed, true);
+            assert_eq!(&remaining[..], "");
+            assert_eq!(&context.indexed[&0].plain, "say 'anything'");
+            assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
+            assert_eq!(&context.named[&"message".to_string()].plain, "anything");
+            assert_eq!(
+                &context.named[&"message".to_string()].ansi,
+                "\x1b[32manything\x1b[m"
+            );
+        } else {
+            panic!("Expected {:?} to match... but it didn't", matcher);
+        }
+    }
+
+    #[test]
+    fn consume_within_line() {
+        let spec = MatcherSpec::Regex {
+            options: Default::default(),
+            source: "say '(?P<message>.*)'".to_string(),
+        };
+        let input = "just say '\x1b[32manything\x1b[m' you know!";
+
+        let mut matcher: Matcher = spec.try_into().unwrap();
+        matcher.options.consume = true;
+
+        if let MatchResult::Matched {
+            remaining,
+            context,
+            consumed,
+        } = matcher.try_match(input.into())
+        {
+            assert_eq!(consumed, true);
+            assert_eq!(&remaining[..], "just  you know!");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
             assert_eq!(&context.named[&"message".to_string()].plain, "anything");

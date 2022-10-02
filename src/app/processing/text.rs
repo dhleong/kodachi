@@ -86,22 +86,23 @@ impl TextProcessor {
             let (handler, result) = self.perform_match(to_match);
             match result {
                 MatchResult::Ignored(to_emit) => receiver.text(to_emit)?,
-                MatchResult::Consumed { remaining } => {
-                    if self.saving_position {
-                        self.saving_position = false;
 
-                        receiver.restore_position()?;
-                        receiver.clear_from_cursor_down()?;
-                    }
-                    receiver.text(remaining)?;
-                }
-
-                MatchResult::Matched { remaining, context } => {
+                MatchResult::Matched {
+                    remaining,
+                    context,
+                    consumed,
+                } => {
                     if let Some(handler_id) = handler {
                         receiver.notification(DaemonNotification::TriggerMatched {
                             handler_id,
                             context,
                         })?;
+                    }
+
+                    if consumed && self.saving_position {
+                        self.saving_position = false;
+                        receiver.restore_position()?;
+                        receiver.clear_from_cursor_down()?;
                     }
 
                     receiver.text(remaining)?;
