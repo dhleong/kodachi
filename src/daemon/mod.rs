@@ -7,7 +7,7 @@ pub mod channel;
 mod commands;
 mod handlers;
 pub mod notifications;
-mod protocol;
+pub mod protocol;
 pub mod responses;
 
 use crate::app::LockableState;

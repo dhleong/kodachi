@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 pub mod stdio;
+pub mod ui;
 
 #[derive(Parser)]
 #[clap(author, version, about, propagate_version = true)]

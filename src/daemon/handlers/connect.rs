@@ -1,7 +1,3 @@
-use crossterm::{
-    cursor::{RestorePosition, SavePosition},
-    terminal::{Clear, ClearType},
-};
 use std::io::{self, Write};
 
 use bytes::BytesMut;
@@ -11,9 +7,10 @@ use tokio::sync::mpsc;
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
-        processing::{ansi::Ansi, text::ProcessorOutputReceiver},
-        Id, LockableState,
+        processing::ansi::Ansi,
+        LockableState,
     },
+    cli::ui::AnsiTerminalWriteUI,
     daemon::{
         channel::{Channel, RespondedChannel},
         commands,
@@ -25,46 +22,13 @@ use crate::{
     transport::{telnet::TelnetTransport, Transport},
 };
 
-struct WriteOutputReceiver<W: Write> {
-    connection_id: Id,
-    notifier: RespondedChannel,
-    output: W,
-}
-
-impl<W: Write> ProcessorOutputReceiver for WriteOutputReceiver<W> {
-    fn save_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, SavePosition)
-    }
-
-    fn restore_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, RestorePosition)
-    }
-
-    fn clear_from_cursor_down(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
-    }
-
-    fn text(&mut self, text: Ansi) -> io::Result<()> {
-        self.output.write_all(&text.as_bytes())
-    }
-
-    fn notification(&mut self, notification: DaemonNotification) -> io::Result<()> {
-        self.notifier
-            .notify(crate::daemon::protocol::Notification::ForConnection {
-                connection_id: self.connection_id,
-                notification,
-            });
-        Ok(())
-    }
-}
-
 pub fn process_connection<T: Transport, W: Write>(
     mut transport: T,
     mut connection: ConnectionReceiver,
     notifier: RespondedChannel,
     output: W,
 ) -> io::Result<RespondedChannel> {
-    let mut receiver = WriteOutputReceiver {
+    let mut receiver = AnsiTerminalWriteUI {
         connection_id: connection.id,
         notifier,
         output,
