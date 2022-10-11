@@ -8,16 +8,30 @@ use crate::{
         matchers::{MatchResult, Matcher},
         Id,
     },
-    daemon::notifications::DaemonNotification,
+    daemon::notifications::{DaemonNotification, MatchContext},
 };
 
 use super::ansi::{Ansi, AnsiMut};
 
 const NEWLINE_BYTE: u8 = b'\n';
 
+pub struct BoxedReceiver<'a> {
+    receiver: Box<&'a mut dyn ProcessorOutputReceiver>,
+}
+
+impl<'a> BoxedReceiver<'a> {
+    pub fn notify(&mut self, notification: DaemonNotification) -> io::Result<()> {
+        self.receiver.notification(notification)
+    }
+}
+
+type MatchHandler = dyn Fn(MatchContext, BoxedReceiver) -> io::Result<()> + Send;
+
 struct RegisteredMatcher {
     matcher: Matcher,
-    handler: Id,
+    #[allow(dead_code)]
+    handler: Id, // We may want to remove by Id
+    on_match: Box<MatchHandler>,
 }
 
 #[derive(Default)]
@@ -99,11 +113,11 @@ impl TextProcessor {
                     context,
                     consumed,
                 } => {
-                    if let Some(handler_id) = handler {
-                        receiver.notification(DaemonNotification::TriggerMatched {
-                            handler_id,
-                            context,
-                        })?;
+                    if let Some(handler) = handler {
+                        let boxed = BoxedReceiver {
+                            receiver: Box::new(receiver),
+                        };
+                        (handler.on_match)(context, boxed)?;
                     }
 
                     if consumed && self.saving_position {
@@ -120,17 +134,25 @@ impl TextProcessor {
         Ok(())
     }
 
-    pub fn register(&mut self, handler: Id, matcher: Matcher) {
-        self.matchers.push(RegisteredMatcher { matcher, handler })
+    pub fn register<R: 'static + Fn(MatchContext, BoxedReceiver) -> io::Result<()> + Send>(
+        &mut self,
+        handler: Id,
+        matcher: Matcher,
+        on_match: R,
+    ) {
+        self.matchers.push(RegisteredMatcher {
+            matcher,
+            handler,
+            on_match: Box::new(on_match),
+        })
     }
 
-    fn perform_match(&mut self, mut to_match: Ansi) -> (Option<Id>, MatchResult) {
+    fn perform_match(&mut self, mut to_match: Ansi) -> (Option<&RegisteredMatcher>, MatchResult) {
         for m in &self.matchers {
             to_match = match m.matcher.try_match(to_match) {
                 MatchResult::Ignored(ansi) => ansi,
                 matched => {
-                    // TODO notify about the match
-                    return (Some(m.handler), matched);
+                    return (Some(m), matched);
                 }
             }
         }

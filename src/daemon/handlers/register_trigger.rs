@@ -28,5 +28,14 @@ pub async fn handle(
         }
     };
 
-    connection.processor.register(handler_id, compiled);
+    connection
+        .processor
+        .register(handler_id, compiled, move |context, mut receiver| {
+            receiver.notify(
+                crate::daemon::notifications::DaemonNotification::TriggerMatched {
+                    handler_id,
+                    context,
+                },
+            )
+        });
 }
