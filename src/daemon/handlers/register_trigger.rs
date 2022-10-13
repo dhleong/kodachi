@@ -14,6 +14,7 @@ pub async fn handle(
         if let Some(reference) = state.lock().unwrap().connections.get_processor(connection_id) {
             reference.clone()
         } else {
+            channel.respond(DaemonResponse::OkResult);
             return;
         };
 
@@ -38,4 +39,6 @@ pub async fn handle(
                 },
             )
         });
+
+    channel.respond(DaemonResponse::OkResult);
 }

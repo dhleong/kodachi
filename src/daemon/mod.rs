@@ -78,6 +78,22 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
             tokio::spawn(handlers::send::handle(channel, state, connection, text));
         }
 
+        ClientRequest::RegisterPrompt {
+            connection_id: connection,
+            matcher,
+            group_id,
+            prompt_index,
+        } => {
+            tokio::spawn(handlers::register_prompt::handle(
+                channel,
+                state,
+                connection,
+                matcher,
+                group_id,
+                prompt_index,
+            ));
+        }
+
         ClientRequest::RegisterTrigger {
             connection_id: connection,
             matcher,
@@ -85,6 +101,36 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
         } => {
             tokio::spawn(handlers::register_trigger::handle(
                 channel, state, connection, matcher, handler_id,
+            ));
+        }
+
+        ClientRequest::SetPromptContent {
+            connection_id,
+            group_id,
+            prompt_index,
+            content,
+            set_group_active,
+        } => {
+            tokio::spawn(handlers::set_prompt_content::handle(
+                channel,
+                state,
+                connection_id,
+                group_id,
+                prompt_index,
+                content,
+                set_group_active.unwrap_or(true),
+            ));
+        }
+
+        ClientRequest::SetActivePromptGroup {
+            connection_id,
+            group_id,
+        } => {
+            tokio::spawn(handlers::set_active_prompt_group::handle(
+                channel,
+                state,
+                connection_id,
+                group_id,
             ));
         }
     }
