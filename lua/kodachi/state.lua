@@ -86,6 +86,43 @@ function KodachiState:on(event, handler)
 end
 
 ---@param matcher MatcherSpec|string
+---@param handler fun(context)|nil If provided, a fn called with the same params as a trigger() handler,
+---and whose return value will be used as the prompt content
+function KodachiState:prompt(matcher, handler)
+  matcher = matchers.inflate(matcher)
+
+  -- TODO:
+  local group_id = 0
+  local prompt_index = 0
+
+  return with_socket(self, function(socket)
+    if not handler then
+      socket:request {
+        type = "RegisterPrompt",
+        connection_id = self.connection_id,
+        matcher = matcher,
+        group_id = group_id,
+        prompt_index = prompt_index,
+      }
+      return
+    end
+
+    self:trigger(matcher, function(context)
+      local to_render = handler(context)
+      if to_render then
+        socket:request {
+          type = "SetPromptContent",
+          connection_id = self.connection_id,
+          group_id = group_id,
+          prompt_index = prompt_index,
+          content = to_render,
+        }
+      end
+    end)
+  end)
+end
+
+---@param matcher MatcherSpec|string
 function KodachiState:trigger(matcher, handler)
   matcher = matchers.inflate(matcher)
   return with_socket(self, function(socket)
