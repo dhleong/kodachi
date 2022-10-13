@@ -2,10 +2,14 @@ use crossterm::{
     cursor::{MoveTo, MoveToNextLine, RestorePosition, SavePosition},
     terminal::{Clear, ClearType, ScrollDown, ScrollUp},
 };
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     app::{
+        clearable::Clearable,
         processing::{ansi::Ansi, text::ProcessorOutputReceiver},
         Id,
     },
@@ -14,6 +18,17 @@ use crate::{
     },
 };
 
+#[derive(Default)]
+pub struct UiState {
+    pub prompts: Vec<Ansi>,
+}
+
+impl Clearable for UiState {
+    fn clear(&mut self) {
+        self.prompts.clear();
+    }
+}
+
 /// This UI expects to interact with an ANSI-powered terminal UI
 /// via an object that implements Write
 pub struct AnsiTerminalWriteUI<W: Write> {
@@ -21,16 +36,21 @@ pub struct AnsiTerminalWriteUI<W: Write> {
     pub notifier: RespondedChannel,
     pub output: W,
 
-    prompts: Vec<Ansi>,
+    state: Arc<Mutex<UiState>>,
 }
 
 impl<W: Write> AnsiTerminalWriteUI<W> {
-    pub fn create(connection_id: Id, notifier: RespondedChannel, output: W) -> Self {
+    pub fn create(
+        state: Arc<Mutex<UiState>>,
+        connection_id: Id,
+        notifier: RespondedChannel,
+        output: W,
+    ) -> Self {
         Self {
             connection_id,
             notifier,
             output,
-            prompts: vec![],
+            state,
         }
     }
 }
@@ -54,7 +74,8 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
     fn text(&mut self, text: Ansi) -> io::Result<()> {
         // Clear the prompts
-        let prompts_count = self.prompts.len() as u16;
+        let state = self.state.lock().unwrap();
+        let prompts_count = state.prompts.len() as u16;
         ::crossterm::queue!(self.output, ScrollDown(prompts_count))?;
 
         self.output.write_all(&text.as_bytes())?;
@@ -62,11 +83,11 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         let (_, h) = ::crossterm::terminal::size()?;
         let (x, y) = ::crossterm::cursor::position()?;
 
-        if !self.prompts.is_empty() {
+        if !state.prompts.is_empty() {
             ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
             ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
 
-            for prompt in &self.prompts {
+            for prompt in &state.prompts {
                 self.output.write_all(&prompt.as_bytes())?;
 
                 // NOTE: This can be convenient for testing redraws:

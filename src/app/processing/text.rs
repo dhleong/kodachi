@@ -25,7 +25,7 @@ impl<'a> BoxedReceiver<'a> {
     }
 }
 
-type MatchHandler = dyn Fn(MatchContext, BoxedReceiver) -> io::Result<()> + Send;
+type MatchHandler = dyn FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send;
 
 struct RegisteredMatcher {
     matcher: Matcher,
@@ -134,7 +134,7 @@ impl TextProcessor {
         Ok(())
     }
 
-    pub fn register<R: 'static + Fn(MatchContext, BoxedReceiver) -> io::Result<()> + Send>(
+    pub fn register<R: 'static + FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send>(
         &mut self,
         handler: Id,
         matcher: Matcher,
@@ -147,8 +147,11 @@ impl TextProcessor {
         })
     }
 
-    fn perform_match(&mut self, mut to_match: Ansi) -> (Option<&RegisteredMatcher>, MatchResult) {
-        for m in &self.matchers {
+    fn perform_match(
+        &mut self,
+        mut to_match: Ansi,
+    ) -> (Option<&mut RegisteredMatcher>, MatchResult) {
+        for m in &mut self.matchers {
             to_match = match m.matcher.try_match(to_match) {
                 MatchResult::Ignored(ansi) => ansi,
                 matched => {

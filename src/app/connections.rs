@@ -5,6 +5,8 @@ use std::{
 
 use tokio::sync::mpsc;
 
+use crate::cli::ui::UiState;
+
 use super::{processing::text::TextProcessor, Id};
 
 pub enum Outgoing {
@@ -12,21 +14,22 @@ pub enum Outgoing {
     Disconnect,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ConnectionState {
-    pub processor: TextProcessor,
+    pub processor: Arc<Mutex<TextProcessor>>,
+    pub ui_state: Arc<Mutex<UiState>>,
 }
 
 #[derive(Clone)]
 pub struct Connection {
     pub outbox: mpsc::Sender<Outgoing>,
-    pub shared_state: Arc<Mutex<ConnectionState>>,
+    pub state: ConnectionState,
 }
 
 pub struct ConnectionReceiver {
     pub id: Id,
     pub outbox: mpsc::Receiver<Outgoing>,
-    pub shared_state: Arc<Mutex<ConnectionState>>,
+    pub state: ConnectionState,
 }
 
 #[derive(Default)]
@@ -43,15 +46,14 @@ impl Connections {
         let state = ConnectionState::default();
         let connection = Connection {
             outbox: outbox_tx,
-            shared_state: Arc::new(Mutex::new(state)),
+            state: state.clone(),
         };
-        let state_ref = connection.shared_state.clone();
         self.connections.insert(id, connection);
 
         ConnectionReceiver {
             id,
             outbox: outbox_rx,
-            shared_state: state_ref,
+            state,
         }
     }
 
@@ -67,9 +69,25 @@ impl Connections {
         }
     }
 
-    pub fn get_state(&mut self, id: Id) -> Option<Arc<Mutex<ConnectionState>>> {
+    pub fn get_state(&mut self, id: Id) -> Option<ConnectionState> {
         if let Some(conn) = self.connections.get(&id) {
-            Some(conn.shared_state.clone())
+            Some(conn.state.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_processor(&mut self, id: Id) -> Option<Arc<Mutex<TextProcessor>>> {
+        if let Some(conn) = self.connections.get(&id) {
+            Some(conn.state.processor.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_ui_state(&mut self, id: Id) -> Option<Arc<Mutex<UiState>>> {
+        if let Some(conn) = self.connections.get(&id) {
+            Some(conn.state.ui_state.clone())
         } else {
             None
         }

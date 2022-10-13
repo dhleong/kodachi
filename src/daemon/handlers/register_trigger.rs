@@ -10,13 +10,12 @@ pub async fn handle(
     matcher: MatcherSpec,
     handler_id: Id,
 ) {
-    let connection_ref =
-        if let Some(reference) = state.lock().unwrap().connections.get_state(connection_id) {
+    let processor_ref =
+        if let Some(reference) = state.lock().unwrap().connections.get_processor(connection_id) {
             reference.clone()
         } else {
             return;
         };
-    let mut connection = connection_ref.lock().unwrap();
 
     let compiled = match matcher.try_into() {
         Ok(compiled) => compiled,
@@ -28,8 +27,9 @@ pub async fn handle(
         }
     };
 
-    connection
-        .processor
+    processor_ref
+        .lock()
+        .unwrap()
         .register(handler_id, compiled, move |context, mut receiver| {
             receiver.notify(
                 crate::daemon::notifications::DaemonNotification::TriggerMatched {
