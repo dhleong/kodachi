@@ -1,4 +1,7 @@
-use std::ops::{Add, Deref, Range, RangeBounds};
+use std::{
+    fmt::{Debug, Display},
+    ops::{Add, Deref, Range, RangeBounds},
+};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
@@ -151,6 +154,26 @@ impl Ansi {
         self.stripped = Some(stripped.clone());
         return stripped;
     }
+
+    pub fn trim_trailing_newlines(self) -> Ansi {
+        if !self.ends_with(&['\r', '\n'][..]) {
+            return self;
+        }
+
+        if let Some(end) = self.bytes.len().checked_sub(1) {
+            for i in (0..end).rev() {
+                let byte = *self
+                    .bytes
+                    .get(i)
+                    .expect("Couldn't access expected index into Bytes");
+                if byte != b'\r' && byte != b'\n' {
+                    let range = 0..(i + 1);
+                    return Ansi::from_bytes(self.bytes.slice(range));
+                }
+            }
+        }
+        return self;
+    }
 }
 
 fn strip_ansi(bytes: Bytes) -> AnsiStripped {
@@ -206,6 +229,19 @@ pub struct AnsiStripped {
     ansi_ranges: Vec<Range<usize>>,
 }
 
+impl Debug for AnsiStripped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value.fmt(f)
+    }
+}
+
+impl Display for AnsiStripped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = std::str::from_utf8(&self.value).unwrap();
+        Display::fmt(s, f)
+    }
+}
+
 impl Deref for AnsiStripped {
     type Target = str;
 
@@ -253,6 +289,12 @@ mod tests {
     fn but_only_strip_ansi() {
         let mut ansi = Ansi::from("say ['anything']");
         assert_eq!(&ansi.strip_ansi()[..], "say ['anything']");
+    }
+
+    #[test]
+    fn trim_trailing_newlines() {
+        let ansi = Ansi::from("grayskull\r\n");
+        assert_eq!(&ansi.trim_trailing_newlines()[..], "grayskull");
     }
 
     #[cfg(test)]

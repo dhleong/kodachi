@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use regex::{Captures, Regex};
+use regex::{Captures, Regex, RegexBuilder};
 use serde::Deserialize;
 
 use crate::daemon::notifications::{MatchContext, MatchedText};
@@ -52,13 +52,18 @@ impl Matcher {
         if let Some(found) = self.pattern.captures(&stripped) {
             let context = self.extract_match_context(&stripped, found);
 
-            let remaining = if self.options.consume {
+            let mut remaining = if self.options.consume {
                 let consumed_range = stripped.get_original_range(context.full_match_range.clone());
                 subject.slice(0..consumed_range.start)
                     + subject.slice(consumed_range.end..subject.len())
             } else {
                 subject
             };
+
+            // If we consumed the whole line, drop any newlines
+            if self.options.consume && remaining.trim().is_empty() {
+                remaining = Ansi::from("");
+            }
 
             return MatchResult::Matched {
                 remaining,
@@ -76,14 +81,17 @@ impl Matcher {
 
         for i in 0..captures.len() {
             let original = stripped.get_original(captures.get(i).unwrap().range());
-            indexed.insert(i, MatchedText::from(original));
+            indexed.insert(i, MatchedText::from(original.trim_trailing_newlines()));
         }
 
         for name in self.pattern.capture_names() {
             if let Some(n) = name {
                 if let Some(captured) = captures.name(n) {
                     let original = stripped.get_original(captured.range());
-                    named.insert(n.to_string(), MatchedText::from(original));
+                    named.insert(
+                        n.to_string(),
+                        MatchedText::from(original.trim_trailing_newlines()),
+                    );
                 }
             }
         }
@@ -110,10 +118,12 @@ impl TryInto<Matcher> for MatcherSpec {
     fn try_into(self) -> Result<Matcher, Self::Error> {
         match self {
             MatcherSpec::Simple { .. } => Err(MatcherCompileError::Unsupported),
-            MatcherSpec::Regex { options, source } => match Regex::new(&source) {
-                Ok(pattern) => Ok(Matcher { options, pattern }),
-                Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
-            },
+            MatcherSpec::Regex { options, source } => {
+                match RegexBuilder::new(&source).multi_line(true).build() {
+                    Ok(pattern) => Ok(Matcher { options, pattern }),
+                    Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
+                }
+            }
         }
     }
 }
@@ -270,6 +280,31 @@ mod tests {
                 &context.named[&"message".to_string()].ansi,
                 "\x1b[32manything\x1b[m"
             );
+        } else {
+            panic!("Expected {:?} to match... but it didn't", matcher);
+        }
+    }
+
+    #[test]
+    fn consume_against_newlines() {
+        let spec = MatcherSpec::Regex {
+            options: Default::default(),
+            source: "^.*honor.*$".to_string(),
+        };
+        let input = "For the honor of Grayskull!\r\n";
+
+        let mut matcher: Matcher = spec.try_into().unwrap();
+        matcher.options.consume = true;
+
+        if let MatchResult::Matched {
+            remaining,
+            context,
+            consumed,
+        } = matcher.try_match(input.into())
+        {
+            assert_eq!(consumed, true);
+            assert_eq!(&remaining[..], "");
+            assert_eq!(&context.indexed[&0].plain, "For the honor of Grayskull!");
         } else {
             panic!("Expected {:?} to match... but it didn't", matcher);
         }
