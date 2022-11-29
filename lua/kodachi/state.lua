@@ -126,25 +126,8 @@ end
 function KodachiState:trigger(matcher, handler)
   matcher = matchers.inflate(matcher)
   return with_socket(self, function(socket)
-    if not self._triggers then
-      self._triggers = Handlers:new()
-      socket:listen(function(message)
-        if message.type == 'TriggerMatched' and message.connection_id == self.connection_id then
-          local triggered_handler = self._triggers:get(message.handler_id)
-          if triggered_handler then
-            vim.schedule(function()
-              triggered_handler(message.context)
-            end)
-          else
-            vim.schedule(function()
-              print('WARNING: Trigger handler missing...')
-            end)
-          end
-        end
-      end)
-    end
-
-    local id = self._triggers:insert(handler)
+    local triggers = self:_trigger_handlers(socket)
+    local id = triggers:insert(handler)
     socket:request {
       type = "RegisterTrigger",
       connection_id = self.connection_id,
@@ -164,6 +147,32 @@ function KodachiState:send(text)
       text = text,
     }
   end)
+end
+
+---@param socket Socket
+function KodachiState:_trigger_handlers(socket)
+  local triggers = self._triggers
+  if not triggers then
+    local new_triggers = Handlers:new()
+    self._triggers = new_triggers
+    socket:listen(function(message)
+      if message.type == 'TriggerMatched' and message.connection_id == self.connection_id then
+        local triggered_handler = self._triggers:get(message.handler_id)
+        if triggered_handler then
+          vim.schedule(function()
+            triggered_handler(message.context)
+          end)
+        else
+          vim.schedule(function()
+            print('WARNING: Trigger handler missing...')
+          end)
+        end
+      end
+    end)
+    return new_triggers
+  end
+
+  return triggers
 end
 
 function KodachiState:_perform_map(lhs)

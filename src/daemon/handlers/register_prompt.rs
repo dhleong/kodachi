@@ -1,5 +1,5 @@
 use crate::{
-    app::{matchers::MatcherSpec, Id, LockableState},
+    app::{matchers::MatcherSpec, processing::text::MatcherId, Id, LockableState},
     daemon::{channel::Channel, responses::DaemonResponse},
 };
 
@@ -35,11 +35,15 @@ pub async fn handle(
         }
     };
 
-    // FIXME: handler ID
+    let id = MatcherId::Prompt {
+        group: group_id,
+        index: prompt_index,
+    };
+
     processor_ref
         .lock()
         .unwrap()
-        .register(Id::MAX, compiled, move |mut context, _| {
+        .register(id, compiled, move |mut context, _| {
             set_prompt_content::try_handle(
                 state.clone(),
                 connection_id,

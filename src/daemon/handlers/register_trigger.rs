@@ -1,5 +1,5 @@
 use crate::{
-    app::{matchers::MatcherSpec, Id, LockableState},
+    app::{matchers::MatcherSpec, processing::text::MatcherId, Id, LockableState},
     daemon::{channel::Channel, responses::DaemonResponse},
 };
 
@@ -10,13 +10,17 @@ pub async fn handle(
     matcher: MatcherSpec,
     handler_id: Id,
 ) {
-    let processor_ref =
-        if let Some(reference) = state.lock().unwrap().connections.get_processor(connection_id) {
-            reference.clone()
-        } else {
-            channel.respond(DaemonResponse::OkResult);
-            return;
-        };
+    let processor_ref = if let Some(reference) = state
+        .lock()
+        .unwrap()
+        .connections
+        .get_processor(connection_id)
+    {
+        reference.clone()
+    } else {
+        channel.respond(DaemonResponse::OkResult);
+        return;
+    };
 
     let compiled = match matcher.try_into() {
         Ok(compiled) => compiled,
@@ -28,17 +32,18 @@ pub async fn handle(
         }
     };
 
-    processor_ref
-        .lock()
-        .unwrap()
-        .register(handler_id, compiled, move |context, mut receiver| {
+    processor_ref.lock().unwrap().register(
+        MatcherId::Handler(handler_id),
+        compiled,
+        move |context, mut receiver| {
             receiver.notify(
                 crate::daemon::notifications::DaemonNotification::TriggerMatched {
                     handler_id,
                     context,
                 },
             )
-        });
+        },
+    );
 
     channel.respond(DaemonResponse::OkResult);
 }

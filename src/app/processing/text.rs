@@ -27,10 +27,16 @@ impl<'a> BoxedReceiver<'a> {
 
 type MatchHandler = dyn FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send;
 
+#[derive(PartialEq)]
+pub enum MatcherId {
+    Handler(Id),
+    Prompt { group: Id, index: usize },
+}
+
 struct RegisteredMatcher {
-    matcher: Matcher,
     #[allow(dead_code)]
-    handler: Id, // We may want to remove by Id
+    id: MatcherId,
+    matcher: Matcher,
     on_match: Box<MatchHandler>,
 }
 
@@ -136,13 +142,13 @@ impl TextProcessor {
 
     pub fn register<R: 'static + FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send>(
         &mut self,
-        handler: Id,
+        id: MatcherId,
         matcher: Matcher,
         on_match: R,
     ) {
         self.matchers.push(RegisteredMatcher {
+            id,
             matcher,
-            handler,
             on_match: Box::new(on_match),
         })
     }
