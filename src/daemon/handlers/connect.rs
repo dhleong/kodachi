@@ -1,8 +1,4 @@
-use std::{
-    io::{self, Write},
-    thread::sleep,
-    time::Duration,
-};
+use std::{io, thread::sleep, time::Duration};
 
 use bytes::BytesMut;
 use telnet::Event;
@@ -11,16 +7,12 @@ use tokio::sync::mpsc;
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
-        processing::ansi::Ansi,
+        processing::{ansi::Ansi, text::ProcessorOutputReceiver},
         LockableState,
     },
     cli::ui::AnsiTerminalWriteUI,
     daemon::{
-        channel::{Channel, RespondedChannel},
-        commands,
-        notifications::DaemonNotification,
-        protocol::Notification,
-        responses::DaemonResponse,
+        channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
     net::Uri,
     transport::{telnet::TelnetTransport, Transport},
@@ -28,31 +20,29 @@ use crate::{
 
 const IDLE_SLEEP_DURATION: Duration = Duration::from_millis(12);
 
-pub fn process_connection<T: Transport, W: Write>(
+pub fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     mut transport: T,
     mut connection: ConnectionReceiver,
-    notifier: RespondedChannel,
-    output: W,
-) -> io::Result<RespondedChannel> {
-    let mut receiver = AnsiTerminalWriteUI {
-        connection_id: connection.id,
-        notifier,
-        output,
-    };
+    mut receiver: R,
+) -> io::Result<R> {
     loop {
         let mut idle = true;
         match transport.read()? {
             Event::Data(data) => {
                 idle = false;
 
+                receiver.begin_chunk()?;
                 let r: &[u8] = &data;
                 let bytes = BytesMut::from(r);
+
                 connection
-                    .shared_state
+                    .state
+                    .processor
                     .lock()
                     .unwrap()
-                    .processor
                     .process(Ansi::from(bytes.freeze()), &mut receiver)?;
+
+                receiver.end_chunk()?;
             }
             Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
             _ => {}
@@ -78,7 +68,7 @@ pub fn process_connection<T: Transport, W: Write>(
         }
     }
 
-    Ok(receiver.notifier)
+    Ok(receiver)
 }
 
 pub async fn handle(
@@ -90,23 +80,18 @@ pub async fn handle(
     let uri = Uri::from_string(&data.uri)?;
     let connection_id = connection.id;
 
-    let mut notifier = channel.respond(DaemonResponse::Connecting { connection_id });
+    let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
 
     let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
     let stdout = io::stdout();
 
-    notifier.notify(Notification::ForConnection {
-        connection_id,
-        notification: DaemonNotification::Connected,
-    });
+    let receiver_state = connection.state.ui_state.clone();
+    let mut receiver = AnsiTerminalWriteUI::create(receiver_state, connection.id, notifier, stdout);
+    receiver.notification(DaemonNotification::Connected)?;
 
-    notifier = process_connection(transport, connection, notifier, stdout)?;
+    receiver = process_connection(transport, connection, receiver)?;
 
-    notifier.notify(Notification::ForConnection {
-        connection_id,
-        notification: DaemonNotification::Disconnected,
-    });
-
+    receiver.notification(DaemonNotification::Disconnected)?;
     state.lock().unwrap().connections.drop(connection_id);
 
     Ok(())

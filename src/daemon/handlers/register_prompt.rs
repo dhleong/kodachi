@@ -3,12 +3,15 @@ use crate::{
     daemon::{channel::Channel, responses::DaemonResponse},
 };
 
+use super::set_prompt_content;
+
 pub async fn handle(
     channel: Channel,
     mut state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
-    handler_id: Id,
+    group_id: Id,
+    prompt_index: usize,
 ) {
     let processor_ref = if let Some(reference) = state
         .lock()
@@ -32,18 +35,25 @@ pub async fn handle(
         }
     };
 
-    processor_ref.lock().unwrap().register(
-        MatcherId::Handler(handler_id),
-        compiled,
-        move |context, mut receiver| {
-            receiver.notify(
-                crate::daemon::notifications::DaemonNotification::TriggerMatched {
-                    handler_id,
-                    context,
-                },
-            )
-        },
-    );
+    let id = MatcherId::Prompt {
+        group: group_id,
+        index: prompt_index,
+    };
+
+    processor_ref
+        .lock()
+        .unwrap()
+        .register(id, compiled, move |mut context, _| {
+            set_prompt_content::try_handle(
+                state.clone(),
+                connection_id,
+                group_id,
+                prompt_index,
+                context.take_full_match().ansi,
+                true,
+            )?;
+            Ok(())
+        });
 
     channel.respond(DaemonResponse::OkResult);
 }

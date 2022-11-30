@@ -8,16 +8,36 @@ use crate::{
         matchers::{MatchResult, Matcher},
         Id,
     },
-    daemon::notifications::DaemonNotification,
+    daemon::notifications::{DaemonNotification, MatchContext},
 };
 
 use super::ansi::{Ansi, AnsiMut};
 
 const NEWLINE_BYTE: u8 = b'\n';
 
+pub struct BoxedReceiver<'a> {
+    receiver: Box<&'a mut dyn ProcessorOutputReceiver>,
+}
+
+impl<'a> BoxedReceiver<'a> {
+    pub fn notify(&mut self, notification: DaemonNotification) -> io::Result<()> {
+        self.receiver.notification(notification)
+    }
+}
+
+type MatchHandler = dyn FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send;
+
+#[derive(PartialEq)]
+pub enum MatcherId {
+    Handler(Id),
+    Prompt { group: Id, index: usize },
+}
+
 struct RegisteredMatcher {
+    #[allow(dead_code)]
+    id: MatcherId,
     matcher: Matcher,
-    handler: Id,
+    on_match: Box<MatchHandler>,
 }
 
 #[derive(Default)]
@@ -28,6 +48,13 @@ pub struct TextProcessor {
 }
 
 pub trait ProcessorOutputReceiver {
+    fn begin_chunk(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+    fn end_chunk(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
     fn save_position(&mut self) -> io::Result<()>;
     fn restore_position(&mut self) -> io::Result<()>;
     fn clear_from_cursor_down(&mut self) -> io::Result<()>;
@@ -92,11 +119,11 @@ impl TextProcessor {
                     context,
                     consumed,
                 } => {
-                    if let Some(handler_id) = handler {
-                        receiver.notification(DaemonNotification::TriggerMatched {
-                            handler_id,
-                            context,
-                        })?;
+                    if let Some(handler) = handler {
+                        let boxed = BoxedReceiver {
+                            receiver: Box::new(receiver),
+                        };
+                        (handler.on_match)(context, boxed)?;
                     }
 
                     if consumed && self.saving_position {
@@ -113,17 +140,28 @@ impl TextProcessor {
         Ok(())
     }
 
-    pub fn register(&mut self, handler: Id, matcher: Matcher) {
-        self.matchers.push(RegisteredMatcher { matcher, handler })
+    pub fn register<R: 'static + FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send>(
+        &mut self,
+        id: MatcherId,
+        matcher: Matcher,
+        on_match: R,
+    ) {
+        self.matchers.push(RegisteredMatcher {
+            id,
+            matcher,
+            on_match: Box::new(on_match),
+        })
     }
 
-    fn perform_match(&mut self, mut to_match: Ansi) -> (Option<Id>, MatchResult) {
-        for m in &self.matchers {
+    fn perform_match(
+        &mut self,
+        mut to_match: Ansi,
+    ) -> (Option<&mut RegisteredMatcher>, MatchResult) {
+        for m in &mut self.matchers {
             to_match = match m.matcher.try_match(to_match) {
                 MatchResult::Ignored(ansi) => ansi,
                 matched => {
-                    // TODO notify about the match
-                    return (Some(m.handler), matched);
+                    return (Some(m), matched);
                 }
             }
         }
