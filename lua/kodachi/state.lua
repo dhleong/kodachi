@@ -1,17 +1,11 @@
 local Handlers = require 'kodachi.handlers'
 local matchers = require 'kodachi.matchers'
+local PromptsManager = require 'kodachi.prompts'
+
+local util = require 'kodachi.util.state'
+local with_socket = util.with_socket
 
 ---@alias KodachiEvent 'connected'|'disconnected'
-
----@param state KodachiState
----@param handler fun(socket:Socket)
-local function with_socket(state, handler)
-  if not state.connection_id then
-    return false
-  end
-
-  return handler(state.socket)
-end
 
 ---@class KodachiState
 ---@field bufnr number
@@ -21,6 +15,7 @@ end
 ---@field socket Socket
 ---@field _events any|nil
 ---@field _mappings any
+---@field _prompts PromptsManager|nil
 ---@field _triggers Handlers|nil
 local KodachiState = {}
 
@@ -32,14 +27,22 @@ function KodachiState:new(o)
 end
 
 function KodachiState:cleanup()
+  local cleared_any = false
   if self._triggers then
     self._triggers:clear()
-    if self.socket and self.connection_id then
-      self.socket:notify {
-        type = "Clear",
-        connection_id = self.connection_id,
-      }
-    end
+    cleared_any = true
+  end
+
+  if self._prompts then
+    self._prompts:clear()
+    cleared_any = true
+  end
+
+  if cleared_any and self.socket and self.connection_id then
+    self.socket:notify {
+      type = "Clear",
+      connection_id = self.connection_id,
+    }
   end
 end
 
@@ -89,37 +92,15 @@ end
 ---@param handler fun(context)|nil If provided, a fn called with the same params as a trigger() handler,
 ---and whose return value will be used as the prompt content
 function KodachiState:prompt(matcher, handler)
-  matcher = matchers.inflate(matcher)
+  local prompts = self._prompts
+  if not prompts then
+    local new_prompts = PromptsManager:new()
+    self._prompts = new_prompts
+    prompts = new_prompts
+  end
 
-  -- TODO:
-  local group_id = 0
-  local prompt_index = 0
-
-  return with_socket(self, function(socket)
-    if not handler then
-      socket:request {
-        type = "RegisterPrompt",
-        connection_id = self.connection_id,
-        matcher = matcher,
-        group_id = group_id,
-        prompt_index = prompt_index,
-      }
-      return
-    end
-
-    self:trigger(matcher, function(context)
-      local to_render = handler(context)
-      if to_render then
-        socket:request {
-          type = "SetPromptContent",
-          connection_id = self.connection_id,
-          group_id = group_id,
-          prompt_index = prompt_index,
-          content = to_render,
-        }
-      end
-    end)
-  end)
+  local group = prompts:group(0)
+  return group:add(matcher, handler)
 end
 
 ---@param matcher MatcherSpec|string

@@ -19,6 +19,10 @@ function Handlers:clear()
   self._next_id = 0
 end
 
+function Handlers:allocate_id()
+  return self:insert(nil)
+end
+
 function Handlers:insert(handler)
   local id = self._next_id
   self._next_id = id + 1
@@ -32,6 +36,10 @@ end
 
 function Handlers:get(id)
   return self._entries[id]
+end
+
+function Handlers:put(id, handler)
+  self._entries[id] = handler
 end
 
 return Handlers
