@@ -47,7 +47,9 @@ pub fn try_handle(
         };
 
     if let Ok(mut ui_state) = conn_state.ui_state.lock() {
-        ui_state.prompts.insert(prompt_index, Ansi::from(content))
+        ui_state
+            .prompts
+            .set_index(prompt_index, Ansi::from(content))
     }
 
     if set_group_active {

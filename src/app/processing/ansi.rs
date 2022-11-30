@@ -70,6 +70,18 @@ pub struct Ansi {
     stripped: Option<AnsiStripped>,
 }
 
+impl Debug for Ansi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.bytes.fmt(f)
+    }
+}
+
+impl PartialEq for Ansi {
+    fn eq(&self, other: &Self) -> bool {
+        self.bytes.eq(&other.bytes)
+    }
+}
+
 impl Deref for Ansi {
     type Target = str;
 

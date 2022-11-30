@@ -1,3 +1,5 @@
+mod prompts;
+
 use crossterm::{
     cursor::{MoveTo, MoveToNextLine, RestorePosition, SavePosition},
     terminal::{Clear, ClearType, ScrollDown, ScrollUp},
@@ -5,6 +7,7 @@ use crossterm::{
 use std::{
     io::{self, Write},
     sync::{Arc, Mutex},
+    time::SystemTime,
 };
 
 use crate::{
@@ -18,9 +21,11 @@ use crate::{
     },
 };
 
+use self::prompts::PromptsState;
+
 #[derive(Default)]
 pub struct UiState {
-    pub prompts: Vec<Ansi>,
+    pub prompts: PromptsState,
 }
 
 impl Clearable for UiState {
@@ -87,14 +92,16 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
             ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
             ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
 
-            for prompt in &state.prompts {
-                self.output.write_all(&prompt.as_bytes())?;
+            for prompt in state.prompts.iter() {
+                if let Some(prompt) = prompt {
+                    self.output.write_all(&prompt.as_bytes())?;
 
-                // NOTE: This can be convenient for testing redraws:
-                // self.output
-                //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
+                    // NOTE: This can be convenient for testing redraws:
+                    // self.output
+                    //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
 
-                ::crossterm::queue!(self.output, MoveToNextLine(1))?;
+                    ::crossterm::queue!(self.output, MoveToNextLine(1))?;
+                }
             }
 
             ::crossterm::queue!(self.output, MoveTo(x, y),)?;
