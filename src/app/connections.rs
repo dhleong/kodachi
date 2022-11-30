@@ -85,14 +85,6 @@ impl Connections {
         }
     }
 
-    pub fn get_ui_state(&mut self, id: Id) -> Option<Arc<Mutex<UiState>>> {
-        if let Some(conn) = self.connections.get(&id) {
-            Some(conn.state.ui_state.clone())
-        } else {
-            None
-        }
-    }
-
     fn allocate_id(&mut self) -> Id {
         let id = self.next_id;
         self.next_id += 1;

@@ -6,6 +6,8 @@ use crate::app::{processing::ansi::Ansi, Id};
 
 #[derive(Serialize)]
 pub struct MatchedText {
+    #[serde(skip_serializing)]
+    pub raw: Ansi,
     pub plain: String,
     pub ansi: String,
 }
@@ -15,6 +17,7 @@ impl MatchedText {
         return MatchedText {
             ansi: (&ansi).to_string(),
             plain: ansi.strip_ansi().to_string(),
+            raw: ansi,
         };
     }
 }
@@ -24,6 +27,14 @@ pub struct MatchContext {
     pub named: HashMap<String, MatchedText>,
     pub indexed: HashMap<usize, MatchedText>,
     pub full_match_range: Range<usize>,
+}
+
+impl MatchContext {
+    pub fn take_full_match(&mut self) -> MatchedText {
+        self.indexed
+            .remove(&0)
+            .expect("MatchContext was missing the full_match somehow")
+    }
 }
 
 #[derive(Serialize)]

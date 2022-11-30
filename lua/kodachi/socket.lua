@@ -1,5 +1,9 @@
 ---@alias KodachiRequest { type: string }
 
+---@alias TriggerMatchedNotification { type: "'TriggerMatched'", connection_id: number, handler_id: number, context: table }
+---@alias DisconnectedNotification { type: "'Disconnected'", connection_id: number  }
+---@alias KodachiNotification TriggerMatchedNotification | DisconnectedNotification
+
 ---@class Socket
 ---@field name string
 ---@field _receivers any[]
@@ -22,7 +26,7 @@ function Socket:new(name, from_app, to_app)
   return o
 end
 
----@param handler fun(message:KodachiRequest)
+---@param handler fun(message:KodachiNotification)
 function Socket:listen(handler)
   table.insert(self._receivers, handler)
 end
