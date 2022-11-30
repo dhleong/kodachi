@@ -62,7 +62,7 @@ impl Matcher {
 
             // If we consumed the whole line, drop any newlines
             if self.options.consume && remaining.trim().is_empty() {
-                remaining = Ansi::from("");
+                remaining = Ansi::empty();
             }
 
             return MatchResult::Matched {

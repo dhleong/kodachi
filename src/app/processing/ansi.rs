@@ -133,6 +133,10 @@ impl Add for Ansi {
 }
 
 impl Ansi {
+    pub fn empty() -> Self {
+        Self::from("")
+    }
+
     pub fn from_bytes(bytes: Bytes) -> Self {
         Self {
             bytes,
