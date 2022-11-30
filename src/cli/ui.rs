@@ -7,7 +7,6 @@ use crossterm::{
 use std::{
     io::{self, Write},
     sync::{Arc, Mutex},
-    time::SystemTime,
 };
 
 use crate::{
@@ -34,6 +33,11 @@ impl Clearable for UiState {
     }
 }
 
+#[derive(Default)]
+struct InternalState {
+    rendered_prompt_lines: u16,
+}
+
 /// This UI expects to interact with an ANSI-powered terminal UI
 /// via an object that implements Write
 pub struct AnsiTerminalWriteUI<W: Write> {
@@ -42,6 +46,7 @@ pub struct AnsiTerminalWriteUI<W: Write> {
     pub output: W,
 
     state: Arc<Mutex<UiState>>,
+    internal: InternalState,
 }
 
 impl<W: Write> AnsiTerminalWriteUI<W> {
@@ -56,6 +61,7 @@ impl<W: Write> AnsiTerminalWriteUI<W> {
             notifier,
             output,
             state,
+            internal: InternalState::default(),
         }
     }
 }
@@ -80,8 +86,10 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
     fn text(&mut self, text: Ansi) -> io::Result<()> {
         // Clear the prompts
         let state = self.state.lock().unwrap();
-        let prompts_count = state.prompts.len() as u16;
-        ::crossterm::queue!(self.output, ScrollDown(prompts_count))?;
+        let last_prompts_count = self.internal.rendered_prompt_lines;
+        if last_prompts_count > 0 {
+            ::crossterm::queue!(self.output, ScrollDown(last_prompts_count))?;
+        }
 
         self.output.write_all(&text.as_bytes())?;
 
@@ -89,6 +97,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         let (x, y) = ::crossterm::cursor::position()?;
 
         if !state.prompts.is_empty() {
+            let prompts_count = state.prompts.len() as u16;
             ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
             ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
 
@@ -104,7 +113,8 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
                 }
             }
 
-            ::crossterm::queue!(self.output, MoveTo(x, y),)?;
+            ::crossterm::queue!(self.output, MoveTo(x, y + prompts_count),)?;
+            self.internal.rendered_prompt_lines = prompts_count;
         }
 
         Ok(())
