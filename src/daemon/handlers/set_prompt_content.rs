@@ -2,6 +2,7 @@ use std::io;
 
 use crate::{
     app::{processing::ansi::Ansi, Id, LockableState},
+    cli::ui::prompts::PromptsState,
     daemon::{channel::Channel, responses::DaemonResponse},
 };
 
@@ -47,9 +48,16 @@ pub fn try_handle(
         };
 
     if let Ok(mut ui_state) = conn_state.ui_state.lock() {
-        ui_state
-            .prompts
-            .set_index(prompt_index, Ansi::from(content))
+        let new_content = Ansi::from(content);
+        if ui_state.active_prompt_group == group_id {
+            ui_state.prompts.set_index(prompt_index, new_content);
+        } else if let Some(group) = ui_state.inactive_prompt_groups.get_mut(group_id) {
+            group.set_index(prompt_index, new_content);
+        } else {
+            let mut group = PromptsState::default();
+            group.set_index(prompt_index, new_content);
+            ui_state.inactive_prompt_groups.insert(group_id, group);
+        }
     }
 
     if set_group_active {

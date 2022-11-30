@@ -1,4 +1,4 @@
-mod prompts;
+pub mod prompts;
 
 use crossterm::{
     cursor::{MoveTo, MoveToNextLine, RestorePosition, SavePosition},
@@ -20,16 +20,19 @@ use crate::{
     },
 };
 
-use self::prompts::PromptsState;
+use self::prompts::{PromptGroups, PromptsState};
 
 #[derive(Default)]
 pub struct UiState {
     pub prompts: PromptsState,
+    pub active_prompt_group: Id,
+    pub inactive_prompt_groups: PromptGroups,
 }
 
 impl Clearable for UiState {
     fn clear(&mut self) {
         self.prompts.clear();
+        self.inactive_prompt_groups.clear();
     }
 }
 

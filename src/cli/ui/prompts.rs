@@ -1,4 +1,6 @@
-use crate::app::{clearable::Clearable, processing::ansi::Ansi};
+use std::collections::HashMap;
+
+use crate::app::{clearable::Clearable, processing::ansi::Ansi, Id};
 
 #[derive(Default)]
 pub struct PromptsState {
@@ -34,6 +36,31 @@ impl PromptsState {
             self.values.push(None);
         }
         self.values[index] = Some(content);
+    }
+}
+
+#[derive(Default)]
+pub struct PromptGroups {
+    groups: HashMap<Id, PromptsState>,
+}
+
+impl Clearable for PromptGroups {
+    fn clear(&mut self) {
+        self.groups.clear();
+    }
+}
+
+impl PromptGroups {
+    pub fn get_mut(&mut self, group_id: Id) -> Option<&mut PromptsState> {
+        self.groups.get_mut(&group_id)
+    }
+
+    pub fn insert(&mut self, group_id: Id, group: PromptsState) {
+        self.groups.insert(group_id, group);
+    }
+
+    pub fn remove(&mut self, group_id: Id) -> Option<PromptsState> {
+        self.groups.remove(&group_id)
     }
 }
 
