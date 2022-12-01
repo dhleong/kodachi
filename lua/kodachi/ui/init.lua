@@ -1,7 +1,9 @@
 local states = require 'kodachi.states'
 
+---@return number The created window id
 local function create_window()
   vim.cmd [[ vsplit | enew ]]
+  return vim.fn.win_getid()
 end
 
 local function reuse_or_create_window()
@@ -12,6 +14,10 @@ local function reuse_or_create_window()
     if not existing.exited and existing.connection_id then
       print('kodachi: A connection is already live in this buffer')
       return
+    elseif initial_bufnr == existing.initial_bufnr and vim.fn.winheight(existing.initial_winid) ~= -1 then
+      -- Reuse an existing window
+      vim.api.nvim_set_current_win(existing.initial_winid)
+      vim.cmd [[ enew ]]
     elseif initial_bufnr == existing.initial_bufnr then
       -- We're in the "initial" buffer for this connection, and the connection has closed.
       -- Create a new window instead of overwriting this one
@@ -47,6 +53,7 @@ function M.ensure_window()
   -- script for a live connection to update mappings, etc.
   states[initial_bufnr] = state
   state.initial_bufnr = initial_bufnr
+  state.initial_winid = vim.fn.win_getid()
 
   local job_id = require 'kodachi.ui.term'.spawn_unix {
     socket_name = socket.name,
