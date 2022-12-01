@@ -15,18 +15,51 @@ function M.spawn_unix(opts)
 
   -- TODO If not debug, ensure the release executable is compiled/up-to-date
 
+  local session_name = vim.fn.rand()
+
   local cmd = vim.tbl_flatten {
-    tmux_wrap and { 'tmux', '-f', kodachi_tmux, 'new-session', '-n', 'kodachi' } or {},
+    tmux_wrap and {
+      'tmux',
+      '-L', 'kodachi-tmux', -- Use a kodachi-specific server to avoid option pollution
+      '-f', kodachi_tmux,
+      'new-session',
+      '-n', 'kodachi',
+      '-s', session_name,
+    } or {},
     M.debug and { 'cargo', 'run', '--' } or kodachi_exe,
     'unix', opts.socket_name,
   }
 
+  local session_path = vim.env.HOME .. '/.config/kodachi/.sessions/'
+  local output_file = session_path .. session_name
+  local state = { bufnr = nil }
+
+  -- Ensure the sessions dir exists
+  vim.fn.mkdir(session_path, "p")
+
   local job_id = vim.fn.termopen(cmd, {
     cwd = kodachi_root,
-    on_exit = function (_, _, _)
+    on_exit = function(_, _, _)
+      -- Smol bit of hacks to "preserve" the window on exit
+      if state.bufnr then
+        local win = vim.fn.bufwinid(state.bufnr)
+        if win ~= -1 then
+          local uri = vim.uri_from_fname(output_file)
+          local bufnr = vim.uri_to_bufnr(uri)
+          vim.api.nvim_win_set_buf(win, bufnr)
+
+          vim.api.nvim_win_call(win, function()
+            vim.fn.termopen({ "cat", output_file })
+            vim.fn.delete(output_file)
+          end)
+        end
+      end
+
       opts.on_exit()
     end,
   })
+
+  state.bufnr = vim.fn.bufnr('%')
 
   return job_id
 end
