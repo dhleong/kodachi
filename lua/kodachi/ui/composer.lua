@@ -1,4 +1,4 @@
-local states = require'kodachi.states'
+local states = require 'kodachi.states'
 
 local MIN_HEIGHT = 2
 
@@ -39,6 +39,10 @@ local function configure_current_as_composer()
   -- Support inserting newlines
   vim.cmd [[ inoremap <buffer> <s-cr> <cr> ]]
   vim.cmd [[ inoremap <buffer> <a-cr> <cr> ]]
+
+  -- Make it natural to leave
+  vim.cmd [[ inoremap <buffer> <c-c> <esc>ZQ ]]
+  vim.cmd [[ nnoremap <buffer> <c-c> ZQ ]]
 end
 
 local function measure_line_width(linenr)
@@ -81,16 +85,15 @@ function M.enter_or_create(opts)
 
   if state.composer_bufnr then
     -- Reuse the existing buffer in case it had some text
-    vim.cmd(state.composer_bufnr .. 'buffer')
+    vim.api.nvim_set_current_buf(state.composer_bufnr)
   else
     -- New composer buffer
     vim.cmd [[ enew ]]
     state.composer_bufnr = vim.fn.bufnr('%')
     states[state.composer_bufnr] = state
-
-    configure_current_as_composer()
   end
 
+  configure_current_as_composer()
   on_composer_buf_entered()
 
   if config.insert then
@@ -120,7 +123,7 @@ end
 function M.compute_height()
   local win_width = vim.fn.winwidth(0)
   local height = 0
-  for i=1, vim.fn.line('$') do
+  for i = 1, vim.fn.line('$') do
     height = height + vim.fn.ceil(measure_line_width(i) / win_width)
   end
   return vim.fn.max { MIN_HEIGHT, height + 1 }
