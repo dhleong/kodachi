@@ -49,8 +49,11 @@ function M.spawn_unix(opts)
           vim.api.nvim_win_set_buf(win, bufnr)
 
           vim.api.nvim_win_call(win, function()
-            vim.fn.termopen({ "cat", output_file })
-            vim.fn.delete(output_file)
+            vim.fn.termopen({ "cat", output_file }, {
+              on_exit = function(_, _, _)
+                vim.fn.delete(output_file)
+              end
+            })
           end)
         end
       end
