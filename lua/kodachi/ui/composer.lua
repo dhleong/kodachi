@@ -26,7 +26,13 @@ local function state_composer()
   return state
 end
 
-local function configure_current_as_composer()
+---@param state KodachiState
+local function configure_current_as_composer(state)
+  -- Enable null-ls completions
+  -- NOTE: These msut be done *before* setting buftype, or else null-ls ignores!
+  vim.api.nvim_buf_set_name(0, 'kodachi.composer:' .. state.connection_id)
+  vim.bo.filetype = 'kodachi.composer'
+
   vim.bo.buftype = 'nofile'
   vim.bo.bufhidden = 'hide'
   vim.bo.swapfile = false
@@ -58,7 +64,7 @@ local function on_composer_buf_entered()
       autocmd TextChangedI <buffer> lua require'kodachi.ui.composer'.on_change()
 
       " Hide the window on leave:
-      autocmd BufLeave <buffer> hide
+      autocmd BufLeave <buffer> lua require'kodachi.ui.composer'.hide()
     augroup KodachiComposer
   ]]
 
@@ -83,7 +89,7 @@ function M.enter_or_create(opts)
   -- No existing window; create one
   vim.cmd [[ belowright new ]]
 
-  if state.composer_bufnr then
+  if state.composer_bufnr and vim.fn.bufexists(state.composer_bufnr) ~= 0 then
     -- Reuse the existing buffer in case it had some text
     vim.api.nvim_set_current_buf(state.composer_bufnr)
   else
@@ -91,9 +97,9 @@ function M.enter_or_create(opts)
     vim.cmd [[ enew ]]
     state.composer_bufnr = vim.fn.bufnr('%')
     states[state.composer_bufnr] = state
+    configure_current_as_composer(state)
   end
 
-  configure_current_as_composer()
   on_composer_buf_entered()
 
   if config.insert then
@@ -139,7 +145,12 @@ function M.hide(opts)
       vim.cmd [[ bwipeout! ]]
       state.composer_bufnr = nil
     else
-      vim.cmd [[ hide ]]
+      -- NOTE: If leaving to a popup window, for example, we may *not* be
+      -- executing in its context! So let's be more careful
+      local win = vim.fn.bufwinid(state.composer_bufnr)
+      if win ~= -1 then
+        vim.fn.win_execute(win, [[ hide ]])
+      end
     end
   end
 end
