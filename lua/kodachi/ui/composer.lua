@@ -30,7 +30,12 @@ end
 local function configure_current_as_composer(state)
   -- Enable null-ls completions
   -- NOTE: These msut be done *before* setting buftype, or else null-ls ignores!
-  vim.api.nvim_buf_set_name(0, 'kodachi.composer:' .. state.connection_id)
+  local buf_name = 'kodachi.composer:' .. state.connection_id
+  local existing_bufnr = vim.fn.bufnr(buf_name)
+  if existing_bufnr ~= -1 then
+    vim.api.nvim_buf_delete(existing_bufnr, { force = true })
+  end
+  vim.api.nvim_buf_set_name(0, buf_name)
   vim.bo.filetype = 'kodachi.composer'
 
   vim.bo.buftype = 'nofile'
