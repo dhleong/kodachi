@@ -29,6 +29,8 @@ pub enum ClientRequest {
     /// Request suggestions to complete some word in the composer
     CompleteComposer {
         connection_id: Id,
+
+        #[serde(flatten)]
         params: CompletionParams,
     },
 
