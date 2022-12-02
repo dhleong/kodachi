@@ -38,20 +38,28 @@ return h.make_builtin({
         }
       end
 
+      -- NOTE: Async/await might be nice, but probably not be worth the dependency on plenary
+      local cb = function(err, results)
+        if err then
+          done {}
+          return
+        end
+
+        local candidates = results and get_candidates(results.words) or {}
+        done {
+          {
+            items = candidates,
+            isIncomplete = #candidates > 0
+          }
+        }
+      end
+
       local line = params.content[params.row]
-      local results = require 'kodachi.completion'.suggest_completions(state, {
+      require 'kodachi.completion'.suggest_completions(state, {
         word_to_complete = params.word_to_complete,
         line = line,
         line_to_cursor = line:sub(1, params.col)
-      })
-
-      local candidates = results and get_candidates(results.words) or {}
-      done {
-        {
-          items = candidates,
-          isIncomplete = #candidates > 0
-        }
-      }
+      }, cb)
     end,
     async = true,
   },

@@ -38,7 +38,16 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
 
     for read in input.lines() {
         let raw_json = read?;
-        let request: Request = serde_json::from_str(&raw_json).unwrap();
+        let request: Request = match serde_json::from_str(&raw_json) {
+            Ok(request) => request,
+            Err(err) => {
+                // return Err(io::Error::new(
+                //     io::ErrorKind::InvalidInput,
+                //     format!("Unable to parse input `{}`: {}", raw_json, err),
+                // ));
+                panic!("Unable to parse input `{}`: {}", raw_json, err);
+            }
+        };
         let state = shared_state.clone();
 
         match request {
@@ -76,6 +85,15 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
             text,
         } => {
             tokio::spawn(handlers::send::handle(channel, state, connection, text));
+        }
+
+        ClientRequest::CompleteComposer {
+            connection_id: connection,
+            params,
+        } => {
+            tokio::spawn(handlers::complete_composer::handle(
+                channel, state, connection, params,
+            ));
         }
 
         ClientRequest::RegisterPrompt {

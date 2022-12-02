@@ -7,6 +7,13 @@ pub struct Connect {
     pub uri: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CompletionParams {
+    pub word_to_complete: String,
+    pub line_to_cursor: String,
+    pub line: String,
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientRequest {
@@ -17,6 +24,12 @@ pub enum ClientRequest {
     Send {
         connection_id: Id,
         text: String,
+    },
+
+    /// Request suggestions to complete some word in the composer
+    CompleteComposer {
+        connection_id: Id,
+        params: CompletionParams,
     },
 
     RegisterTrigger {

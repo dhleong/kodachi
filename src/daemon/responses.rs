@@ -10,4 +10,6 @@ pub enum DaemonResponse {
 
     Connecting { connection_id: Id },
     SendResult { sent: bool },
+
+    CompleteResult { words: Vec<String> },
 }

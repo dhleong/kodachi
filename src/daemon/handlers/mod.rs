@@ -1,4 +1,5 @@
 pub mod clear;
+pub mod complete_composer;
 pub mod connect;
 pub mod disconnect;
 pub mod register_prompt;
