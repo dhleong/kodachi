@@ -1,23 +1,29 @@
 use std::io;
 
 use crate::{
-    app::{Id, LockableState},
-    daemon::{channel::Channel, commands},
+    app::{completion::CompletionParams, Id, LockableState},
+    daemon::{channel::Channel, responses::DaemonResponse},
 };
 
 pub async fn handle(
     channel: Channel,
-    state: LockableState,
+    mut state: LockableState,
     connection_id: Id,
-    params: commands::CompletionParams,
+    params: CompletionParams,
 ) -> io::Result<()> {
-    let words = vec![
-        "grayskull".to_string(),
-        "magic".to_string(),
-        "swift".to_string(),
-        "wind".to_string(),
-    ];
+    let connection = match state.lock().unwrap().connections.get_state(connection_id) {
+        Some(connection) => connection,
+        None => {
+            channel.respond(DaemonResponse::ErrorResult {
+                error: "Not connected".to_string(),
+            });
+            return Ok(());
+        }
+    };
 
-    channel.respond(crate::daemon::responses::DaemonResponse::CompleteResult { words });
+    let completions = connection.completions.lock().unwrap();
+    let words = completions.suggest(params);
+
+    channel.respond(DaemonResponse::CompleteResult { words });
     Ok(())
 }

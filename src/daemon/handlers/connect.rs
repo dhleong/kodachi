@@ -8,6 +8,7 @@ use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
         processing::{ansi::Ansi, text::ProcessorOutputReceiver},
+        processors::register_processors,
         LockableState,
     },
     cli::ui::AnsiTerminalWriteUI,
@@ -76,7 +77,7 @@ pub async fn handle(
     mut state: LockableState,
     data: commands::Connect,
 ) -> io::Result<()> {
-    let connection = state.lock().unwrap().connections.create();
+    let mut connection = state.lock().unwrap().connections.create();
     let uri = Uri::from_string(&data.uri)?;
     let connection_id = connection.id;
 
@@ -84,6 +85,8 @@ pub async fn handle(
 
     let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
     let stdout = io::stdout();
+
+    register_processors(state.clone(), &mut connection);
 
     let receiver_state = connection.state.ui_state.clone();
     let mut receiver = AnsiTerminalWriteUI::create(receiver_state, connection.id, notifier, stdout);

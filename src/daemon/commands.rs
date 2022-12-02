@@ -1,17 +1,10 @@
 use serde::Deserialize;
 
-use crate::app::{matchers::MatcherSpec, Id};
+use crate::app::{completion::CompletionParams, matchers::MatcherSpec, Id};
 
 #[derive(Debug, Deserialize)]
 pub struct Connect {
     pub uri: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct CompletionParams {
-    pub word_to_complete: String,
-    pub line_to_cursor: String,
-    pub line: String,
 }
 
 #[derive(Deserialize)]

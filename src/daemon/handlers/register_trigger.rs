@@ -32,7 +32,7 @@ pub async fn handle(
         }
     };
 
-    processor_ref.lock().unwrap().register(
+    processor_ref.lock().unwrap().register_matcher(
         MatcherId::Handler(handler_id),
         compiled,
         move |context, mut receiver| {
