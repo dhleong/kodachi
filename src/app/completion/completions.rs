@@ -4,7 +4,7 @@ use regex::Regex;
 
 use crate::app::processing::ansi::Ansi;
 
-use super::CompletionParams;
+use super::{transforms::WordTransform, CompletionParams};
 
 pub struct Completions {
     incoming_words: HashSet<String>,
@@ -29,8 +29,11 @@ impl Completions {
         }
     }
 
-    pub fn suggest(&self, _params: CompletionParams) -> Vec<String> {
-        // TODO
-        self.incoming_words.iter().map(|s| s.to_string()).collect()
+    pub fn suggest(&self, params: CompletionParams) -> Vec<String> {
+        let transformer = WordTransform::matching_word(params.word_to_complete);
+        self.incoming_words
+            .iter()
+            .map(|s| transformer.transform(s))
+            .collect()
     }
 }

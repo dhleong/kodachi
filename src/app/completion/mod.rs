@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 pub mod completions;
+pub mod transforms;
 
 #[derive(Debug, Deserialize)]
 pub struct CompletionParams {
