@@ -23,7 +23,7 @@ pub enum ClientRequest {
     CompleteComposer {
         connection_id: Id,
 
-        #[serde(flatten)]
+        // #[serde(flatten)]
         params: CompletionParams,
     },
 

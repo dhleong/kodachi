@@ -1,5 +1,6 @@
-use std::io::{self, BufReader};
+use std::io::{self, stdout, BufReader};
 use std::os::unix::net::UnixStream;
+use std::time::Duration;
 
 use clap::StructOpt;
 use cli::{Cli, Commands};
@@ -11,16 +12,14 @@ mod net;
 mod transport;
 
 use cli::stdio::StdinReader;
+use crossterm::style::{Print, ResetColor};
 
-#[tokio::main]
-async fn main() -> io::Result<()> {
-    let cli = Cli::parse();
-
+async fn run(cli: Cli) -> io::Result<()> {
     match &cli.command {
         Commands::Stdio => {
             let input = StdinReader::stdin();
             let response = io::stderr();
-            daemon::daemon(input, response).await?;
+            daemon::daemon(input, response).await
         }
 
         Commands::Unix { path } => {
@@ -30,9 +29,22 @@ async fn main() -> io::Result<()> {
             };
             let input = BufReader::new(socket.try_clone().unwrap());
             let response = socket;
-            daemon::daemon(input, response).await?;
+            daemon::daemon(input, response).await
         }
     }
+}
 
-    Ok(())
+fn main() -> io::Result<()> {
+    let cli = Cli::parse();
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let result = rt.block_on(run(cli));
+
+    // Clean up any dangling threads (connections, etc.)
+    rt.shutdown_timeout(Duration::from_millis(100));
+
+    // Leave some room to print the error clearly
+    ::crossterm::execute!(stdout(), ResetColor, Print("\n\n"))?;
+
+    return result;
 }

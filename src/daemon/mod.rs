@@ -41,11 +41,10 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
         let request: Request = match serde_json::from_str(&raw_json) {
             Ok(request) => request,
             Err(err) => {
-                // return Err(io::Error::new(
-                //     io::ErrorKind::InvalidInput,
-                //     format!("Unable to parse input `{}`: {}", raw_json, err),
-                // ));
-                panic!("Unable to parse input `{}`: {}", raw_json, err);
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Unable to parse input `{}`: {}", raw_json, err),
+                ));
             }
         };
         let state = shared_state.clone();
