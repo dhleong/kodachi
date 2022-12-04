@@ -32,6 +32,12 @@ impl Completions {
         );
     }
 
+    pub fn process_outgoing(&mut self, line: String) {
+        let words_regex = Regex::new(r"(\w+)").unwrap();
+        self.history
+            .insert_many(words_regex.find_iter(&line).map(|m| m.as_str().to_string()));
+    }
+
     pub fn suggest(&self, params: CompletionParams) -> Vec<String> {
         let transformer = WordTransform::matching_word(params.word_to_complete);
         self.history
