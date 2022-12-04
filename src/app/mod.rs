@@ -5,6 +5,7 @@ use self::connections::Connections;
 pub mod clearable;
 pub mod completion;
 pub mod connections;
+pub mod history;
 pub mod matchers;
 pub mod processing;
 pub mod processors;
