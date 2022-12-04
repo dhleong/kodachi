@@ -26,6 +26,7 @@ impl<'a> BoxedReceiver<'a> {
 }
 
 type MatchHandler = dyn FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send;
+type LineHandler = dyn Fn(&mut Ansi) -> io::Result<()> + Send;
 
 #[derive(PartialEq)]
 pub enum MatcherId {
@@ -40,9 +41,14 @@ struct RegisteredMatcher {
     on_match: Box<MatchHandler>,
 }
 
+struct RegisteredLineProcessor {
+    process: Box<LineHandler>,
+}
+
 #[derive(Default)]
 pub struct TextProcessor {
     matchers: Vec<RegisteredMatcher>,
+    processors: Vec<RegisteredLineProcessor>,
     pending_line: AnsiMut,
     saving_position: bool,
 }
@@ -109,7 +115,11 @@ impl TextProcessor {
             // If we *do* have a full line in pending_line, pop it off and feed it to matchers;
             // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
             // emit RestorePosition + Clear first
-            let to_match = self.pending_line.take();
+            let mut to_match = self.pending_line.take();
+
+            // Do some passive processing first
+            self.perform_processing(&mut to_match)?;
+
             let (handler, result) = self.perform_match(to_match);
             match result {
                 MatchResult::Ignored(to_emit) => receiver.text(to_emit)?,
@@ -140,7 +150,9 @@ impl TextProcessor {
         Ok(())
     }
 
-    pub fn register<R: 'static + FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send>(
+    pub fn register_matcher<
+        R: 'static + FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send,
+    >(
         &mut self,
         id: MatcherId,
         matcher: Matcher,
@@ -151,6 +163,22 @@ impl TextProcessor {
             matcher,
             on_match: Box::new(on_match),
         })
+    }
+
+    pub fn register_processor<P: 'static + Fn(&mut Ansi) -> io::Result<()> + Send>(
+        &mut self,
+        processor: P,
+    ) {
+        self.processors.push(RegisteredLineProcessor {
+            process: Box::new(processor),
+        })
+    }
+
+    fn perform_processing(&self, line: &mut Ansi) -> io::Result<()> {
+        for p in &self.processors {
+            (p.process)(line)?;
+        }
+        Ok(())
     }
 
     fn perform_match(

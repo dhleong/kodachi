@@ -3,9 +3,11 @@ use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 use self::connections::Connections;
 
 pub mod clearable;
+pub mod completion;
 pub mod connections;
 pub mod matchers;
 pub mod processing;
+pub mod processors;
 
 pub type Id = u64;
 

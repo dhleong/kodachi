@@ -2,7 +2,9 @@ local states = require 'kodachi.states'
 
 local MIN_HEIGHT = 2
 
-local M = {}
+local M = {
+  _state_bufnr_for_composer_bufnr = {}
+}
 
 local function feed_backspace()
   -- Use backspace to ensure we're starting from scratch
@@ -77,6 +79,13 @@ local function on_composer_buf_entered()
   M.on_change()
 end
 
+function M.state_for_composer_bufnr(bufnr)
+  local state_bufnr = M._state_bufnr_for_composer_bufnr[bufnr]
+  if state_bufnr then
+    return states[state_bufnr]
+  end
+end
+
 ---Jump to the composer window, if any is available in the current tabpage for the KodachiState
 --associated with the current buffer, else create a new composer and enter that. This function is a
 --nop if executed *in* a composer buffer
@@ -102,6 +111,7 @@ function M.enter_or_create(opts)
     vim.cmd [[ enew ]]
     state.composer_bufnr = vim.fn.bufnr('%')
     states[state.composer_bufnr] = state
+    M._state_bufnr_for_composer_bufnr[state.composer_bufnr] = state.bufnr
     configure_current_as_composer(state)
   end
 

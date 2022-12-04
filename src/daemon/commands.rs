@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::app::{matchers::MatcherSpec, Id};
+use crate::app::{completion::CompletionParams, matchers::MatcherSpec, Id};
 
 #[derive(Debug, Deserialize)]
 pub struct Connect {
@@ -17,6 +17,14 @@ pub enum ClientRequest {
     Send {
         connection_id: Id,
         text: String,
+    },
+
+    /// Request suggestions to complete some word in the composer
+    CompleteComposer {
+        connection_id: Id,
+
+        // #[serde(flatten)]
+        params: CompletionParams,
     },
 
     RegisterTrigger {
