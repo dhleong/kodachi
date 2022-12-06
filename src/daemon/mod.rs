@@ -95,6 +95,20 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
             ));
         }
 
+        ClientRequest::GetHistory {
+            connection_id,
+            limit,
+            cursor,
+        } => {
+            tokio::spawn(handlers::get_history::handle(
+                channel,
+                state,
+                connection_id,
+                limit,
+                cursor,
+            ));
+        }
+
         ClientRequest::RegisterPrompt {
             connection_id: connection,
             matcher,

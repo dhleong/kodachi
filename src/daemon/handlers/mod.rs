@@ -2,6 +2,7 @@ pub mod clear;
 pub mod complete_composer;
 pub mod connect;
 pub mod disconnect;
+pub mod get_history;
 pub mod register_prompt;
 pub mod register_trigger;
 pub mod send;

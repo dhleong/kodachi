@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+pub mod cursors;
+
 use crate::app::Id;
 
 use super::{
