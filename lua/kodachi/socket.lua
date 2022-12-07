@@ -89,6 +89,31 @@ function Socket:request(request, cb)
   return request.id
 end
 
+function Socket:request_blocking(request, timeout)
+  local timeout = timeout or 5000
+
+  local state = { done = false }
+
+  self:request(request, function(response)
+    state.response = response
+    state.done = true
+  end)
+
+  local received_done, error_code = vim.wait(timeout, function()
+    return state.done
+  end)
+
+  if received_done then
+    return state.response
+  end
+
+  if error_code == -1 then
+    error("ERROR: Timed out performing ", request.type)
+  else
+    error("ERROR: Interrupted performing ", request.type)
+  end
+end
+
 ---Raw, low-level data-writing method
 function Socket:_write(data)
   if self.connected then
