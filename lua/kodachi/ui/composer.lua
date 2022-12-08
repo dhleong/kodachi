@@ -31,7 +31,7 @@ end
 ---@param state KodachiState
 local function configure_current_as_composer(state)
   -- Enable null-ls completions
-  -- NOTE: These msut be done *before* setting buftype, or else null-ls ignores!
+  -- NOTE: These must be done *before* setting buftype, or else null-ls ignores!
   local buf_name = 'kodachi.composer:' .. state.connection_id
   local existing_bufnr = vim.fn.bufnr(buf_name)
   if existing_bufnr ~= -1 then
@@ -46,16 +46,20 @@ local function configure_current_as_composer(state)
   vim.wo.winfixheight = true
 
   -- Handle submitting
-  vim.cmd [[ inoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr> ]]
-  vim.cmd [[ nnoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr> ]]
+  vim.cmd [[inoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr>]]
+  vim.cmd [[nnoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr>]]
 
   -- Support inserting newlines
-  vim.cmd [[ inoremap <buffer> <s-cr> <cr> ]]
-  vim.cmd [[ inoremap <buffer> <a-cr> <cr> ]]
+  vim.cmd [[inoremap <buffer> <s-cr> <cr>]]
+  vim.cmd [[inoremap <buffer> <a-cr> <cr>]]
 
   -- Make it natural to leave
-  vim.cmd [[ inoremap <buffer> <c-c> <esc>ZQ ]]
-  vim.cmd [[ nnoremap <buffer> <c-c> ZQ ]]
+  vim.cmd [[inoremap <buffer> <c-c> <esc>ZQ]]
+  vim.cmd [[nnoremap <buffer> <c-c> ZQ]]
+
+  -- In-line History navigation
+  vim.cmd [[nnoremap <buffer> k <cmd>lua require'kodachi.ui.composer'.maybe_history('older')<cr>]]
+  vim.cmd [[nnoremap <buffer> j <cmd>lua require'kodachi.ui.composer'.maybe_history('newer')<cr>]]
 end
 
 local function measure_line_width(linenr)
@@ -168,6 +172,18 @@ function M.hide(opts)
       end
     end
   end
+end
+
+---@param direction '"older"'|'"newer"'
+function M.maybe_history(direction)
+  local moves_by_direction = {
+    older = { offset = -1, key = 'k' },
+    newer = { offset = 1, key = 'j' },
+  }
+  local moves = moves_by_direction[direction]
+
+  -- TODO try scrolling history
+  vim.api.nvim_feedkeys(moves.key, 'n', false)
 end
 
 function M.on_change()
