@@ -203,6 +203,11 @@ function M.maybe_history(direction)
   end
 end
 
+---@param content string
+function M.set_content(content)
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.fn.split(content, '\n'))
+end
+
 ---@param direction '"Older"'|'"Newer"'
 function M.scroll_history(direction)
   local state = state_composer()
@@ -223,7 +228,8 @@ function M.scroll_history(direction)
     return
   end
 
-  print('TODO', vim.inspect(response))
+  M.set_content(response.new_content)
+  M._active_cursor = response.cursor
 end
 
 function M.on_change()
