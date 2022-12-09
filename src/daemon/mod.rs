@@ -138,6 +138,7 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
         ClientRequest::ScrollHistory {
             connection_id,
             direction,
+            content,
             cursor,
         } => {
             tokio::spawn(handlers::scroll_history::handle(
@@ -145,6 +146,7 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
                 state,
                 connection_id,
                 direction,
+                content,
                 cursor,
             ));
         }

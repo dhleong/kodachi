@@ -155,6 +155,11 @@ function M.compute_height()
   return vim.fn.max { MIN_HEIGHT, height + 1 }
 end
 
+function M.get_content()
+  local lines = vim.fn.getline(1, '$')
+  return table.concat(lines, '\n')
+end
+
 ---@param opts { clear:boolean }|nil
 function M.hide(opts)
   local state = state_composer()
@@ -209,6 +214,7 @@ function M.scroll_history(direction)
     type = 'ScrollHistory',
     connection_id = state.connection_id,
     direction = direction,
+    content = M.get_content(),
     cursor = M._active_cursor,
   }
 
@@ -234,8 +240,7 @@ function M.submit()
     return
   end
 
-  local lines = vim.fn.getline(1, '$')
-  local text = table.concat(lines, '\n')
+  local text = M.get_content()
 
   M.clear()
 

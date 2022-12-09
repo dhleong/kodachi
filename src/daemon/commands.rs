@@ -32,6 +32,7 @@ pub enum ClientRequest {
     ScrollHistory {
         connection_id: Id,
         direction: HistoryScrollDirection,
+        content: String,
         cursor: Option<HistoryCursor>,
     },
 

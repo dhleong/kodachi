@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 const DEFAULT_HISTORY_CAPACITY: usize = 10000;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, PartialEq, Eq)]
 pub enum HistoryScrollDirection {
     Older,
     Newer,
@@ -46,6 +46,10 @@ impl<T: Eq + Hash> History<T> {
 
     pub fn iter(&self) -> ritelinked::linked_hash_set::Iter<T> {
         self.entries.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
     }
 }
 

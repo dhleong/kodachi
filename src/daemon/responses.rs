@@ -26,4 +26,8 @@ pub enum DaemonResponse {
         entries: Vec<String>,
         cursor: Option<HistoryCursor>,
     },
+    HistoryScrollResult {
+        new_content: String,
+        cursor: Option<HistoryCursor>,
+    },
 }
