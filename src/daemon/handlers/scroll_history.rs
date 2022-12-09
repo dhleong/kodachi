@@ -33,11 +33,15 @@ pub fn try_handle(
     // TODO If the history version doesn't match, throw away the cursor
 
     let offset = cursor.as_ref().map_or(0, |c| c.offset);
+    let initial_content = cursor
+        .as_ref()
+        .and_then(|c| c.initial_content.clone())
+        .unwrap_or_else(|| content.clone());
     let version = 0; // TODO
 
     let history = connection.sent.lock().unwrap();
 
-    let next_offset = match (cursor, direction) {
+    let next_offset = match (cursor.clone(), direction) {
         (None, HistoryScrollDirection::Older) => history.len().checked_sub(1),
         (Some(_), HistoryScrollDirection::Older) => offset.checked_sub(1),
         (None, HistoryScrollDirection::Newer) => None,
@@ -56,16 +60,21 @@ pub fn try_handle(
                 limit: 1,
                 offset: next_offset.unwrap(),
                 version,
+                initial_content: Some(initial_content),
             }),
         }
     } else {
-        DaemonResponse::HistoryScrollResult {
-            cursor,
-            new_content: match direction {
-                HistoryScrollDirection::Older => content,
+        match direction {
+            // Keep whatever was there
+            HistoryScrollDirection::Older => DaemonResponse::HistoryScrollResult {
+                cursor,
+                new_content: content,
+            },
 
-                // TODO Restore initial content
-                HistoryScrollDirection::Newer => content,
+            // Restore initial content
+            HistoryScrollDirection::Newer => DaemonResponse::HistoryScrollResult {
+                cursor: None,
+                new_content: initial_content,
             },
         }
     }
@@ -181,15 +190,15 @@ mod tests {
         assert_eq!(new_content, "First");
 
         // We've reached the end
-        let (new_content, cursor3) = context.older(new_content.to_string(), cursor2);
+        let (new_content, cursor3) = context.older(new_content.to_string(), cursor2.clone());
         assert_eq!(new_content, "First");
-        assert_eq!(cursor3, cursor2);
+        assert_eq!(cursor3.clone(), cursor2.clone());
 
-        let (new_content, _cursor4) = context.newer(new_content.to_string(), cursor3);
+        let (new_content, cursor4) = context.newer(new_content.to_string(), cursor3);
         assert_eq!(new_content, "Second");
 
-        // let (new_content, cursor5) = context.newer(new_content, cursor4);
-        // assert_eq!(new_content, initial_content);
-        // assert_eq!(cursor5, None);
+        let (new_content, cursor5) = context.newer(new_content, cursor4);
+        assert_eq!(new_content, initial_content);
+        assert_eq!(cursor5, None);
     }
 }

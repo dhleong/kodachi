@@ -41,6 +41,7 @@ pub async fn handle(
             offset: offset + limit,
             limit,
             version: 0,
+            initial_content: None,
         })
     } else {
         None
