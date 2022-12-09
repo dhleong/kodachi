@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::Id;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct HistoryCursor {
     pub limit: usize,
     pub offset: usize,
