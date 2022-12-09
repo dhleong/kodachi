@@ -51,7 +51,7 @@ local function show_history(entries)
 
   History.restore()
 
-  if ok then
+  if ok and input ~= '' then
     local state = require 'kodachi.states'.current_connected()
     if state then
       state:send(input)
