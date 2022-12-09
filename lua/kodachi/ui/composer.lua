@@ -3,7 +3,8 @@ local states = require 'kodachi.states'
 local MIN_HEIGHT = 2
 
 local M = {
-  _state_bufnr_for_composer_bufnr = {}
+  _state_bufnr_for_composer_bufnr = {},
+  _active_cursor = nil,
 }
 
 local function feed_backspace()
@@ -58,8 +59,8 @@ local function configure_current_as_composer(state)
   vim.cmd [[nnoremap <buffer> <c-c> ZQ]]
 
   -- In-line History navigation
-  vim.cmd [[nnoremap <buffer> k <cmd>lua require'kodachi.ui.composer'.maybe_history('older')<cr>]]
-  vim.cmd [[nnoremap <buffer> j <cmd>lua require'kodachi.ui.composer'.maybe_history('newer')<cr>]]
+  vim.cmd [[nnoremap <buffer> k <cmd>lua require'kodachi.ui.composer'.maybe_history('Older')<cr>]]
+  vim.cmd [[nnoremap <buffer> j <cmd>lua require'kodachi.ui.composer'.maybe_history('Newer')<cr>]]
 end
 
 local function measure_line_width(linenr)
@@ -174,16 +175,49 @@ function M.hide(opts)
   end
 end
 
----@param direction '"older"'|'"newer"'
+---@param direction '"Older"'|'"Newer"'
 function M.maybe_history(direction)
+  if not state_composer() then
+    return
+  end
+
   local moves_by_direction = {
-    older = { offset = -1, key = 'k' },
-    newer = { offset = 1, key = 'j' },
+    Older = { offset = -1, key = 'k' },
+    Newer = { offset = 1, key = 'j' },
   }
   local moves = moves_by_direction[direction]
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local line = cursor[1]
+  local lines = vim.fn.line('$')
 
-  -- TODO try scrolling history
-  vim.api.nvim_feedkeys(moves.key, 'n', false)
+  if line + moves.offset <= 0 or line + moves.offset > lines then
+    M.scroll_history(direction)
+  else
+    -- Feed the key as if typed normally
+    vim.api.nvim_feedkeys(moves.key, 'nt', false)
+  end
+end
+
+---@param direction '"Older"'|'"Newer"'
+function M.scroll_history(direction)
+  local state = state_composer()
+  if not state then
+    return
+  end
+
+  local response = state.socket:request_blocking {
+    type = 'ScrollHistory',
+    connection_id = state.connection_id,
+    direction = direction,
+    cursor = M._active_cursor,
+  }
+
+  if response.type == 'ErrorResult' then
+    print(vim.inspect(response))
+    return
+  end
+
+  print('TODO', vim.inspect(response))
 end
 
 function M.on_change()

@@ -135,6 +135,20 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
             ));
         }
 
+        ClientRequest::ScrollHistory {
+            connection_id,
+            direction,
+            cursor,
+        } => {
+            tokio::spawn(handlers::scroll_history::handle(
+                channel,
+                state,
+                connection_id,
+                direction,
+                cursor,
+            ));
+        }
+
         ClientRequest::SetPromptContent {
             connection_id,
             group_id,

@@ -1,8 +1,15 @@
 use std::hash::Hash;
 
 use ritelinked::LinkedHashSet;
+use serde::Deserialize;
 
 const DEFAULT_HISTORY_CAPACITY: usize = 10000;
+
+#[derive(Deserialize)]
+pub enum HistoryScrollDirection {
+    Older,
+    Newer,
+}
 
 pub struct History<T> {
     max_entries: usize,

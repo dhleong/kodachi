@@ -5,6 +5,7 @@ pub mod disconnect;
 pub mod get_history;
 pub mod register_prompt;
 pub mod register_trigger;
+pub mod scroll_history;
 pub mod send;
 pub mod set_active_prompt_group;
 pub mod set_prompt_content;

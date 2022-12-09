@@ -1,6 +1,8 @@
 use serde::Deserialize;
 
-use crate::app::{completion::CompletionParams, matchers::MatcherSpec, Id};
+use crate::app::{
+    completion::CompletionParams, history::HistoryScrollDirection, matchers::MatcherSpec, Id,
+};
 
 use super::protocol::cursors::HistoryCursor;
 
@@ -24,6 +26,12 @@ pub enum ClientRequest {
     GetHistory {
         connection_id: Id,
         limit: usize,
+        cursor: Option<HistoryCursor>,
+    },
+
+    ScrollHistory {
+        connection_id: Id,
+        direction: HistoryScrollDirection,
         cursor: Option<HistoryCursor>,
     },
 
