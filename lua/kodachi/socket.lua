@@ -89,8 +89,8 @@ function Socket:request(request, cb)
   return request.id
 end
 
-function Socket:request_blocking(request, timeout)
-  local timeout = timeout or 5000
+function Socket:request_blocking(request, timeout_ms)
+  local timeout = timeout_ms or 5000
 
   local state = { done = false }
 
@@ -108,9 +108,9 @@ function Socket:request_blocking(request, timeout)
   end
 
   if error_code == -1 then
-    error("ERROR: Timed out performing ", request.type)
+    error("ERROR: Timed out performing " .. request.type)
   else
-    error("ERROR: Interrupted performing ", request.type)
+    error("ERROR: Interrupted performing " .. request.type)
   end
 end
 
