@@ -8,7 +8,7 @@ pub async fn handle(
     mut state: LockableState,
     connection_id: Id,
     default_limit: usize,
-    request_cursor: Option<HistoryCursor>,
+    provided_cursor: Option<HistoryCursor>,
 ) {
     let connection =
         if let Some(reference) = state.lock().unwrap().connections.get_state(connection_id) {
@@ -20,15 +20,20 @@ pub async fn handle(
             return;
         };
 
+    let history = connection.sent.lock().unwrap();
+
     // TODO If the history version doesn't match, throw away the cursor
+    let version = history.version();
+    let request_cursor = if provided_cursor.as_ref().map(|c| c.version) == Some(version) {
+        provided_cursor.clone()
+    } else {
+        None
+    };
 
     let limit = request_cursor.as_ref().map_or(default_limit, |c| c.limit);
     let offset = request_cursor.as_ref().map_or(0, |c| c.offset);
 
-    let mut entries: Vec<String> = connection
-        .sent
-        .lock()
-        .unwrap()
+    let mut entries: Vec<String> = history
         .iter()
         .skip(offset)
         .take(limit + 1)
@@ -36,11 +41,10 @@ pub async fn handle(
         .collect();
 
     let cursor = if entries.len() > limit {
-        // TODO encode history "version"
         Some(HistoryCursor {
             offset: offset + limit,
             limit,
-            version: 0,
+            version,
             initial_content: None,
         })
     } else {
