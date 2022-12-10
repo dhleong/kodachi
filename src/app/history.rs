@@ -14,6 +14,7 @@ pub enum HistoryScrollDirection {
 pub struct History<T> {
     max_entries: usize,
     entries: LinkedHashSet<T>,
+    version: u64,
 }
 
 impl<T: Eq + Hash> Default for History<T> {
@@ -27,6 +28,7 @@ impl<T: Eq + Hash> History<T> {
         Self {
             max_entries: capacity,
             entries: LinkedHashSet::default(),
+            version: 0,
         }
     }
 
@@ -42,6 +44,8 @@ impl<T: Eq + Hash> History<T> {
                 self.entries.pop_front();
             }
         }
+
+        self.on_modified();
     }
 
     pub fn iter(&self) -> ritelinked::linked_hash_set::Iter<T> {
@@ -50,6 +54,15 @@ impl<T: Eq + Hash> History<T> {
 
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    fn on_modified(&mut self) {
+        let (result, _overflowed) = self.version.overflowing_add(1);
+        self.version = result;
     }
 }
 
@@ -70,5 +83,18 @@ impl<T> IntoIterator for History<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.entries.into_iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_overflow_test() {
+        let mut history = History::default();
+        history.version = u64::MAX;
+        history.insert("String");
+        assert_eq!(history.version, 0);
     }
 }

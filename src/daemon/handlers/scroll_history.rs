@@ -19,7 +19,7 @@ pub fn try_handle(
     connection_id: Id,
     direction: HistoryScrollDirection,
     content: String,
-    cursor: Option<HistoryCursor>,
+    provided_cursor: Option<HistoryCursor>,
 ) -> DaemonResponse {
     let connection =
         if let Some(reference) = state.lock().unwrap().connections.get_state(connection_id) {
@@ -30,16 +30,23 @@ pub fn try_handle(
             };
         };
 
-    // TODO If the history version doesn't match, throw away the cursor
+    let history = connection.sent.lock().unwrap();
 
-    let offset = cursor.as_ref().map_or(0, |c| c.offset);
-    let initial_content = cursor
+    // NOTE: If the history version doesn't match, throw away the cursor
+    let version = history.version();
+    let cursor = if provided_cursor.as_ref().map(|c| c.version) == Some(version) {
+        provided_cursor.clone()
+    } else {
+        None
+    };
+
+    // NOTE: Never throw away the initial_content, however
+    let initial_content = provided_cursor
         .as_ref()
         .and_then(|c| c.initial_content.clone())
         .unwrap_or_else(|| content.clone());
-    let version = 0; // TODO
 
-    let history = connection.sent.lock().unwrap();
+    let offset = cursor.as_ref().map_or(0, |c| c.offset);
 
     let next_offset = match (cursor.clone(), direction) {
         (None, HistoryScrollDirection::Older) => history.len().checked_sub(1),
@@ -116,6 +123,19 @@ mod tests {
                 .insert_many(entries);
 
             return empty;
+        }
+
+        fn insert(&mut self, entry: String) {
+            self.state
+                .lock()
+                .unwrap()
+                .connections
+                .get_state(self.connection_id)
+                .unwrap()
+                .sent
+                .lock()
+                .unwrap()
+                .insert(entry);
         }
 
         fn try_handle(
@@ -200,5 +220,27 @@ mod tests {
         let (new_content, cursor5) = context.newer(new_content, cursor4);
         assert_eq!(new_content, initial_content);
         assert_eq!(cursor5, None);
+    }
+
+    #[test]
+    fn ignore_cursor_on_version_change() {
+        let initial_content = "For the honor of grayskull!";
+        let mut context =
+            TestContext::with_history(vec!["First".to_string(), "Second".to_string()]);
+        let (new_content, cursor1) = context.older(initial_content.to_string(), None);
+        assert_eq!(new_content, "Second");
+
+        context.insert("Third".to_string());
+        let (new_content, cursor2) = context.older(new_content.to_string(), cursor1.clone());
+        assert_eq!(new_content, "Third");
+        assert_eq!(
+            cursor2,
+            Some(HistoryCursor {
+                limit: 1,
+                offset: 2,
+                version: 2,
+                initial_content: Some(initial_content.to_string()),
+            })
+        );
     }
 }
