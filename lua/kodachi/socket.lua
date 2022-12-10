@@ -4,6 +4,8 @@
 ---@alias DisconnectedNotification { type: "'Disconnected'", connection_id: number  }
 ---@alias KodachiNotification TriggerMatchedNotification | DisconnectedNotification
 
+local DEFAULT_BLOCKING_TIMEOUT = 500
+
 ---@class Socket
 ---@field name string
 ---@field _receivers any[]
@@ -90,7 +92,7 @@ function Socket:request(request, cb)
 end
 
 function Socket:request_blocking(request, timeout_ms)
-  local timeout = timeout_ms or 5000
+  local timeout = timeout_ms or DEFAULT_BLOCKING_TIMEOUT
 
   local state = { done = false }
 
