@@ -101,9 +101,10 @@ function Socket:request_blocking(request, timeout_ms)
     state.done = true
   end)
 
+  local interval = 20
   local received_done, error_code = vim.wait(timeout, function()
     return state.done
-  end)
+  end, interval)
 
   if received_done then
     return state.response
