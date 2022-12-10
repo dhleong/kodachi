@@ -1,5 +1,6 @@
 use std::{
     fmt::{Debug, Display},
+    hash::Hash,
     ops::{Add, Deref, Range, RangeBounds},
 };
 
@@ -76,11 +77,19 @@ impl Debug for Ansi {
     }
 }
 
+impl Hash for Ansi {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.bytes.hash(state)
+    }
+}
+
 impl PartialEq for Ansi {
     fn eq(&self, other: &Self) -> bool {
         self.bytes.eq(&other.bytes)
     }
 }
+
+impl Eq for Ansi {}
 
 impl Deref for Ansi {
     type Target = str;

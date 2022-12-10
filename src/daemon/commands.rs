@@ -1,6 +1,10 @@
 use serde::Deserialize;
 
-use crate::app::{completion::CompletionParams, matchers::MatcherSpec, Id};
+use crate::app::{
+    completion::CompletionParams, history::HistoryScrollDirection, matchers::MatcherSpec, Id,
+};
+
+use super::protocol::cursors::HistoryCursor;
 
 #[derive(Debug, Deserialize)]
 pub struct Connect {
@@ -17,6 +21,19 @@ pub enum ClientRequest {
     Send {
         connection_id: Id,
         text: String,
+    },
+
+    GetHistory {
+        connection_id: Id,
+        limit: usize,
+        cursor: Option<HistoryCursor>,
+    },
+
+    ScrollHistory {
+        connection_id: Id,
+        direction: HistoryScrollDirection,
+        content: String,
+        cursor: Option<HistoryCursor>,
     },
 
     /// Request suggestions to complete some word in the composer

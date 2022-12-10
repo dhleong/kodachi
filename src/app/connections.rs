@@ -7,7 +7,9 @@ use tokio::sync::mpsc;
 
 use crate::cli::ui::UiState;
 
-use super::{completion::completions::Completions, processing::text::TextProcessor, Id};
+use super::{
+    completion::completions::Completions, history::History, processing::text::TextProcessor, Id,
+};
 
 pub enum Outgoing {
     Text(String),
@@ -18,6 +20,7 @@ pub enum Outgoing {
 pub struct ConnectionState {
     pub processor: Arc<Mutex<TextProcessor>>,
     pub completions: Arc<Mutex<Completions>>,
+    pub sent: Arc<Mutex<History<String>>>,
     pub ui_state: Arc<Mutex<UiState>>,
 }
 

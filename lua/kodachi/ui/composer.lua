@@ -3,7 +3,8 @@ local states = require 'kodachi.states'
 local MIN_HEIGHT = 2
 
 local M = {
-  _state_bufnr_for_composer_bufnr = {}
+  _state_bufnr_for_composer_bufnr = {},
+  _active_cursor = nil,
 }
 
 local function feed_backspace()
@@ -31,7 +32,7 @@ end
 ---@param state KodachiState
 local function configure_current_as_composer(state)
   -- Enable null-ls completions
-  -- NOTE: These msut be done *before* setting buftype, or else null-ls ignores!
+  -- NOTE: These must be done *before* setting buftype, or else null-ls ignores!
   local buf_name = 'kodachi.composer:' .. state.connection_id
   local existing_bufnr = vim.fn.bufnr(buf_name)
   if existing_bufnr ~= -1 then
@@ -46,16 +47,20 @@ local function configure_current_as_composer(state)
   vim.wo.winfixheight = true
 
   -- Handle submitting
-  vim.cmd [[ inoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr> ]]
-  vim.cmd [[ nnoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr> ]]
+  vim.cmd [[inoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr>]]
+  vim.cmd [[nnoremap <buffer> <cr> <cmd>lua require'kodachi.ui.composer'.submit()<cr>]]
 
   -- Support inserting newlines
-  vim.cmd [[ inoremap <buffer> <s-cr> <cr> ]]
-  vim.cmd [[ inoremap <buffer> <a-cr> <cr> ]]
+  vim.cmd [[inoremap <buffer> <s-cr> <cr>]]
+  vim.cmd [[inoremap <buffer> <a-cr> <cr>]]
 
   -- Make it natural to leave
-  vim.cmd [[ inoremap <buffer> <c-c> <esc>ZQ ]]
-  vim.cmd [[ nnoremap <buffer> <c-c> ZQ ]]
+  vim.cmd [[inoremap <buffer> <c-c> <esc>ZQ]]
+  vim.cmd [[nnoremap <buffer> <c-c> ZQ]]
+
+  -- In-line History navigation
+  vim.cmd [[nnoremap <buffer> k <cmd>lua require'kodachi.ui.composer'.maybe_history('Older')<cr>]]
+  vim.cmd [[nnoremap <buffer> j <cmd>lua require'kodachi.ui.composer'.maybe_history('Newer')<cr>]]
 end
 
 local function measure_line_width(linenr)
@@ -150,6 +155,11 @@ function M.compute_height()
   return vim.fn.max { MIN_HEIGHT, height + 1 }
 end
 
+function M.get_content()
+  local lines = vim.fn.getline(1, '$')
+  return table.concat(lines, '\n')
+end
+
 ---@param opts { clear:boolean }|nil
 function M.hide(opts)
   local state = state_composer()
@@ -170,6 +180,58 @@ function M.hide(opts)
   end
 end
 
+---@param direction '"Older"'|'"Newer"'
+function M.maybe_history(direction)
+  if not state_composer() then
+    return
+  end
+
+  local moves_by_direction = {
+    Older = { offset = -1, key = 'k' },
+    Newer = { offset = 1, key = 'j' },
+  }
+  local moves = moves_by_direction[direction]
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local line = cursor[1]
+  local lines = vim.fn.line('$')
+
+  if line + moves.offset <= 0 or line + moves.offset > lines then
+    M.scroll_history(direction)
+  else
+    -- Feed the key as if typed normally
+    vim.api.nvim_feedkeys(moves.key, 'nt', false)
+  end
+end
+
+---@param content string
+function M.set_content(content)
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.fn.split(content, '\n'))
+end
+
+---@param direction '"Older"'|'"Newer"'
+function M.scroll_history(direction)
+  local state = state_composer()
+  if not state then
+    return
+  end
+
+  local response = state.socket:request_blocking {
+    type = 'ScrollHistory',
+    connection_id = state.connection_id,
+    direction = direction,
+    content = M.get_content(),
+    cursor = M._active_cursor,
+  }
+
+  if response.type == 'ErrorResult' then
+    print(vim.inspect(response))
+    return
+  end
+
+  M.set_content(response.new_content)
+  M._active_cursor = response.cursor
+end
+
 function M.on_change()
   -- Ensure the current window is sized based on the height of its text
   local buf_height = M.compute_height()
@@ -184,8 +246,7 @@ function M.submit()
     return
   end
 
-  local lines = vim.fn.getline(1, '$')
-  local text = table.concat(lines, '\n')
+  local text = M.get_content()
 
   M.clear()
 

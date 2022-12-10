@@ -95,6 +95,20 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
             ));
         }
 
+        ClientRequest::GetHistory {
+            connection_id,
+            limit,
+            cursor,
+        } => {
+            tokio::spawn(handlers::get_history::handle(
+                channel,
+                state,
+                connection_id,
+                limit,
+                cursor,
+            ));
+        }
+
         ClientRequest::RegisterPrompt {
             connection_id: connection,
             matcher,
@@ -118,6 +132,22 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
         } => {
             tokio::spawn(handlers::register_trigger::handle(
                 channel, state, connection, matcher, handler_id,
+            ));
+        }
+
+        ClientRequest::ScrollHistory {
+            connection_id,
+            direction,
+            content,
+            cursor,
+        } => {
+            tokio::spawn(handlers::scroll_history::handle(
+                channel,
+                state,
+                connection_id,
+                direction,
+                content,
+                cursor,
             ));
         }
 

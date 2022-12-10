@@ -4,6 +4,8 @@
 ---@alias DisconnectedNotification { type: "'Disconnected'", connection_id: number  }
 ---@alias KodachiNotification TriggerMatchedNotification | DisconnectedNotification
 
+local DEFAULT_BLOCKING_TIMEOUT = 500
+
 ---@class Socket
 ---@field name string
 ---@field _receivers any[]
@@ -87,6 +89,32 @@ function Socket:request(request, cb)
   end
 
   return request.id
+end
+
+function Socket:request_blocking(request, timeout_ms)
+  local timeout = timeout_ms or DEFAULT_BLOCKING_TIMEOUT
+
+  local state = { done = false }
+
+  self:request(request, function(response)
+    state.response = response
+    state.done = true
+  end)
+
+  local interval = 20
+  local received_done, error_code = vim.wait(timeout, function()
+    return state.done
+  end, interval)
+
+  if received_done then
+    return state.response
+  end
+
+  if error_code == -1 then
+    error("ERROR: Timed out performing " .. request.type)
+  else
+    error("ERROR: Interrupted performing " .. request.type)
+  end
 end
 
 ---Raw, low-level data-writing method

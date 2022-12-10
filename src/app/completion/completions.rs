@@ -1,16 +1,13 @@
 use regex::Regex;
 
-use ritelinked::LinkedHashSet;
-
-use crate::app::processing::ansi::Ansi;
+use crate::app::{history::History, processing::ansi::Ansi};
 
 use super::{transforms::WordTransform, CompletionParams};
 
 const DEFAULT_RECENCY_CAPACITY: usize = 5000;
 
 pub struct Completions {
-    max_entries: usize,
-    incoming_words: LinkedHashSet<String>,
+    history: History<String>,
 }
 
 impl Default for Completions {
@@ -22,30 +19,28 @@ impl Default for Completions {
 impl Completions {
     pub fn with_capacity(capacity: usize) -> Self {
         Completions {
-            max_entries: capacity,
-            incoming_words: LinkedHashSet::with_capacity(capacity),
+            history: History::with_capacity(capacity),
         }
     }
 
     pub fn process_incoming(&mut self, line: &mut Ansi) {
         let words_regex = Regex::new(r"(\w+)").unwrap();
-        for m in words_regex.find_iter(&line.strip_ansi()) {
-            let word = m.as_str();
-            if !self.incoming_words.contains(word) {
-                self.incoming_words.insert(word.to_string());
-            }
-        }
+        self.history.insert_many(
+            words_regex
+                .find_iter(&line.strip_ansi())
+                .map(|m| m.as_str().to_string()),
+        );
+    }
 
-        if let Some(overage) = self.incoming_words.len().checked_sub(self.max_entries) {
-            for _ in 0..overage {
-                self.incoming_words.pop_front();
-            }
-        }
+    pub fn process_outgoing(&mut self, line: String) {
+        let words_regex = Regex::new(r"(\w+)").unwrap();
+        self.history
+            .insert_many(words_regex.find_iter(&line).map(|m| m.as_str().to_string()));
     }
 
     pub fn suggest(&self, params: CompletionParams) -> Vec<String> {
         let transformer = WordTransform::matching_word(params.word_to_complete);
-        self.incoming_words
+        self.history
             .iter()
             .map(|s| transformer.transform(s))
             .collect()
