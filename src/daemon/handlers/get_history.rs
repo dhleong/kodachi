@@ -22,7 +22,7 @@ pub async fn handle(
 
     let history = connection.sent.lock().unwrap();
 
-    // TODO If the history version doesn't match, throw away the cursor
+    // If the history version doesn't match, throw away the cursor
     let version = history.version();
     let request_cursor = if provided_cursor.as_ref().map(|c| c.version) == Some(version) {
         provided_cursor.clone()
