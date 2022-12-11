@@ -40,7 +40,11 @@ function M.spawn_unix(opts)
   local job_id = vim.fn.termopen(cmd, {
     cwd = kodachi_root,
     on_exit = function(_, _, _)
-      -- Smol bit of hacks to "preserve" the window on exit
+      opts.on_exit()
+
+      -- Smol bit of hacks to "preserve" the window on exit.
+      -- We do this *after* invoking the on_exit callback to ensure the original
+      -- bufnr is still available to listeners
       if state.bufnr then
         local win = vim.fn.bufwinid(state.bufnr)
         if win ~= -1 then
@@ -58,7 +62,6 @@ function M.spawn_unix(opts)
         end
       end
 
-      opts.on_exit()
     end,
   })
 

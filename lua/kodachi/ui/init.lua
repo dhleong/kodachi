@@ -58,6 +58,17 @@ function M.ensure_window()
   local job_id = require 'kodachi.ui.term'.spawn_unix {
     socket_name = socket.name,
     on_exit = function()
+      if vim.api.nvim_exec_autocmds then
+        vim.api.nvim_exec_autocmds('User', {
+          pattern = 'KodachiDisconnect',
+          modeline = false,
+          data = {
+            bufnr = state.bufnr,
+            connection_id = state.connection_id,
+          },
+        })
+      end
+
       state.exited = true
       state.connection_id = nil
 

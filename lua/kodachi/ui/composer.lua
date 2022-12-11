@@ -80,6 +80,16 @@ local function on_composer_buf_entered()
     augroup KodachiComposer
   ]]
 
+  if vim.api.nvim_create_autocmd then
+    vim.api.nvim_create_autocmd({ 'User' }, {
+      group = 'KodachiComposer',
+      pattern = { 'KodachiDisconnect' },
+      callback = function(params)
+        require 'kodachi.ui.composer'._hide_if_disconnected(params.data.bufnr)
+      end,
+    })
+  end
+
   -- Resize based on text in buffer
   M.on_change()
 end
@@ -251,6 +261,24 @@ function M.submit()
   M.clear()
 
   state:send(text)
+end
+
+function M._hide_if_disconnected(connection_bufnr)
+  local state = states[connection_bufnr]
+  if not state then
+    return
+  end
+
+  if not state.composer_bufnr then
+    return
+  end
+
+  -- TODO: It would be nice to preserve any incomplete buffer in case there is some
+  -- incomplete input the user wanted to save for use on reconnect; for now even if
+  -- the buffer still exists it gets wiped anyway, so this is simple to clean up windows.
+  vim.api.nvim_buf_delete(state.composer_bufnr, {
+    force = true,
+  })
 end
 
 return M
