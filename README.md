@@ -41,7 +41,7 @@ The easiest way to get started is to just install this as a plugin. I like [Plug
 Plug 'dhleong/kodachi'
 ```
 
-You will also need to [set up Rust][https://www.rust-lang.org/learn/get-started] to build
+You will also need to [set up Rust](https://www.rust-lang.org/learn/get-started) to build
 that process; we don't currently provide pre-built binaries.
 
 From there, we provide a lua API for connecting and configuring:
