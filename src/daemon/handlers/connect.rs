@@ -1,7 +1,6 @@
-use std::{io, thread::sleep, time::Duration};
+use std::io;
 
 use bytes::BytesMut;
-use tokio::sync::mpsc;
 
 use crate::{
     app::{
@@ -18,54 +17,44 @@ use crate::{
     transport::{telnet::TelnetTransport, Transport, TransportEvent},
 };
 
-const IDLE_SLEEP_DURATION: Duration = Duration::from_millis(12);
-
-pub fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
+pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     mut transport: T,
     mut connection: ConnectionReceiver,
     mut receiver: R,
 ) -> io::Result<R> {
-    loop {
-        let mut idle = false;
-        match transport.read()? {
-            TransportEvent::Data(data) => {
-                idle = false;
+    let mut connected = true;
+    while connected {
+        tokio::select! {
+            incoming = transport.read() => match incoming? {
+                TransportEvent::Data(data) => {
+                    receiver.begin_chunk()?;
+                    let r: &[u8] = &data;
+                    let bytes = BytesMut::from(r);
 
-                receiver.begin_chunk()?;
-                let r: &[u8] = &data;
-                let bytes = BytesMut::from(r);
+                    connection
+                        .state
+                        .processor
+                        .lock()
+                        .unwrap()
+                        .process(Ansi::from(bytes.freeze()), &mut receiver)?;
 
-                connection
-                    .state
-                    .processor
-                    .lock()
-                    .unwrap()
-                    .process(Ansi::from(bytes.freeze()), &mut receiver)?;
+                    receiver.end_chunk()?;
+                },
+                TransportEvent::Nop => {}
+            },
 
-                receiver.end_chunk()?;
-            }
-
-            TransportEvent::Nop => {}
+            outgoing = connection.outbox.recv() => {
+                match outgoing {
+                    Some(Outgoing::Text(text)) => {
+                        transport.write(&text.as_bytes()).await?;
+                        transport.write(b"\r\n").await?;
+                    }
+                    Some(Outgoing::Disconnect) | None => {
+                        connected = false;
+                    }
+                };
+            },
         };
-
-        match connection.outbox.try_recv() {
-            Ok(Outgoing::Text(text)) => {
-                idle = false;
-                transport.write(&text.as_bytes())?;
-                transport.write(b"\r\n")?;
-            }
-            Ok(Outgoing::Disconnect) => {
-                break;
-            }
-            Err(mpsc::error::TryRecvError::Empty) => {}
-            Err(mpsc::error::TryRecvError::Disconnected) => {
-                break;
-            }
-        }
-
-        if idle {
-            sleep(IDLE_SLEEP_DURATION);
-        }
     }
 
     Ok(receiver)
@@ -82,7 +71,7 @@ pub async fn handle(
 
     let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
 
-    let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
+    let transport = TelnetTransport::connect(&uri.host, uri.port, 4096).await?;
     let stdout = io::stdout();
 
     register_processors(state.clone(), &mut connection);
@@ -91,7 +80,7 @@ pub async fn handle(
     let mut receiver = AnsiTerminalWriteUI::create(receiver_state, connection.id, notifier, stdout);
     receiver.notification(DaemonNotification::Connected)?;
 
-    receiver = process_connection(transport, connection, receiver)?;
+    receiver = process_connection(transport, connection, receiver).await?;
 
     receiver.notification(DaemonNotification::Disconnected)?;
     state.lock().unwrap().connections.drop(connection_id);
