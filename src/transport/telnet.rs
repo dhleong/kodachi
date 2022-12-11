@@ -1,8 +1,9 @@
 use std::{io, net::TcpStream};
 
+use bytes::BytesMut;
 use telnet::{self, Telnet};
 
-use super::Transport;
+use super::{Transport, TransportEvent};
 
 pub struct TelnetTransport {
     telnet: Telnet,
@@ -18,8 +19,16 @@ impl TelnetTransport {
 }
 
 impl Transport for TelnetTransport {
-    fn read(&mut self) -> io::Result<telnet::Event> {
-        self.telnet.read_nonblocking()
+    fn read(&mut self) -> io::Result<TransportEvent> {
+        match self.telnet.read_nonblocking()? {
+            telnet::Event::Data(data) => {
+                let r: &[u8] = &data;
+                let bytes = BytesMut::from(r);
+                Ok(TransportEvent::Data(bytes.freeze()))
+            }
+            telnet::Event::Error(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+            _ => Ok(TransportEvent::Nop),
+        }
     }
 
     fn write(&mut self, data: &[u8]) -> io::Result<usize> {

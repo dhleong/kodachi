@@ -1,7 +1,6 @@
 use std::{io, thread::sleep, time::Duration};
 
 use bytes::BytesMut;
-use telnet::Event;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -16,7 +15,7 @@ use crate::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
     net::Uri,
-    transport::{telnet::TelnetTransport, Transport},
+    transport::{telnet::TelnetTransport, Transport, TransportEvent},
 };
 
 const IDLE_SLEEP_DURATION: Duration = Duration::from_millis(12);
@@ -27,9 +26,9 @@ pub fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     mut receiver: R,
 ) -> io::Result<R> {
     loop {
-        let mut idle = true;
+        let mut idle = false;
         match transport.read()? {
-            Event::Data(data) => {
+            TransportEvent::Data(data) => {
                 idle = false;
 
                 receiver.begin_chunk()?;
@@ -45,8 +44,8 @@ pub fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
 
                 receiver.end_chunk()?;
             }
-            Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
-            _ => {}
+
+            TransportEvent::Nop => {}
         };
 
         match connection.outbox.try_recv() {
