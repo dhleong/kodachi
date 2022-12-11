@@ -41,8 +41,13 @@ function M.with_connection(uri, on_connection)
       )
     end
   else
-    -- Already connected to this URI
+    -- Already connected to this URI; first, cleanup state
     state:cleanup()
+
+    -- Next, ensure we have an opened window
+    require 'kodachi.ui'.ensure_window()
+
+    -- Finally, trigger the callback
     on_connection(state)
   end
 end

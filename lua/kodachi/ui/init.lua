@@ -11,17 +11,25 @@ local function reuse_or_create_window()
 
   local existing = states.current { silent = true }
   if existing then
-    if not existing.exited and existing.connection_id then
+    local connected = not existing.exited and existing.connection_id
+    if connected and vim.fn.bufwinnr(existing.bufnr) ~= -1 then
       print('kodachi: A connection is already live in this buffer')
       return
-    elseif initial_bufnr == existing.initial_bufnr and vim.fn.winheight(existing.initial_winid) ~= -1 then
+    elseif not connected and initial_bufnr == existing.initial_bufnr and vim.fn.winheight(existing.initial_winid) ~= -1 then
       -- Reuse an existing window
       vim.api.nvim_set_current_win(existing.initial_winid)
       vim.cmd [[ enew ]]
     elseif initial_bufnr == existing.initial_bufnr then
-      -- We're in the "initial" buffer for this connection, and the connection has closed.
+      -- We're in the "initial" buffer for this connection, and either the
+      -- connection has closed or we've hidden the buffer.
       -- Create a new window instead of overwriting this one
-      create_window()
+      local new_winid = create_window()
+
+      if connected then
+        -- Still connected; restore the buffer!
+        vim.api.nvim_win_set_buf(new_winid, existing.bufnr)
+        return
+      end
     else
       -- Reuse the window with a new buffer
       vim.cmd [[ enew ]]
