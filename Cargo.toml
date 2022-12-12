@@ -6,9 +6,10 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.15.0", features = ["io-util", "io-std", "macros", "net", "rt-multi-thread", "sync"] }
+tokio-native-tls = "0.3.0"
 
-url = "2.2.2"
 native-tls = "0.2.8"
+url = "2.2.2"
 
 delegate = "0.6.1"
 regex = "1.5.4"

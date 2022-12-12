@@ -3,9 +3,10 @@ use std::io;
 use async_trait::async_trait;
 use bytes::BytesMut;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
 };
+use tokio_native_tls::{TlsConnector, TlsStream};
 
 use super::{Transport, TransportEvent};
 
@@ -14,16 +15,39 @@ mod protocol;
 
 use processor::{TelnetEvent, TelnetProcessor};
 
-pub struct TelnetTransport {
+pub struct TelnetTransport<S: AsyncRead + AsyncWrite> {
     buffer: BytesMut,
-    stream: TcpStream,
+    stream: S,
     telnet: TelnetProcessor,
 }
 
-impl TelnetTransport {
+impl TelnetTransport<TcpStream> {
     pub async fn connect(host: &str, port: u16, buffer_size: usize) -> io::Result<Self> {
+        Self::connect_with_stream(TcpStream::connect((host, port)).await?, buffer_size).await
+    }
+}
+
+impl TelnetTransport<TlsStream<TcpStream>> {
+    pub async fn connect_tls(host: &str, port: u16, buffer_size: usize) -> io::Result<Self> {
+        let tcp = TcpStream::connect((host, port)).await?;
+        let connector = match native_tls::TlsConnector::builder().build() {
+            Ok(connector) => connector,
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err)),
+        };
+        let cx = TlsConnector::from(connector);
+
+        let stream = match cx.connect(host, tcp).await {
+            Ok(stream) => stream,
+            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err)),
+        };
+
+        Self::connect_with_stream(stream, buffer_size).await
+    }
+}
+
+impl<S: AsyncRead + AsyncWrite> TelnetTransport<S> {
+    async fn connect_with_stream(stream: S, buffer_size: usize) -> io::Result<Self> {
         let buffer = BytesMut::with_capacity(buffer_size);
-        let stream = TcpStream::connect((host, port)).await?;
         Ok(Self {
             buffer,
             stream,
@@ -44,7 +68,7 @@ impl TelnetTransport {
 }
 
 #[async_trait]
-impl Transport for TelnetTransport {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send> Transport for TelnetTransport<S> {
     async fn read(&mut self) -> io::Result<TransportEvent> {
         loop {
             match self.process_buffer()? {

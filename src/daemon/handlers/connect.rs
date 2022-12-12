@@ -12,7 +12,7 @@ use crate::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
     net::Uri,
-    transport::{telnet::TelnetTransport, Transport, TransportEvent},
+    transport::{BoxedTransport, Transport, TransportEvent},
 };
 
 pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
@@ -67,7 +67,7 @@ pub async fn handle(
 
     let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
 
-    let transport = TelnetTransport::connect(&uri.host, uri.port, 4096).await?;
+    let transport = BoxedTransport::connect_uri(uri, 4096).await?;
     let stdout = io::stdout();
 
     register_processors(state.clone(), &mut connection);

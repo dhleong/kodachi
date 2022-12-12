@@ -33,7 +33,7 @@ impl Uri {
 
                 let tls = match url.scheme() {
                     "telnet" => false,
-                    "ssl" => true,
+                    "ssl" | "tls" => true,
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::AddrNotAvailable,
