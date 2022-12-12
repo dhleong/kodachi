@@ -100,8 +100,14 @@ impl TelnetProcessor {
                 }
 
                 (State::SubnegotiateIac, IAC) => {
-                    // TODO literal IAC byte
-                    i += 1;
+                    // Literal IAC byte; chop off the bytes before...
+                    let mut after = bytes.split_off(i);
+
+                    // Consume the extra IAC
+                    after.get_u8();
+
+                    // Then shove the rest of the bytes back on the end
+                    bytes.unsplit(after);
                 }
                 (State::SubnegotiateIac, SE) => {
                     self.state = State::Data;
@@ -230,6 +236,24 @@ mod tests {
             processor.process_one(&mut buffer)?,
             Some(TelnetEvent::Subnegotiate(Bytes::from(
                 &b"\x45\x01VARNAME\x02THE VALUE"[..]
+            )))
+        );
+
+        assert_eq!(processor.process_one(&mut buffer)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn subnegotiations_literal_iac_test() -> io::Result<()> {
+        let bytes = b"\xFF\xFA\x45\x01VARNAME\x02THE\xFF\xFFVALUE\xFF\xF0";
+
+        let mut processor = TelnetProcessor::default();
+        let mut buffer = BytesMut::from(&bytes[..]);
+
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Subnegotiate(Bytes::from(
+                &b"\x45\x01VARNAME\x02THE\xFFVALUE"[..]
             )))
         );
 
