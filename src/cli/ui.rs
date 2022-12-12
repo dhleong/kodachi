@@ -2,6 +2,7 @@ pub mod prompts;
 
 use crossterm::{
     cursor::{MoveTo, MoveToNextLine, RestorePosition, SavePosition},
+    style::ResetColor,
     terminal::{Clear, ClearType, ScrollDown, ScrollUp},
 };
 use std::{
@@ -84,6 +85,10 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
     fn clear_from_cursor_down(&mut self) -> io::Result<()> {
         ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
+    }
+
+    fn reset_colors(&mut self) -> io::Result<()> {
+        ::crossterm::queue!(self.output, ResetColor)
     }
 
     fn text(&mut self, text: Ansi) -> io::Result<()> {

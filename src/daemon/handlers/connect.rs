@@ -1,8 +1,4 @@
-use std::{io, thread::sleep, time::Duration};
-
-use bytes::BytesMut;
-use telnet::Event;
-use tokio::sync::mpsc;
+use std::io;
 
 use crate::{
     app::{
@@ -16,60 +12,48 @@ use crate::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
     net::Uri,
-    transport::{telnet::TelnetTransport, Transport},
+    transport::{BoxedTransport, Transport, TransportEvent},
 };
 
-const IDLE_SLEEP_DURATION: Duration = Duration::from_millis(12);
-
-pub fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
+pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     mut transport: T,
     mut connection: ConnectionReceiver,
-    mut receiver: R,
-) -> io::Result<R> {
-    loop {
-        let mut idle = true;
-        match transport.read()? {
-            Event::Data(data) => {
-                idle = false;
+    receiver: &mut R,
+) -> io::Result<()> {
+    let mut connected = true;
+    while connected {
+        tokio::select! {
+            incoming = transport.read() => match incoming? {
+                TransportEvent::Data(data) => {
+                    receiver.begin_chunk()?;
 
-                receiver.begin_chunk()?;
-                let r: &[u8] = &data;
-                let bytes = BytesMut::from(r);
+                    connection
+                        .state
+                        .processor
+                        .lock()
+                        .unwrap()
+                        .process(Ansi::from_bytes(data), receiver)?;
 
-                connection
-                    .state
-                    .processor
-                    .lock()
-                    .unwrap()
-                    .process(Ansi::from(bytes.freeze()), &mut receiver)?;
+                    receiver.end_chunk()?;
+                },
+                TransportEvent::Nop => {},
+            },
 
-                receiver.end_chunk()?;
-            }
-            Event::Error(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
-            _ => {}
+            outgoing = connection.outbox.recv() => {
+                match outgoing {
+                    Some(Outgoing::Text(text)) => {
+                        transport.write(&text.as_bytes()).await?;
+                        transport.write(b"\r\n").await?;
+                    }
+                    Some(Outgoing::Disconnect) | None => {
+                        connected = false;
+                    }
+                };
+            },
         };
-
-        match connection.outbox.try_recv() {
-            Ok(Outgoing::Text(text)) => {
-                idle = false;
-                transport.write(&text.as_bytes())?;
-                transport.write(b"\r\n")?;
-            }
-            Ok(Outgoing::Disconnect) => {
-                break;
-            }
-            Err(mpsc::error::TryRecvError::Empty) => {}
-            Err(mpsc::error::TryRecvError::Disconnected) => {
-                break;
-            }
-        }
-
-        if idle {
-            sleep(IDLE_SLEEP_DURATION);
-        }
     }
 
-    Ok(receiver)
+    Ok(())
 }
 
 pub async fn handle(
@@ -83,7 +67,7 @@ pub async fn handle(
 
     let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
 
-    let transport = TelnetTransport::connect(&uri.host, uri.port, 4096)?;
+    let transport = BoxedTransport::connect_uri(uri, 4096).await?;
     let stdout = io::stdout();
 
     register_processors(state.clone(), &mut connection);
@@ -92,7 +76,27 @@ pub async fn handle(
     let mut receiver = AnsiTerminalWriteUI::create(receiver_state, connection.id, notifier, stdout);
     receiver.notification(DaemonNotification::Connected)?;
 
-    receiver = process_connection(transport, connection, receiver)?;
+    let result = process_connection(transport, connection, &mut receiver).await;
+    if let Err(error) = result {
+        match error.kind() {
+            io::ErrorKind::UnexpectedEof
+            | io::ErrorKind::TimedOut
+            | io::ErrorKind::ConnectionReset => {
+                let message = if error.kind() == io::ErrorKind::UnexpectedEof {
+                    "Disconnected.".to_string()
+                } else {
+                    format!("Disconnected: {}", error)
+                };
+                receiver.begin_chunk()?;
+                receiver.reset_colors()?;
+                receiver.text(format!("\n{}\n", message).into())?;
+                receiver.end_chunk()?;
+            }
+            _ => {
+                return Err(error);
+            }
+        }
+    }
 
     receiver.notification(DaemonNotification::Disconnected)?;
     state.lock().unwrap().connections.drop(connection_id);
