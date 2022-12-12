@@ -1,17 +1,26 @@
-use std::{collections::VecDeque, io};
+use std::io;
 
 use bytes::{Buf, Bytes, BytesMut};
 
-use super::protocol::IAC;
+use super::protocol::{
+    NegotiationType, TelnetCommand, TelnetOption, DO, DONT, IAC, SB, SE, WILL, WONT,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TelnetEvent {
     Data(Bytes),
+    Command(TelnetCommand),
+    Negotiate(NegotiationType, TelnetOption),
+    Subnegotiate(Bytes),
 }
 
 #[derive(Clone, Copy)]
 enum State {
     Data,
+    InterpretAsCommand,
+    Negotiate(NegotiationType),
+    Subnegotiate,
+    SubnegotiateIac,
 }
 
 impl Default for State {
@@ -22,44 +31,111 @@ impl Default for State {
 
 #[derive(Default)]
 pub struct TelnetProcessor {
-    queue: VecDeque<TelnetEvent>,
     state: State,
 }
 
 impl TelnetProcessor {
-    pub fn enqueue(&mut self, bytes: &mut BytesMut) -> io::Result<()> {
+    pub fn process_one(&mut self, bytes: &mut BytesMut) -> io::Result<Option<TelnetEvent>> {
         let mut i = 0usize;
         while i < bytes.remaining() {
-            let byte = (&bytes)[i];
+            let byte = bytes[i];
             match (self.state, byte) {
                 (State::Data, IAC) => {
-                    self.split_data(bytes, i);
-                    i = 0;
+                    if let Some(data) = self.split_data(bytes, i) {
+                        return Ok(Some(data));
+                    }
 
-                    // TODO state transition
-                    break;
+                    self.state = State::InterpretAsCommand;
+                    bytes.get_u8();
+                    i = 0;
                 }
+
                 (State::Data, _) => {
+                    i += 1;
+                }
+
+                //
+                // IAC handling
+                (State::InterpretAsCommand, IAC) => {
+                    // Consume the literal byte as data
+                    self.state = State::Data;
+                    i += 1;
+                }
+
+                (State::InterpretAsCommand, WILL | WONT | DO | DONT) => {
+                    self.state = State::Negotiate(NegotiationType::from_byte(bytes.get_u8()));
+                }
+
+                (State::InterpretAsCommand, SB) => {
+                    self.state = State::Subnegotiate;
+                    bytes.get_u8();
+                }
+
+                (State::InterpretAsCommand, command) => {
+                    self.state = State::Data;
+                    bytes.get_u8();
+                    return Ok(Some(TelnetEvent::Command(TelnetCommand::from_byte(
+                        command,
+                    ))));
+                }
+
+                //
+                // Option Negotiation
+                (State::Negotiate(negotiation), _) => {
+                    self.state = State::Data;
+                    return Ok(Some(TelnetEvent::Negotiate(
+                        negotiation,
+                        TelnetOption::from_byte(bytes.get_u8()),
+                    )));
+                }
+
+                //
+                // Subnegotiation
+                (State::Subnegotiate, IAC) => {
+                    self.state = State::SubnegotiateIac;
+                    i += 1;
+                }
+                (State::Subnegotiate, _) => {
+                    i += 1;
+                }
+
+                (State::SubnegotiateIac, IAC) => {
+                    // TODO literal IAC byte
+                    i += 1;
+                }
+                (State::SubnegotiateIac, SE) => {
+                    self.state = State::Data;
+                    let data_end = i.checked_sub(1);
+                    let data = bytes.split_to(data_end.unwrap_or(0)).freeze();
+
+                    // Consume SE and IAC
+                    bytes.get_u8();
+                    if data_end.is_some() {
+                        bytes.get_u8();
+                    }
+
+                    return Ok(Some(TelnetEvent::Subnegotiate(data)));
+                }
+                (State::SubnegotiateIac, _) => {
+                    // Unexpected byte; I guess just consume it
+                    self.state = State::Subnegotiate;
                     i += 1;
                 }
             };
         }
 
         if i > 0 {
-            self.split_data(bytes, i);
+            return Ok(self.split_data(bytes, i));
         }
 
-        Ok(())
+        Ok(None)
     }
 
-    pub fn pop(&mut self) -> Option<TelnetEvent> {
-        self.queue.pop_front()
-    }
-
-    fn split_data(&mut self, bytes: &mut BytesMut, at: usize) {
+    fn split_data(&mut self, bytes: &mut BytesMut, at: usize) -> Option<TelnetEvent> {
         if at > 0 {
-            self.queue
-                .push_back(TelnetEvent::Data(bytes.split_to(at).freeze()));
+            Some(TelnetEvent::Data(bytes.split_to(at).freeze()))
+        } else {
+            None
         }
     }
 }
@@ -69,18 +145,95 @@ mod tests {
     use super::*;
 
     #[test]
+    fn nop_test() -> io::Result<()> {
+        let mut processor = TelnetProcessor::default();
+        let mut buffer = BytesMut::new();
+        assert_eq!(processor.process_one(&mut buffer)?, None);
+        Ok(())
+    }
+
+    #[test]
     fn simple_data_test() -> io::Result<()> {
         let bytes = b"For the honor of Grayskull!";
 
         let mut processor = TelnetProcessor::default();
-        processor.enqueue(&mut BytesMut::from(&bytes[..]))?;
+        let mut buffer = BytesMut::from(&bytes[..]);
 
         assert_eq!(
-            processor.pop(),
+            processor.process_one(&mut buffer)?,
             Some(TelnetEvent::Data(Bytes::from(&bytes[..])))
         );
 
-        assert_eq!(processor.pop(), None);
+        assert_eq!(processor.process_one(&mut buffer)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn literal_iac_data() -> io::Result<()> {
+        let bytes = b"For the \xFF\xFFhonor\xFF\xFF of Grayskull!";
+
+        let mut processor = TelnetProcessor::default();
+        let mut buffer = BytesMut::from(&bytes[..]);
+
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Data(Bytes::from(&b"For the "[..])))
+        );
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Data(Bytes::from(&b"\xFFhonor"[..])))
+        );
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Data(Bytes::from(&b"\xFF of Grayskull!"[..])))
+        );
+
+        assert_eq!(processor.process_one(&mut buffer)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn negotiations_test() -> io::Result<()> {
+        let bytes = b"For\xFF\xFB\x18the";
+
+        let mut processor = TelnetProcessor::default();
+        let mut buffer = BytesMut::from(&bytes[..]);
+
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Data(Bytes::from(&b"For"[..])))
+        );
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Negotiate(
+                NegotiationType::Will,
+                TelnetOption::Ttype
+            ))
+        );
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Data(Bytes::from(&b"the"[..])))
+        );
+
+        assert_eq!(processor.process_one(&mut buffer)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn subnegotiations_test() -> io::Result<()> {
+        let bytes = b"\xFF\xFA\x45\x01VARNAME\x02THE VALUE\xFF\xF0";
+
+        let mut processor = TelnetProcessor::default();
+        let mut buffer = BytesMut::from(&bytes[..]);
+
+        assert_eq!(
+            processor.process_one(&mut buffer)?,
+            Some(TelnetEvent::Subnegotiate(Bytes::from(
+                &b"\x45\x01VARNAME\x02THE VALUE"[..]
+            )))
+        );
+
+        assert_eq!(processor.process_one(&mut buffer)?, None);
         Ok(())
     }
 }

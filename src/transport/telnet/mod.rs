@@ -9,10 +9,10 @@ use tokio::{
 
 use super::{Transport, TransportEvent};
 
-mod protocol;
 mod processor;
+mod protocol;
 
-use processor::{TelnetProcessor, TelnetEvent};
+use processor::{TelnetEvent, TelnetProcessor};
 
 pub struct TelnetTransport {
     buffer: BytesMut,
@@ -31,10 +31,14 @@ impl TelnetTransport {
         })
     }
 
-    fn pop_transport_event(&mut self) -> io::Result<TransportEvent> {
-        match self.telnet.pop() {
-            Some(TelnetEvent::Data(bytes)) => Ok(TransportEvent::Data(bytes)),
-            None => Ok(TransportEvent::Nop),
+    fn process_buffer(&mut self) -> io::Result<Option<TransportEvent>> {
+        match self.telnet.process_one(&mut self.buffer)? {
+            Some(TelnetEvent::Data(bytes)) => Ok(Some(TransportEvent::Data(bytes))),
+            Some(_) => {
+                // TODO: Log unexpected event
+                Ok(Some(TransportEvent::Nop))
+            }
+            None => Ok(None),
         }
     }
 }
@@ -42,15 +46,23 @@ impl TelnetTransport {
 #[async_trait]
 impl Transport for TelnetTransport {
     async fn read(&mut self) -> io::Result<TransportEvent> {
-        match self.pop_transport_event()? {
-            TransportEvent::Nop => {}, // Nothing to do; proceed with read below
-            pending => return Ok(pending), // Return pending events before next read
+        loop {
+            match self.process_buffer()? {
+                None => {
+                    // Nothing to do; proceed with read below
+                    break;
+                }
+                Some(TransportEvent::Nop) => {
+                    // Some unhandled telnet command; loop back and try again
+                }
+                // Return pending events before next read
+                Some(pending) => return Ok(pending),
+            }
         }
 
         self.stream.read_buf(&mut self.buffer).await?;
-        self.telnet.enqueue(&mut self.buffer)?;
-
-        self.pop_transport_event()
+        self.process_buffer()
+            .map(|option| option.unwrap_or(TransportEvent::Nop))
     }
 
     async fn write(&mut self, data: &[u8]) -> io::Result<usize> {
