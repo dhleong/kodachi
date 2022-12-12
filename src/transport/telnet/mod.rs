@@ -73,7 +73,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> Transport for TelnetTransport<S> 
         loop {
             match self.process_buffer()? {
                 None => {
-                    // Nothing to do; proceed with read below
+                    // Nothing to do (right now); proceed with read below
                     break;
                 }
                 Some(TransportEvent::Nop) => {
