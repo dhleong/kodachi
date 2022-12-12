@@ -60,7 +60,7 @@ function M.ensure_window()
 
   -- Reuse an existing Socket, if appropriate; else create a new one
   local existing = states.current { silent = true }
-  local socket = existing.socket
+  local socket = existing and existing.socket
   if not socket or not existing or existing.exited then
     socket = require 'kodachi.socket'.create()
   end
