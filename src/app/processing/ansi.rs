@@ -36,9 +36,9 @@ impl Into<Ansi> for AnsiMut {
     }
 }
 
-impl From<&str> for AnsiMut {
-    fn from(source: &str) -> Self {
-        Self::from_bytes(BytesMut::from(source))
+impl<T: AsRef<str>> From<T> for AnsiMut {
+    fn from(source: T) -> Self {
+        Self::from_bytes(BytesMut::from(source.as_ref()))
     }
 }
 
@@ -61,7 +61,7 @@ impl AnsiMut {
 
     pub fn take(&mut self) -> Ansi {
         let bytes = self.take_bytes();
-        Ansi::from(bytes.freeze())
+        Ansi::from_bytes(bytes.freeze())
     }
 }
 
@@ -109,6 +109,12 @@ impl AsRef<[u8]> for Ansi {
 impl From<&str> for Ansi {
     fn from(source: &str) -> Self {
         AnsiMut::from(source).into()
+    }
+}
+
+impl From<String> for Ansi {
+    fn from(source: String) -> Self {
+        source.as_str().into()
     }
 }
 

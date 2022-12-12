@@ -64,6 +64,7 @@ pub trait ProcessorOutputReceiver {
     fn save_position(&mut self) -> io::Result<()>;
     fn restore_position(&mut self) -> io::Result<()>;
     fn clear_from_cursor_down(&mut self) -> io::Result<()>;
+    fn reset_colors(&mut self) -> io::Result<()>;
 
     fn text(&mut self, text: Ansi) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
@@ -223,6 +224,10 @@ mod tests {
         }
 
         fn clear_from_cursor_down(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn reset_colors(&mut self) -> io::Result<()> {
             Ok(())
         }
 

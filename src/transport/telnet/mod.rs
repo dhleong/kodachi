@@ -84,7 +84,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> Transport for TelnetTransport<S> 
             }
         }
 
-        self.stream.read_buf(&mut self.buffer).await?;
+        let read = self.stream.read_buf(&mut self.buffer).await?;
+        if read == 0 && self.buffer.is_empty() {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+
         self.process_buffer()
             .map(|option| option.unwrap_or(TransportEvent::Nop))
     }
