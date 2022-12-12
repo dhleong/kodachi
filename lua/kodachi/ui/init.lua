@@ -15,6 +15,10 @@ local function reuse_or_create_window()
     if connected and vim.fn.bufwinnr(existing.bufnr) ~= -1 then
       print('kodachi: A connection is already live in this buffer')
       return
+    elseif not existing.exited and initial_bufnr == existing.initial_bufnr and
+        vim.fn.winheight(existing.initial_winid) ~= -1 then
+      -- Reuse an existing (disconnected) socket
+      vim.api.nvim_set_current_win(existing.initial_winid)
     elseif not connected and initial_bufnr == existing.initial_bufnr and vim.fn.winheight(existing.initial_winid) ~= -1 then
       -- Reuse an existing window
       vim.api.nvim_set_current_win(existing.initial_winid)
@@ -54,7 +58,13 @@ function M.ensure_window()
     return
   end
 
-  local socket = require 'kodachi.socket'.create()
+  -- Reuse an existing Socket, if appropriate; else create a new one
+  local existing = states.current { silent = true }
+  local socket = existing.socket
+  if not socket or not existing or existing.exited then
+    socket = require 'kodachi.socket'.create()
+  end
+
   local state = states.create_for_buf { socket = socket }
 
   -- Share the state with the source buffer, I guess? This facilitates reloading the
@@ -62,6 +72,13 @@ function M.ensure_window()
   states[initial_bufnr] = state
   state.initial_bufnr = initial_bufnr
   state.initial_winid = vim.fn.win_getid()
+
+  if existing and not existing.exited then
+    -- Reuse the existing job
+    state.job_id = existing.job_id
+    state.bufnr = existing.bufnr
+    return state
+  end
 
   local job_id = require 'kodachi.ui.term'.spawn_unix {
     socket_name = socket.name,

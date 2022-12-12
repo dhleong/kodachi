@@ -89,7 +89,7 @@ pub async fn handle(
                 };
                 receiver.begin_chunk()?;
                 receiver.reset_colors()?;
-                receiver.text(format!("\n{}", message).into())?;
+                receiver.text(format!("\n{}\n", message).into())?;
                 receiver.end_chunk()?;
             }
             _ => {
