@@ -14,7 +14,7 @@ pub enum TelnetEvent {
     Subnegotiate(Bytes),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum State {
     Data,
     InterpretAsCommand,
@@ -130,7 +130,7 @@ impl TelnetProcessor {
             };
         }
 
-        if i > 0 {
+        if i > 0 && self.state == State::Data {
             return Ok(self.split_data(bytes, i));
         }
 
@@ -256,6 +256,17 @@ mod tests {
                 &b"\x45\x01VARNAME\x02THE\xFFVALUE"[..]
             )))
         );
+
+        assert_eq!(processor.process_one(&mut buffer)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn incomplete_subnegotiations_test() -> io::Result<()> {
+        let bytes = b"\xFF\xFA\x45\x01VARNAME\x02";
+
+        let mut processor = TelnetProcessor::default();
+        let mut buffer = BytesMut::from(&bytes[..]);
 
         assert_eq!(processor.process_one(&mut buffer)?, None);
         Ok(())
