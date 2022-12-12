@@ -1,7 +1,5 @@
 use std::io;
 
-use bytes::BytesMut;
-
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
@@ -28,15 +26,13 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
             incoming = transport.read() => match incoming? {
                 TransportEvent::Data(data) => {
                     receiver.begin_chunk()?;
-                    let r: &[u8] = &data;
-                    let bytes = BytesMut::from(r);
 
                     connection
                         .state
                         .processor
                         .lock()
                         .unwrap()
-                        .process(Ansi::from(bytes.freeze()), &mut receiver)?;
+                        .process(Ansi::from_bytes(data), &mut receiver)?;
 
                     receiver.end_chunk()?;
                 },
