@@ -240,7 +240,7 @@ mod tests {
             processor.process_one(&mut buffer)?,
             Some(TelnetEvent::Negotiate(
                 NegotiationType::Will,
-                TelnetOption::Ttype
+                TelnetOption::TermType
             ))
         );
         assert_eq!(

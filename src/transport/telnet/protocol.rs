@@ -1,6 +1,3 @@
-// Go Ahead
-pub const GA: u8 = 249;
-
 pub const SE: u8 = 240;
 pub const SB: u8 = 250;
 pub const WILL: u8 = 251;
@@ -10,36 +7,6 @@ pub const DONT: u8 = 254;
 
 // Interpret As Command
 pub const IAC: u8 = 255;
-
-pub mod options {
-    // Terminal Type
-    pub const TTYPE: u8 = 24;
-
-    // Negotiate About Window Size
-    pub const NAWS: u8 = 31;
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TelnetCommand {
-    GoAhead,
-    Unknown(u8),
-}
-
-impl TelnetCommand {
-    pub fn from_byte(byte: u8) -> TelnetCommand {
-        match byte {
-            GA => TelnetCommand::GoAhead,
-            _ => TelnetCommand::Unknown(byte),
-        }
-    }
-
-    pub fn byte(&self) -> u8 {
-        match self {
-            TelnetCommand::GoAhead => GA,
-            TelnetCommand::Unknown(b) => *b,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NegotiationType {
@@ -70,27 +37,52 @@ impl NegotiationType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-pub enum TelnetOption {
-    Ttype,
-    Naws,
-    Unknown(u8),
+macro_rules! declare_type {
+    (
+        $type_name:ident {
+            $($name:ident => $byte_value_name:expr,)*
+        }
+    ) => {
+        #[allow(dead_code)]
+        #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+        pub enum $type_name {
+            $($name),*,
+            Unknown(u8),
+        }
+
+        impl $type_name {
+            #[allow(dead_code)]
+            pub fn from_byte(byte: u8) -> Self {
+                match byte {
+                    $($byte_value_name => $type_name::$name),*,
+                    _ => $type_name::Unknown(byte),
+                }
+            }
+
+            #[allow(dead_code)]
+            pub fn byte(&self) -> u8 {
+                match self {
+                    $($type_name::$name => $byte_value_name),*,
+                    $type_name::Unknown(byte) => *byte,
+                }
+            }
+        }
+    };
 }
 
-impl TelnetOption {
-    pub fn from_byte(byte: u8) -> Self {
-        match byte {
-            options::TTYPE => TelnetOption::Ttype,
-            options::NAWS => TelnetOption::Naws,
-            _ => TelnetOption::Unknown(byte),
-        }
-    }
+declare_type!(TelnetCommand {
+    GoAhead => 249,
+});
 
-    pub fn byte(&self) -> u8 {
-        match self {
-            TelnetOption::Ttype => options::TTYPE,
-            TelnetOption::Naws => options::NAWS,
-            TelnetOption::Unknown(b) => *b,
-        }
-    }
-}
+declare_type!(TelnetOption {
+    SuppressGoAhead => 3,
+    TermType => 24,
+    // Negotiate About Window Size
+    Naws => 31,
+    Charset => 42,
+    MSDP => 69,
+    MCCP2 => 86,
+    MCCP3 => 87,
+    MSP => 90,
+    GMCP => 201,
+});
