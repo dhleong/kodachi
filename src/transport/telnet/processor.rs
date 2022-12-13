@@ -12,7 +12,7 @@ pub enum TelnetEvent {
     Data(Bytes),
     Command(TelnetCommand),
     Negotiate(NegotiationType, TelnetOption),
-    Subnegotiate(Bytes),
+    Subnegotiate(TelnetOption, Bytes),
 }
 
 impl TelnetEvent {
@@ -28,10 +28,11 @@ impl TelnetEvent {
                 stream.write_u8(negotiation.byte()).await?;
                 stream.write_u8(option.byte()).await
             }
-            TelnetEvent::Subnegotiate(mut bytes) => {
+            TelnetEvent::Subnegotiate(option, mut bytes) => {
                 stream.write_u8(IAC).await?;
                 stream.write_u8(SB).await?;
 
+                stream.write_u8(option.byte()).await?;
                 stream.write_all_buf(&mut bytes).await?;
 
                 stream.write_u8(IAC).await?;
@@ -139,7 +140,7 @@ impl TelnetProcessor {
                 (State::SubnegotiateIac, SE) => {
                     self.state = State::Data;
                     let data_end = i.checked_sub(1);
-                    let data = bytes.split_to(data_end.unwrap_or(0)).freeze();
+                    let mut data = bytes.split_to(data_end.unwrap_or(0)).freeze();
 
                     // Consume SE and IAC
                     bytes.get_u8();
@@ -147,7 +148,9 @@ impl TelnetProcessor {
                         bytes.get_u8();
                     }
 
-                    return Ok(Some(TelnetEvent::Subnegotiate(data)));
+                    let option_byte = data.get_u8();
+                    let option = TelnetOption::from_byte(option_byte);
+                    return Ok(Some(TelnetEvent::Subnegotiate(option, data)));
                 }
                 (State::SubnegotiateIac, _) => {
                     // Unexpected byte; I guess just consume it
@@ -261,9 +264,10 @@ mod tests {
 
         assert_eq!(
             processor.process_one(&mut buffer)?,
-            Some(TelnetEvent::Subnegotiate(Bytes::from(
-                &b"\x45\x01VARNAME\x02THE VALUE"[..]
-            )))
+            Some(TelnetEvent::Subnegotiate(
+                TelnetOption::MSDP,
+                Bytes::from(&b"\x01VARNAME\x02THE VALUE"[..])
+            ))
         );
 
         assert_eq!(processor.process_one(&mut buffer)?, None);
@@ -279,9 +283,10 @@ mod tests {
 
         assert_eq!(
             processor.process_one(&mut buffer)?,
-            Some(TelnetEvent::Subnegotiate(Bytes::from(
-                &b"\x45\x01VARNAME\x02THE\xFFVALUE"[..]
-            )))
+            Some(TelnetEvent::Subnegotiate(
+                TelnetOption::MSDP,
+                Bytes::from(&b"\x01VARNAME\x02THE\xFFVALUE"[..])
+            ))
         );
 
         assert_eq!(processor.process_one(&mut buffer)?, None);

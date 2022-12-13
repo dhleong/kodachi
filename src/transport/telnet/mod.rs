@@ -8,7 +8,7 @@ use tokio::{
 };
 use tokio_native_tls::{TlsConnector, TlsStream};
 
-use self::options::{OptionsNegotiator, OptionsNegotiatorBuilder};
+use self::options::TelnetOptionsManager;
 
 use super::{Transport, TransportEvent};
 
@@ -22,7 +22,7 @@ pub struct TelnetTransport<S: AsyncRead + AsyncWrite> {
     buffer: BytesMut,
     stream: S,
     telnet: TelnetProcessor,
-    options: OptionsNegotiator,
+    options: TelnetOptionsManager,
 }
 
 impl TelnetTransport<TcpStream> {
@@ -52,13 +52,12 @@ impl TelnetTransport<TlsStream<TcpStream>> {
 impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
     async fn connect_with_stream(stream: S, buffer_size: usize) -> io::Result<Self> {
         let buffer = BytesMut::with_capacity(buffer_size);
-        let options = OptionsNegotiatorBuilder::default().build();
 
         Ok(Self {
             buffer,
             stream,
             telnet: TelnetProcessor::default(),
-            options,
+            options: TelnetOptionsManager::default(),
         })
     }
 

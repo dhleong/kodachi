@@ -3,9 +3,10 @@ use std::{collections::HashMap, io};
 use log::trace;
 use tokio::io::AsyncWrite;
 
-use crate::transport::telnet::processor::TelnetEvent;
-
-use super::protocol::{NegotiationType, TelnetOption};
+use crate::transport::telnet::{
+    processor::TelnetEvent,
+    protocol::{NegotiationType, TelnetOption},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum OptionState {
@@ -76,6 +77,7 @@ impl OptionsNegotiatorBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn accept_will(mut self, option: TelnetOption) -> Self {
         self.options
             .insert(option, OptionState::Accept(NegotiationType::Will));

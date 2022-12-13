@@ -75,6 +75,7 @@ declare_type!(TelnetCommand {
 });
 
 declare_type!(TelnetOption {
+    Echo => 1,
     SuppressGoAhead => 3,
     TermType => 24,
     // Negotiate About Window Size
