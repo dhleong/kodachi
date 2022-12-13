@@ -32,6 +32,13 @@ impl TelnetCommand {
             _ => TelnetCommand::Unknown(byte),
         }
     }
+
+    pub fn byte(&self) -> u8 {
+        match self {
+            TelnetCommand::GoAhead => GA,
+            TelnetCommand::Unknown(b) => *b,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,9 +59,18 @@ impl NegotiationType {
             _ => panic!("Not a negotiation type: {:?}", byte),
         }
     }
+
+    pub fn byte(&self) -> u8 {
+        match self {
+            NegotiationType::Will => WILL,
+            NegotiationType::Wont => WONT,
+            NegotiationType::Do => DO,
+            NegotiationType::Dont => DONT,
+        }
+    }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum TelnetOption {
     Ttype,
     Naws,
@@ -67,6 +83,14 @@ impl TelnetOption {
             options::TTYPE => TelnetOption::Ttype,
             options::NAWS => TelnetOption::Naws,
             _ => TelnetOption::Unknown(byte),
+        }
+    }
+
+    pub fn byte(&self) -> u8 {
+        match self {
+            TelnetOption::Ttype => options::TTYPE,
+            TelnetOption::Naws => options::NAWS,
+            TelnetOption::Unknown(b) => *b,
         }
     }
 }

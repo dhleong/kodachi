@@ -8,11 +8,13 @@ use cli::{Cli, Commands};
 mod app;
 mod cli;
 mod daemon;
+mod logging;
 mod net;
 mod transport;
 
 use cli::stdio::StdinReader;
 use crossterm::style::{Print, ResetColor};
+use logging::KodachiLogger;
 
 async fn run(cli: Cli) -> io::Result<()> {
     match &cli.command {
@@ -36,6 +38,9 @@ async fn run(cli: Cli) -> io::Result<()> {
 
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
+
+    log::set_boxed_logger(Box::new(KodachiLogger::default())).unwrap();
+    log::set_max_level(log::LevelFilter::Trace);
 
     let rt = tokio::runtime::Runtime::new()?;
     let result = rt.block_on(run(cli));

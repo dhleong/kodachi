@@ -8,8 +8,11 @@ use tokio::{
 };
 use tokio_native_tls::{TlsConnector, TlsStream};
 
+use self::options::{OptionsNegotiator, OptionsNegotiatorBuilder};
+
 use super::{Transport, TransportEvent};
 
+mod options;
 mod processor;
 mod protocol;
 
@@ -19,6 +22,7 @@ pub struct TelnetTransport<S: AsyncRead + AsyncWrite> {
     buffer: BytesMut,
     stream: S,
     telnet: TelnetProcessor,
+    options: OptionsNegotiator,
 }
 
 impl TelnetTransport<TcpStream> {
@@ -45,21 +49,30 @@ impl TelnetTransport<TlsStream<TcpStream>> {
     }
 }
 
-impl<S: AsyncRead + AsyncWrite> TelnetTransport<S> {
+impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
     async fn connect_with_stream(stream: S, buffer_size: usize) -> io::Result<Self> {
         let buffer = BytesMut::with_capacity(buffer_size);
+        let options = OptionsNegotiatorBuilder::default().build();
+
         Ok(Self {
             buffer,
             stream,
             telnet: TelnetProcessor::default(),
+            options,
         })
     }
 
-    fn process_buffer(&mut self) -> io::Result<Option<TransportEvent>> {
+    async fn process_buffer(&mut self) -> io::Result<Option<TransportEvent>> {
         match self.telnet.process_one(&mut self.buffer)? {
             Some(TelnetEvent::Data(bytes)) => Ok(Some(TransportEvent::Data(bytes))),
+            Some(TelnetEvent::Negotiate(negotiation, option)) => {
+                self.options
+                    .negotiate(negotiation, option, &mut self.stream)
+                    .await?;
+                Ok(Some(TransportEvent::Nop))
+            }
             Some(_) => {
-                // TODO: Log unexpected event
+                // TODO: Log unexpected event?
                 Ok(Some(TransportEvent::Nop))
             }
             None => Ok(None),
@@ -71,7 +84,7 @@ impl<S: AsyncRead + AsyncWrite> TelnetTransport<S> {
 impl<S: AsyncRead + AsyncWrite + Unpin + Send> Transport for TelnetTransport<S> {
     async fn read(&mut self) -> io::Result<TransportEvent> {
         loop {
-            match self.process_buffer()? {
+            match self.process_buffer().await? {
                 None => {
                     // Nothing to do (right now); proceed with read below
                     break;
@@ -90,6 +103,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> Transport for TelnetTransport<S> 
         }
 
         self.process_buffer()
+            .await
             .map(|option| option.unwrap_or(TransportEvent::Nop))
     }
 
