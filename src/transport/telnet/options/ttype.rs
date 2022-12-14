@@ -87,7 +87,7 @@ impl TermTypeOptionHandler {
             State::MttsBitVector => {
                 let mut bit_vector = 0;
 
-                if let Some(colors) = supports_color::on(supports_color::Stream::Stdout) {
+                if let Some(colors) = supports_color::on_cached(supports_color::Stream::Stdout) {
                     if colors.has_basic {
                         bit_vector += MTTS_ANSI;
                     }
