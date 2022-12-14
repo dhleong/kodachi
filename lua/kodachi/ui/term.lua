@@ -17,6 +17,10 @@ function M.spawn_unix(opts)
 
   local session_name = vim.fn.rand()
 
+  local env = {
+    DEBUG = vim.g.KODACHI_DEBUG,
+  }
+
   local cmd = vim.tbl_flatten {
     tmux_wrap and {
       'tmux',
@@ -25,6 +29,7 @@ function M.spawn_unix(opts)
       'new-session',
       '-n', 'kodachi',
       '-s', session_name,
+      '-e', 'DEBUG=' .. env.DEBUG,
     } or {},
     M.debug and { 'cargo', 'run', '--' } or kodachi_exe,
     'unix', opts.socket_name,
@@ -39,6 +44,7 @@ function M.spawn_unix(opts)
 
   local job_id = vim.fn.termopen(cmd, {
     cwd = kodachi_root,
+    env = env,
     on_exit = function(_, _, _)
       opts.on_exit()
 
