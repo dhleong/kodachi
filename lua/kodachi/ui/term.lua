@@ -51,7 +51,7 @@ function M.spawn_unix(opts)
       -- Smol bit of hacks to "preserve" the window on exit.
       -- We do this *after* invoking the on_exit callback to ensure the original
       -- bufnr is still available to listeners
-      if state.bufnr then
+      if tmux_wrap and state.bufnr then
         local win = vim.fn.bufwinid(state.bufnr)
         if win ~= -1 then
           local uri = vim.uri_from_fname(output_file)
