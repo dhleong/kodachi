@@ -12,6 +12,12 @@ use super::{negotiator::OptionsNegotiatorBuilder, DynWriteStream, TelnetOptionHa
 
 const IS: u8 = 0;
 
+const MTTS_ANSI: u16 = 1;
+const MTTS_VT100: u16 = 2;
+const MTTS_UTF8: u16 = 4;
+const MTTS_256COLOR: u16 = 8;
+const MTTS_TRUECOLOR: u16 = 256;
+
 enum State {
     ClientName,
     TermType,
@@ -77,13 +83,31 @@ impl TermTypeOptionHandler {
     fn build_name(&self, buf: &mut BytesMut) {
         match self.state {
             State::ClientName => buf.put_slice(b"kodachi"),
-            State::TermType => buf.put_slice(
-                env::var("TERM")
-                    .unwrap_or("".to_string())
-                    .as_str()
-                    .as_bytes(),
-            ),
-            State::MttsBitVector => buf.put_slice(b"MTTS 0"), // TODO
+            State::TermType => buf.put_slice(env::var("TERM").unwrap_or("".to_string()).as_bytes()),
+            State::MttsBitVector => {
+                let mut bit_vector = 0;
+
+                if let Some(colors) = supports_color::on(supports_color::Stream::Stdout) {
+                    if colors.has_basic {
+                        bit_vector += MTTS_ANSI;
+                    }
+                    if colors.has_256 {
+                        bit_vector += MTTS_256COLOR;
+                    }
+                    if colors.has_16m {
+                        bit_vector += MTTS_TRUECOLOR;
+                    }
+                }
+
+                if supports_unicode::on(supports_unicode::Stream::Stdout) {
+                    bit_vector += MTTS_UTF8;
+                }
+
+                // Just assume VT100 for now I guess
+                bit_vector += MTTS_VT100;
+
+                buf.put_slice(format!("MTTS {}", bit_vector).as_bytes())
+            }
         }
     }
 
