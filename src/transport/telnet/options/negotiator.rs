@@ -29,19 +29,29 @@ impl OptionsNegotiator {
         trace!(target: "telnet", "<< {:?} {:?}", negotiation, option);
 
         if let Some(state) = self.options.get(&option) {
-            if state == &OptionState::Accept(negotiation) {
-                let (state, response_type) = match negotiation {
-                    NegotiationType::Do => (OptionState::Do, NegotiationType::Will),
-                    NegotiationType::Will => (OptionState::Will, NegotiationType::Do),
-                    _ => panic!("Impossible negotiation {:?} for {:?}", negotiation, option),
-                };
-                self.options.insert(option, state);
+            match (negotiation, state) {
+                (_, &OptionState::Accept(negotiation)) => {
+                    let (state, response_type) = match negotiation {
+                        NegotiationType::Do => (OptionState::Do, NegotiationType::Will),
+                        NegotiationType::Will => (OptionState::Will, NegotiationType::Do),
+                        _ => panic!("Impossible negotiation {:?} for {:?}", negotiation, option),
+                    };
+                    self.options.insert(option, state);
 
-                let response = TelnetEvent::Negotiate(response_type, option);
-                trace!(target: "telnet", ">> {:?}", response);
-                response.write_all(stream).await?;
+                    let response = TelnetEvent::Negotiate(response_type, option);
+                    trace!(target: "telnet", ">> {:?}", response);
+                    response.write_all(stream).await?;
 
-                return Ok(());
+                    return Ok(());
+                }
+
+                (NegotiationType::Do, &OptionState::Do)
+                | (NegotiationType::Will, &OptionState::Will) => {
+                    // Already accepted; this is a nop
+                    return Ok(());
+                }
+
+                _ => {} // Ignore and fall through below:
             }
         }
 
@@ -143,6 +153,31 @@ mod tests {
         ) -> std::task::Poll<Result<(), io::Error>> {
             todo!()
         }
+    }
+
+    #[tokio::test]
+    async fn do_after_do_test() -> io::Result<()> {
+        let mut handler = OptionsNegotiatorBuilder::default()
+            .accept_do(TelnetOption::TermType)
+            .build();
+
+        let mut stream = TestStream::new();
+
+        handler
+            .negotiate(NegotiationType::Do, TelnetOption::TermType, &mut stream)
+            .await?;
+
+        handler
+            .negotiate(NegotiationType::Do, TelnetOption::TermType, &mut stream)
+            .await?;
+
+        let mut expected_stream = TestStream::new();
+        TelnetEvent::Negotiate(NegotiationType::Will, TelnetOption::TermType)
+            .write_all(&mut expected_stream)
+            .await?;
+        assert_eq!(stream.sent, expected_stream.sent);
+
+        Ok(())
     }
 
     #[tokio::test]
