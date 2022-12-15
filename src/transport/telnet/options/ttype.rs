@@ -49,18 +49,24 @@ impl TelnetOptionHandler for TermTypeOptionHandler {
     async fn negotiate(
         &mut self,
         negotiation: NegotiationType,
-        stream: DynWriteStream<'_>,
+        _stream: DynWriteStream<'_>,
     ) -> io::Result<()> {
         match negotiation {
-            NegotiationType::Do => {
-                self.respond_with_state(stream).await?;
-                self.advance_state();
-            }
             NegotiationType::Dont => {
                 self.reset();
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    async fn subnegotiate(
+        &mut self,
+        _data: bytes::Bytes,
+        stream: DynWriteStream<'_>,
+    ) -> io::Result<()> {
+        self.respond_with_state(stream).await?;
+        self.advance_state();
         Ok(())
     }
 }

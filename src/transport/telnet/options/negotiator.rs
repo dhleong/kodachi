@@ -20,6 +20,13 @@ pub struct OptionsNegotiator {
 }
 
 impl OptionsNegotiator {
+    pub fn is_accepted(&self, option: TelnetOption) -> bool {
+        match self.options.get(&option) {
+            Some(OptionState::Will | OptionState::Do) => true,
+            _ => false,
+        }
+    }
+
     pub async fn negotiate<S: AsyncWrite + Unpin + Send>(
         &mut self,
         negotiation: NegotiationType,
