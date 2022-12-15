@@ -102,7 +102,7 @@ impl<S: AsyncWrite> AsyncWrite for CompressableStream<S> {
 
 #[cfg(test)]
 mod tests {
-    use bytes::{BufMut, Bytes, BytesMut};
+    use bytes::{Buf, BufMut, Bytes, BytesMut};
     use flate2::{Compress, Compression, Status};
     use tokio::io::AsyncReadExt;
 
@@ -130,8 +130,9 @@ mod tests {
             _cx: &mut std::task::Context<'_>,
             buf: &mut ReadBuf<'_>,
         ) -> Poll<io::Result<()>> {
-            buf.put_slice(&self.to_read);
-            self.to_read.clear();
+            let to_read_count = buf.remaining().min(self.to_read.remaining());
+            let to_read = self.to_read.copy_to_bytes(to_read_count);
+            buf.put_slice(&to_read);
             Poll::Ready(Ok(()))
         }
     }
@@ -150,18 +151,31 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn decompress_test() -> io::Result<()> {
-        let input = "For the honor of Grayskull!";
+    async fn small_decompress_test() -> io::Result<()> {
+        test_decompress_round_trip("For the honor of Grayskull!").await
+    }
+
+    #[tokio::test]
+    async fn large_decompress_test() -> io::Result<()> {
+        let mut input = String::new();
+        for _ in 0..1000 {
+            input.push_str("For the honor of Grayskull!\n");
+        }
+        test_decompress_round_trip(&input).await
+    }
+
+    async fn test_decompress_round_trip(input: &str) -> io::Result<()> {
         let mut compressor = Compress::new(Compression::default(), false);
 
-        let mut compressed = BytesMut::with_capacity(4096);
-        compressed.put_bytes(0, 4096);
+        // NOTE: The slice must have some len() for compress() to work
+        let mut compressed = BytesMut::with_capacity(input.len());
+        compressed.put_bytes(0, compressed.capacity());
 
         let status = compressor
             .compress(
                 input.as_bytes(),
                 &mut compressed,
-                flate2::FlushCompress::Sync,
+                flate2::FlushCompress::Finish,
             )
             .expect("Failed to compress");
         assert_ne!(status, Status::BufError);
@@ -173,11 +187,18 @@ mod tests {
         let mut wrapper = CompressableStream::new(stream);
         wrapper.set_decompressing(true);
 
-        let mut dst = BytesMut::default();
-        let read = wrapper.read_buf(&mut dst).await?;
+        let mut dst = BytesMut::with_capacity(input.len());
+        let mut read = 0;
+        loop {
+            let this_read = wrapper.read_buf(&mut dst).await?;
+            if this_read == 0 {
+                break;
+            }
+            read += this_read;
+        }
 
-        assert_eq!(read, input.len());
         assert_eq!(dst, input);
+        assert_eq!(read, input.len());
 
         Ok(())
     }
