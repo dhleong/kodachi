@@ -10,6 +10,7 @@ use self::{
 
 use super::protocol::{NegotiationType, TelnetOption};
 
+pub mod mccp;
 pub mod negotiator;
 pub mod ttype;
 

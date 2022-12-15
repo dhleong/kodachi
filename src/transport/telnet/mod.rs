@@ -8,7 +8,10 @@ use tokio::{
 };
 use tokio_native_tls::{TlsConnector, TlsStream};
 
-use self::options::TelnetOptionsManager;
+use self::{
+    options::{mccp::CompressableStream, TelnetOptionsManager},
+    protocol::TelnetOption,
+};
 
 use super::{Transport, TransportEvent};
 
@@ -20,7 +23,7 @@ use processor::{TelnetEvent, TelnetProcessor};
 
 pub struct TelnetTransport<S: AsyncRead + AsyncWrite> {
     buffer: BytesMut,
-    stream: S,
+    stream: CompressableStream<S>,
     telnet: TelnetProcessor,
     options: TelnetOptionsManager,
 }
@@ -55,7 +58,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
 
         Ok(Self {
             buffer,
-            stream,
+            stream: CompressableStream::new(stream),
             telnet: TelnetProcessor::default(),
             options: TelnetOptionsManager::default(),
         })
@@ -68,6 +71,13 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
                 self.options
                     .negotiate(negotiation, option, &mut self.stream)
                     .await?;
+                Ok(Some(TransportEvent::Nop))
+            }
+            Some(TelnetEvent::Subnegotiate(option, _data)) => {
+                if option == TelnetOption::MCCP2 {
+                    // Start compressing
+                    self.stream.set_decompressing(true);
+                }
                 Ok(Some(TransportEvent::Nop))
             }
             Some(_) => {
