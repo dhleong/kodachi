@@ -26,8 +26,6 @@ impl OptionsNegotiator {
         option: TelnetOption,
         stream: &mut S,
     ) -> io::Result<()> {
-        trace!(target: "telnet", "<< {:?} {:?}", negotiation, option);
-
         if let Some(state) = self.options.get(&option) {
             match (negotiation, state) {
                 (_, &OptionState::Accept(negotiation)) => {
@@ -102,7 +100,6 @@ impl OptionsNegotiatorBuilder {
         self
     }
 
-    #[allow(dead_code)]
     pub fn accept_will(mut self, option: TelnetOption) -> Self {
         self.options
             .insert(option, OptionState::Accept(NegotiationType::Will));

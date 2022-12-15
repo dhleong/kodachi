@@ -2,6 +2,7 @@ use std::io;
 
 use async_trait::async_trait;
 use bytes::BytesMut;
+use log::trace;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
@@ -68,16 +69,21 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
         match self.telnet.process_one(&mut self.buffer)? {
             Some(TelnetEvent::Data(bytes)) => Ok(Some(TransportEvent::Data(bytes))),
             Some(TelnetEvent::Negotiate(negotiation, option)) => {
+                trace!(target: "telnet", "<< {:?} {:?}", negotiation, option);
+
                 self.options
                     .negotiate(negotiation, option, &mut self.stream)
                     .await?;
                 Ok(Some(TransportEvent::Nop))
             }
-            Some(TelnetEvent::Subnegotiate(option, _data)) => {
+            Some(TelnetEvent::Subnegotiate(option, data)) => {
+                trace!(target: "telnet", "<< SB {:?} {:?} SE", option, data);
+
                 if option == TelnetOption::MCCP2 {
                     // Start compressing
                     self.stream.set_decompressing(true);
                 }
+
                 Ok(Some(TransportEvent::Nop))
             }
             Some(_) => {
