@@ -73,6 +73,25 @@ replacing triggers and mappings without disconnecting.
 To open a "composer" window for sending something to the server, simply hit `i` within this
 output window, as you would normally.
 
+#### Autocomplete
+
+Auto-complete support in Neovim is implemented as a [null-ls][null-ls] source:
+
+```vim
+Plug 'jose-elias-alvarez/null-ls.nvim'
+```
+
+```lua
+require 'null-ls'.setup {
+  sources = {
+    -- ... Your other sources ...
+
+    -- Kodachi completion:
+    require 'kodachi.null-ls.completion',
+  },
+}
+```
+
 
 [mud]: https://en.wikipedia.org/wiki/MUD
 [nvim]: https://neovim.io
@@ -80,3 +99,4 @@ output window, as you would normally.
 [iaido]: https://github.com/dhleong/iaido
 [rust]: https://www.rust-lang.org
 [plug]: https://github.com/junegunn/vim-plug
+[null-ls]: https://github.com/jose-elias-alvarez/null-ls.nvim
