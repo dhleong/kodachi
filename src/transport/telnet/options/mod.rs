@@ -10,6 +10,7 @@ use self::{
 
 use super::protocol::{NegotiationType, TelnetOption};
 
+pub mod mccp;
 pub mod negotiator;
 pub mod ttype;
 
@@ -50,7 +51,9 @@ impl Default for TelnetOptionsManager {
             handlers.insert(handler.option(), handler);
         }
 
-        let negotiator = negotiator_builder.build();
+        // Build the negotiator, adding in extra options not managed by a Handler
+        let negotiator = negotiator_builder.accept_will(TelnetOption::MCCP2).build();
+
         TelnetOptionsManager {
             negotiator,
             handlers,
