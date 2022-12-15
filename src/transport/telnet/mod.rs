@@ -79,9 +79,16 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
             Some(TelnetEvent::Subnegotiate(option, data)) => {
                 trace!(target: "telnet", "<< SB {:?} {:?} SE", option, data);
 
-                if option == TelnetOption::MCCP2 {
+                match option {
                     // Start compressing
-                    self.stream.set_decompressing(true);
+                    TelnetOption::MCCP2 => self.stream.set_decompressing(true),
+
+                    // Otherwise, delgate to the options manager
+                    _ => {
+                        self.options
+                            .subnegotiate(option, data, &mut self.stream)
+                            .await?;
+                    }
                 }
 
                 Ok(Some(TransportEvent::Nop))

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, io};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use tokio::io::AsyncWrite;
 
 use self::{
@@ -27,6 +28,10 @@ pub trait TelnetOptionHandler: Send {
         _negotiation: NegotiationType,
         _stream: DynWriteStream<'_>,
     ) -> io::Result<()> {
+        Ok(())
+    }
+
+    async fn subnegotiate(&mut self, _data: Bytes, _stream: DynWriteStream<'_>) -> io::Result<()> {
         Ok(())
     }
 }
@@ -74,6 +79,21 @@ impl TelnetOptionsManager {
         if let Some(handler) = self.handlers.get_mut(&option) {
             let wrapped: Box<&mut (dyn AsyncWrite + Unpin + Send)> = Box::new(stream);
             handler.negotiate(negotiation, wrapped).await?;
+        }
+        Ok(())
+    }
+
+    pub async fn subnegotiate<S: AsyncWrite + Unpin + Send>(
+        &mut self,
+        option: TelnetOption,
+        data: Bytes,
+        stream: &mut S,
+    ) -> io::Result<()> {
+        if self.negotiator.is_accepted(option) {
+            if let Some(handler) = self.handlers.get_mut(&option) {
+                let wrapped: Box<&mut (dyn AsyncWrite + Unpin + Send)> = Box::new(stream);
+                handler.subnegotiate(data, wrapped).await?;
+            }
         }
         Ok(())
     }
