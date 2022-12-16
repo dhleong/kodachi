@@ -30,16 +30,14 @@ pub struct SendTextProcessor {
 }
 
 impl SendTextProcessor {
-    pub fn register_matcher<
-        R: 'static + Fn(MatchContext) -> Pin<Box<dyn Future<Output = io::Result<ProcessResult>>>>,
-    >(
-        &mut self,
-        matcher: Matcher,
-        on_match: R,
-    ) {
+    pub fn register_matcher<R, F>(&mut self, matcher: Matcher, on_match: R)
+    where
+        R: 'static + Fn(MatchContext) -> F,
+        F: 'static + Future<Output = io::Result<ProcessResult>>,
+    {
         self.matchers.push(RegisteredMatcher {
             matcher,
-            on_match: Box::new(on_match),
+            on_match: Box::new(move |context| Box::pin(on_match(context))),
         })
     }
 
@@ -119,13 +117,11 @@ mod tests {
             }
             .try_into()
             .unwrap(),
-            |context| {
-                Box::pin(async move {
-                    Ok(ProcessResult::ReplaceWith(format!(
-                        "yell For the Honor of Grayskull, {}!",
-                        context.indexed[&1].plain
-                    )))
-                })
+            |context| async move {
+                Ok(ProcessResult::ReplaceWith(format!(
+                    "yell For the Honor of Grayskull, {}!",
+                    context.indexed[&1].plain
+                )))
             },
         );
 
