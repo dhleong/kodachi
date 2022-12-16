@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::app::{processing::ansi::Ansi, Id};
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct MatchedText {
     #[serde(skip_serializing)]
     pub raw: Ansi,
@@ -22,7 +22,7 @@ impl MatchedText {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct MatchContext {
     pub named: HashMap<String, MatchedText>,
     pub indexed: HashMap<usize, MatchedText>,

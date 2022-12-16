@@ -18,6 +18,7 @@ pub enum Outgoing {
 
 #[derive(Default, Clone)]
 pub struct ConnectionState {
+    pub send_processor: Arc<Mutex<TextProcessor>>,
     pub processor: Arc<Mutex<TextProcessor>>,
     pub completions: Arc<Mutex<Completions>>,
     pub sent: Arc<Mutex<History<String>>>,
@@ -76,6 +77,14 @@ impl Connections {
     pub fn get_state(&mut self, id: Id) -> Option<ConnectionState> {
         if let Some(conn) = self.connections.get(&id) {
             Some(conn.state.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_send_processor(&mut self, id: Id) -> Option<Arc<Mutex<TextProcessor>>> {
+        if let Some(conn) = self.connections.get(&id) {
+            Some(conn.state.send_processor.clone())
         } else {
             None
         }
