@@ -47,7 +47,7 @@ pub async fn handle(channel: Channel, mut state: LockableState, connection_id: I
     // Enqueue the processed text to be sent
     let outbox = state.lock().unwrap().connections.get_outbox(connection_id);
     let sent = if let Some(outbox) = outbox {
-        outbox.send(Outgoing::Text(to_send.clone())).await.is_ok()
+        outbox.send(Outgoing::Text(to_send)).await.is_ok()
     } else {
         false
     };
