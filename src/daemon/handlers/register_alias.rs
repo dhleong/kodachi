@@ -1,6 +1,12 @@
+use std::io;
+
 use crate::{
     app::{matchers::MatcherSpec, processing::send::ProcessResult, Id, LockableState},
-    daemon::{channel::Channel, responses::DaemonResponse},
+    daemon::{
+        channel::Channel,
+        requests::ServerRequest,
+        responses::{ClientResponse, DaemonResponse},
+    },
 };
 
 pub async fn handle(
@@ -39,14 +45,28 @@ pub async fn handle(
         .register_matcher(compiled, move |context| {
             let mut receiver = receiver.clone();
             async move {
-                // TODO FIXME handle response; timeout; etc
-                receiver
-                    .request(crate::daemon::requests::ServerRequest::HandleAliasMatch {
+                let response = receiver
+                    .request(ServerRequest::HandleAliasMatch {
                         handler_id,
                         context,
                     })
-                    .await;
-                Ok(ProcessResult::Stop)
+                    .await?;
+
+                match response {
+                    ClientResponse::AliasMatchHandled {
+                        replacement: Some(replacement),
+                    } => Ok(ProcessResult::ReplaceWith(replacement)),
+
+                    ClientResponse::AliasMatchHandled { replacement: None } => {
+                        Ok(ProcessResult::Stop)
+                    }
+
+                    #[allow(unreachable_patterns)]
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Unexpected response: {:?}", response),
+                    )),
+                }
             }
         });
 

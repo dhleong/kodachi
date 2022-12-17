@@ -35,7 +35,8 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
     response: TResponse,
 ) -> io::Result<()> {
     let shared_state = LockableState::default();
-    let channels = ChannelSource::new(Box::new(response));
+    let (to_listeners, _) = tokio::sync::broadcast::channel(1);
+    let channels = ChannelSource::new(Box::new(response), to_listeners.clone());
 
     for read in input.lines() {
         let raw_json = read?;
@@ -57,6 +58,11 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
             } => {
                 let channel = channels.create_with_request_id(request_id);
                 dispatch_request(state, channel, payload);
+            }
+
+            Request::Response(response) => {
+                // NOTE: We ignore errors here; there may be no listeners, and that's okay
+                to_listeners.send(response).ok();
             }
 
             Request::Notification(ClientNotification::Clear { connection_id }) => {

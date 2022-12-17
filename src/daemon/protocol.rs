@@ -8,7 +8,7 @@ use super::{
     commands::{ClientNotification, ClientRequest},
     notifications::DaemonNotification,
     requests::ServerRequest,
-    responses::DaemonResponse,
+    responses::{DaemonResponse, ResponseToServerRequest},
 };
 
 #[derive(Deserialize)]
@@ -20,6 +20,8 @@ pub enum Request {
         #[serde(flatten)]
         payload: ClientRequest,
     },
+
+    Response(ResponseToServerRequest),
 
     Notification(ClientNotification),
 }
