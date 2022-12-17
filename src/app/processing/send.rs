@@ -78,13 +78,15 @@ impl SendTextProcessor {
     async fn process_once(&self, input: String) -> io::Result<ProcessResult> {
         // TODO The conversion from String <-> Ansi could be cheaper... Or perhaps
         // we could refactor to use a trait instead of Ansi?
-        let mut to_match: Ansi = input.into();
+        let mut to_match: Ansi = input.clone().into();
         let mut unchanged = true;
         for matcher in &self.matchers {
             match matcher.matcher.try_match(to_match) {
                 MatchResult::Ignored(ignored) => to_match = ignored,
                 MatchResult::Matched { context, .. } => {
-                    if let Some(replaced) = self.process_match(matcher, context).await? {
+                    if let Some(replaced) =
+                        self.process_match(matcher, context, input.clone()).await?
+                    {
                         unchanged = false;
                         to_match = replaced.into();
                     } else {
@@ -95,7 +97,7 @@ impl SendTextProcessor {
         }
 
         if unchanged {
-            Ok(ProcessResult::Unchanged(to_match.strip_ansi().to_string()))
+            Ok(ProcessResult::Unchanged(input))
         } else {
             Ok(ProcessResult::ReplaceWith(
                 to_match.strip_ansi().to_string(),
@@ -106,16 +108,16 @@ impl SendTextProcessor {
     async fn process_match(
         &self,
         matcher: &RegisteredMatcher,
-        mut context: MatchContext,
+        context: MatchContext,
+        mut original: String,
     ) -> io::Result<Option<String>> {
         let result = (matcher.on_match)(context.clone());
         match result.await? {
             ProcessResult::Stop => Ok(None),
             ProcessResult::Unchanged(s) => Ok(Some(s)),
             ProcessResult::ReplaceWith(replacement) => {
-                let mut input = context.take_full_match().plain;
-                input.replace_range(context.full_match_range, &replacement);
-                Ok(Some(input))
+                original.replace_range(context.full_match_range, &replacement);
+                Ok(Some(original))
             }
         }
     }
@@ -154,10 +156,8 @@ mod tests {
         Ok(())
     }
 
-    #[ignore]
     #[tokio::test]
     async fn non_start_replacement_test() -> io::Result<()> {
-        // TODO
         let mut processor = SendTextProcessor::default();
         processor.register_matcher(
             MatcherSpec::Regex {
@@ -205,7 +205,7 @@ mod tests {
 
         let result = processor.process("honor Grayskull".to_string()).await;
         let err = result.expect_err("Expected a recursion error");
-        assert_eq!(err.to_string(), "yell For the Honor of Grayskull, sword!");
+        assert!(err.to_string().contains("Infinite loop"));
 
         Ok(())
     }
