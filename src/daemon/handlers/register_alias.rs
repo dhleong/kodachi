@@ -1,5 +1,5 @@
 use crate::{
-    app::{matchers::MatcherSpec, processing::text::MatcherId, Id, LockableState},
+    app::{matchers::MatcherSpec, processing::send::ProcessResult, Id, LockableState},
     daemon::{channel::Channel, responses::DaemonResponse},
 };
 
@@ -14,7 +14,7 @@ pub async fn handle(
         .lock()
         .unwrap()
         .connections
-        .get_processor(connection_id)
+        .get_send_processor(connection_id)
     {
         reference.clone()
     } else {
@@ -32,20 +32,23 @@ pub async fn handle(
         }
     };
 
-    // TODO: We can probably refactor this to use channel.for_connection
-    // instead of needing BoxedReceiver...
-    processor_ref.lock().unwrap().register_matcher(
-        MatcherId::Handler(handler_id),
-        compiled,
-        move |context, mut receiver| {
-            receiver.notify(
-                crate::daemon::notifications::DaemonNotification::TriggerMatched {
-                    handler_id,
-                    context,
-                },
-            )
-        },
-    );
+    let receiver = channel.for_connection(connection_id);
+    processor_ref
+        .lock()
+        .await
+        .register_matcher(compiled, move |context| {
+            let mut receiver = receiver.clone();
+            async move {
+                // TODO FIXME handle response; timeout; etc
+                receiver
+                    .request(crate::daemon::requests::ServerRequest::HandleAliasMatch {
+                        handler_id,
+                        context,
+                    })
+                    .await;
+                Ok(ProcessResult::Stop)
+            }
+        });
 
     channel.respond(DaemonResponse::OkResult);
 }

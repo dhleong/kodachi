@@ -7,6 +7,7 @@ use crate::app::Id;
 use super::{
     commands::{ClientNotification, ClientRequest},
     notifications::DaemonNotification,
+    requests::ServerRequest,
     responses::DaemonResponse,
 };
 
@@ -14,7 +15,7 @@ use super::{
 #[serde(untagged)]
 pub enum Request {
     ForResponse {
-        id: u64,
+        id: Id,
 
         #[serde(flatten)]
         payload: ClientRequest,
@@ -39,6 +40,14 @@ pub enum Notification {
 
         #[serde(flatten)]
         notification: DaemonNotification,
+    },
+
+    ServerRequest {
+        id: Id,
+        connection_id: Id,
+
+        #[serde(flatten)]
+        payload: ServerRequest,
     },
 }
 

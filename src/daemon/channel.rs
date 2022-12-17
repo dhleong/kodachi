@@ -5,8 +5,11 @@ use std::{
 
 use serde::Serialize;
 
+use crate::app::Id;
+
 use super::{
     protocol::{Notification, Response},
+    requests::ServerRequest,
     responses::DaemonResponse,
 };
 
@@ -35,13 +38,20 @@ impl Write for LockedWriter {
     }
 }
 
+#[derive(Clone)]
 pub struct Channel {
     request_id: u64,
     writer: LockedWriter,
 }
 
 impl Channel {
-    #[allow(dead_code)]
+    pub fn for_connection(&self, connection_id: Id) -> ConnectionChannel {
+        ConnectionChannel {
+            connection_id,
+            writer: self.writer.clone(),
+        }
+    }
+
     pub fn notify(&mut self, payload: Notification) {
         self.writer.write_json(&payload).unwrap();
     }
@@ -67,6 +77,25 @@ pub struct RespondedChannel {
 impl RespondedChannel {
     pub fn notify(&mut self, payload: Notification) {
         self.writer.write_json(&payload).unwrap();
+    }
+}
+
+#[derive(Clone)]
+pub struct ConnectionChannel {
+    connection_id: Id,
+    writer: LockedWriter,
+}
+
+impl ConnectionChannel {
+    pub async fn request(&mut self, payload: ServerRequest) {
+        let id = 0; // FIXME
+        self.writer
+            .write_json(&Notification::ServerRequest {
+                id,
+                connection_id: self.connection_id,
+                payload,
+            })
+            .unwrap();
     }
 }
 

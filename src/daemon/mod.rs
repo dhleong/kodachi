@@ -8,6 +8,7 @@ mod commands;
 mod handlers;
 pub mod notifications;
 pub mod protocol;
+pub mod requests;
 pub mod responses;
 
 use crate::app::LockableState;
