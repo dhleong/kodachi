@@ -64,9 +64,10 @@ pub struct RequestIdGenerator {
 impl RequestIdGenerator {
     pub async fn next(&mut self) -> Id {
         let mut lock = self.next_id.lock().await;
-        let next_id = *lock;
-        *lock += 1;
-        return next_id;
+        let id = *lock;
+        let (next_id, _) = id.overflowing_add(1);
+        *lock = next_id;
+        return id;
     }
 }
 
