@@ -167,7 +167,7 @@ function KodachiState:_alias_handlers(socket)
     local new_aliases = Handlers:new()
     self._aliases = new_aliases
     socket:listen(function(message)
-      if message.type == 'AliasMatched' and message.connection_id == self.connection_id then
+      if message.type == 'HandleAliasMatch' and message.connection_id == self.connection_id then
         local matched_handler = self._aliases:get(message.handler_id)
         if matched_handler then
           vim.schedule(function()

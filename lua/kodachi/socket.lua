@@ -1,6 +1,6 @@
 ---@alias KodachiRequest { type: string }
 
----@alias AliasMatchedNotification { type: "'AliasMatched'", id: number, connection_id: number, handler_id: number, context: table }
+---@alias AliasMatchedNotification { type: "'HandleAliasMatch'", id: number, connection_id: number, handler_id: number, context: table }
 ---@alias TriggerMatchedNotification { type: "'TriggerMatched'", connection_id: number, handler_id: number, context: table }
 ---@alias DisconnectedNotification { type: "'Disconnected'", connection_id: number  }
 ---@alias KodachiNotification AliasMatchedNotification | TriggerMatchedNotification | DisconnectedNotification
