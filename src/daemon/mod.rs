@@ -16,7 +16,7 @@ use crate::app::LockableState;
 use self::{
     channel::{Channel, ChannelSource},
     commands::{ClientNotification, ClientRequest},
-    protocol::Request,
+    protocol::{Request, RequestIdGenerator},
 };
 
 fn launch<T>(handler: T)
@@ -36,7 +36,8 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
 ) -> io::Result<()> {
     let shared_state = LockableState::default();
     let (to_listeners, _) = tokio::sync::broadcast::channel(1);
-    let channels = ChannelSource::new(Box::new(response), to_listeners.clone());
+    let request_ids = RequestIdGenerator::default();
+    let channels = ChannelSource::new(Box::new(response), request_ids, to_listeners.clone());
 
     for read in input.lines() {
         let raw_json = read?;

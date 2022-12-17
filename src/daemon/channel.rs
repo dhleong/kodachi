@@ -10,7 +10,7 @@ use tokio::{sync::broadcast::Sender, time::timeout};
 use crate::app::Id;
 
 use super::{
-    protocol::{Notification, Response},
+    protocol::{Notification, RequestIdGenerator, Response},
     requests::ServerRequest,
     responses::{ClientResponse, DaemonResponse, ResponseToServerRequest},
 };
@@ -44,6 +44,7 @@ impl Write for LockedWriter {
 pub struct Channel {
     request_id: u64,
     writer: LockedWriter,
+    request_ids: RequestIdGenerator,
     response_sender: Sender<ResponseToServerRequest>,
 }
 
@@ -52,6 +53,7 @@ impl Channel {
         ConnectionChannel {
             connection_id,
             writer: self.writer.clone(),
+            request_ids: self.request_ids.clone(),
             response_sender: self.response_sender.clone(),
         }
     }
@@ -89,12 +91,13 @@ impl RespondedChannel {
 pub struct ConnectionChannel {
     connection_id: Id,
     writer: LockedWriter,
+    request_ids: RequestIdGenerator,
     response_sender: Sender<ResponseToServerRequest>,
 }
 
 impl ConnectionChannel {
     pub async fn request(&mut self, payload: ServerRequest) -> io::Result<ClientResponse> {
-        let id = 0; // FIXME
+        let id = self.request_ids.next().await;
         self.writer
             .write_json(&Notification::ServerRequest {
                 id,
@@ -125,16 +128,19 @@ impl ConnectionChannel {
 
 pub struct ChannelSource {
     response_sender: Sender<ResponseToServerRequest>,
+    request_ids: RequestIdGenerator,
     writer: LockedWriter,
 }
 
 impl ChannelSource {
     pub fn new(
         writer: Box<dyn Write + Send>,
+        request_ids: RequestIdGenerator,
         response_sender: Sender<ResponseToServerRequest>,
     ) -> Self {
         Self {
             writer: LockedWriter(Arc::new(Mutex::new(writer)), Arc::new(Mutex::new(()))),
+            request_ids,
             response_sender,
         }
     }
@@ -145,6 +151,7 @@ impl ChannelSource {
         Channel {
             request_id,
             writer: self.writer.clone(),
+            request_ids: self.request_ids.clone(),
             response_sender: self.response_sender.clone(),
         }
     }
