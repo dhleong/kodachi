@@ -40,7 +40,6 @@ pub enum ClientResponse {
 
 #[derive(Clone, Deserialize)]
 pub struct ResponseToServerRequest {
-    #[serde(rename = "id")]
     pub request_id: Id,
 
     #[serde(flatten)]

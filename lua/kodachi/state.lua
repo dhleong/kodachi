@@ -177,7 +177,6 @@ function KodachiState:_alias_handlers(socket)
                 type = 'AliasMatchHandled',
                 request_id = message.id,
                 handler_id = message.handler_id,
-                context = message.context,
                 replacement = result,
               }
             end
