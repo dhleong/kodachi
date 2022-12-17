@@ -79,11 +79,13 @@ impl SendTextProcessor {
         // TODO The conversion from String <-> Ansi could be cheaper... Or perhaps
         // we could refactor to use a trait instead of Ansi?
         let mut to_match: Ansi = input.into();
+        let mut unchanged = true;
         for matcher in &self.matchers {
             match matcher.matcher.try_match(to_match) {
                 MatchResult::Ignored(ignored) => to_match = ignored,
                 MatchResult::Matched { context, .. } => {
                     if let Some(replaced) = self.process_match(matcher, context).await? {
+                        unchanged = false;
                         to_match = replaced.into();
                     } else {
                         return Ok(ProcessResult::Stop);
@@ -91,7 +93,14 @@ impl SendTextProcessor {
                 }
             }
         }
-        Ok(ProcessResult::Unchanged(to_match.strip_ansi().to_string()))
+
+        if unchanged {
+            Ok(ProcessResult::Unchanged(to_match.strip_ansi().to_string()))
+        } else {
+            Ok(ProcessResult::ReplaceWith(
+                to_match.strip_ansi().to_string(),
+            ))
+        }
     }
 
     async fn process_match(
@@ -141,6 +150,62 @@ mod tests {
             result.expect("Processing was unexpectedly stopped"),
             "yell For the Honor of Grayskull, sword!"
         );
+
+        Ok(())
+    }
+
+    #[ignore]
+    #[tokio::test]
+    async fn non_start_replacement_test() -> io::Result<()> {
+        // TODO
+        let mut processor = SendTextProcessor::default();
+        processor.register_matcher(
+            MatcherSpec::Regex {
+                options: Default::default(),
+                source: "honor (.*)".to_string(),
+            }
+            .try_into()
+            .unwrap(),
+            |context| async move {
+                Ok(ProcessResult::ReplaceWith(format!(
+                    "yell For the Honor of {}!",
+                    context.indexed[&1].plain
+                )))
+            },
+        );
+
+        let result = processor
+            .process("Let's honor Grayskull".to_string())
+            .await?;
+        assert_eq!(
+            result.expect("Processing was unexpectedly stopped"),
+            "Let's yell For the Honor of Grayskull!"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn detect_recursion_test() -> io::Result<()> {
+        let mut processor = SendTextProcessor::default();
+        processor.register_matcher(
+            MatcherSpec::Regex {
+                options: Default::default(),
+                source: "honor (.*)".to_string(),
+            }
+            .try_into()
+            .unwrap(),
+            |context| async move {
+                Ok(ProcessResult::ReplaceWith(format!(
+                    "yell for the honor of {}!",
+                    context.indexed[&1].plain
+                )))
+            },
+        );
+
+        let result = processor.process("honor Grayskull".to_string()).await;
+        let err = result.expect_err("Expected a recursion error");
+        assert_eq!(err.to_string(), "yell For the Honor of Grayskull, sword!");
 
         Ok(())
     }
