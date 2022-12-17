@@ -116,6 +116,20 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
             ));
         }
 
+        ClientRequest::RegisterAlias {
+            connection_id,
+            matcher,
+            handler_id,
+        } => {
+            tokio::spawn(handlers::register_alias::handle(
+                channel,
+                state,
+                connection_id,
+                matcher,
+                handler_id,
+            ));
+        }
+
         ClientRequest::RegisterPrompt {
             connection_id: connection,
             matcher,

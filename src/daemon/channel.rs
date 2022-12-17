@@ -56,6 +56,7 @@ impl Channel {
         }
     }
 
+    #[allow(unused)]
     pub fn notify(&mut self, payload: Notification) {
         self.writer.write_json(&payload).unwrap();
     }
@@ -110,7 +111,7 @@ impl ConnectionChannel {
                         return Ok(response.payload);
                     }
                 }
-                Ok(err) => {
+                Ok(_err) => {
                     // Probably a RecvError meaning the sender is gone. This.. shouldn't happen
                     return Err(io::ErrorKind::TimedOut.into());
                 }
