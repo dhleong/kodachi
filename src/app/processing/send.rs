@@ -15,9 +15,9 @@ pub enum ProcessResult {
     Stop,
 }
 
-type MatchHandler =
-    dyn Fn(MatchContext) -> Pin<Box<dyn Future<Output = io::Result<ProcessResult>>>>;
-// type MatchHandler = dyn Fn(MatchContext) -> io::Result<ProcessResult>;
+type MatchHandler = dyn Fn(MatchContext) -> Pin<Box<dyn Future<Output = io::Result<ProcessResult>> + Send + Sync>>
+    + Send
+    + Sync;
 
 struct RegisteredMatcher {
     matcher: Matcher,
@@ -32,8 +32,8 @@ pub struct SendTextProcessor {
 impl SendTextProcessor {
     pub fn register_matcher<R, F>(&mut self, matcher: Matcher, on_match: R)
     where
-        R: 'static + Fn(MatchContext) -> F,
-        F: 'static + Future<Output = io::Result<ProcessResult>>,
+        R: 'static + (Fn(MatchContext) -> F) + Send + Sync,
+        F: 'static + Future<Output = io::Result<ProcessResult>> + Send + Sync,
     {
         self.matchers.push(RegisteredMatcher {
             matcher,
@@ -66,7 +66,8 @@ impl SendTextProcessor {
     }
 
     async fn process_once(&self, input: String) -> io::Result<ProcessResult> {
-        // TODO The conversion from String <-> Ansi could be cheaper...
+        // TODO The conversion from String <-> Ansi could be cheaper... Or perhaps
+        // we could refactor to use a trait instead of Ansi?
         let mut to_match: Ansi = input.into();
         for matcher in &self.matchers {
             match matcher.matcher.try_match(to_match) {

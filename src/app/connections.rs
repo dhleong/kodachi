@@ -8,7 +8,10 @@ use tokio::sync::mpsc;
 use crate::cli::ui::UiState;
 
 use super::{
-    completion::completions::Completions, history::History, processing::text::TextProcessor, Id,
+    completion::completions::Completions,
+    history::History,
+    processing::{send::SendTextProcessor, text::TextProcessor},
+    Id,
 };
 
 pub enum Outgoing {
@@ -18,7 +21,7 @@ pub enum Outgoing {
 
 #[derive(Default, Clone)]
 pub struct ConnectionState {
-    pub send_processor: Arc<Mutex<TextProcessor>>,
+    pub send_processor: Arc<tokio::sync::Mutex<SendTextProcessor>>,
     pub processor: Arc<Mutex<TextProcessor>>,
     pub completions: Arc<Mutex<Completions>>,
     pub sent: Arc<Mutex<History<String>>>,
@@ -82,7 +85,10 @@ impl Connections {
         }
     }
 
-    pub fn get_send_processor(&mut self, id: Id) -> Option<Arc<Mutex<TextProcessor>>> {
+    pub fn get_send_processor(
+        &mut self,
+        id: Id,
+    ) -> Option<Arc<tokio::sync::Mutex<SendTextProcessor>>> {
         if let Some(conn) = self.connections.get(&id) {
             Some(conn.state.send_processor.clone())
         } else {
