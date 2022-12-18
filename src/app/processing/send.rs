@@ -55,6 +55,7 @@ impl SendTextProcessor {
         let mut result = input;
 
         for _ in 0..MAX_RECURSION {
+            println!("process {}", result);
             match self.process_once(result).await? {
                 ProcessResult::Unchanged(final_result) => {
                     // Nothing more to replace!
@@ -83,9 +84,16 @@ impl SendTextProcessor {
         for matcher in &self.matchers {
             match matcher.matcher.try_match(to_match) {
                 MatchResult::Ignored(ignored) => to_match = ignored,
-                MatchResult::Matched { context, .. } => {
-                    if let Some(replaced) =
-                        self.process_match(matcher, context, input.clone()).await?
+                MatchResult::Matched {
+                    context,
+                    mut remaining,
+                    ..
+                } => {
+                    // NOTE: Since the matcher *shouldn't* consume, remaining *should*
+                    // be the original input
+                    if let Some(replaced) = self
+                        .process_match(matcher, context, remaining.strip_ansi().to_string())
+                        .await?
                     {
                         unchanged = false;
                         to_match = replaced.into();
@@ -206,6 +214,48 @@ mod tests {
         let result = processor.process("honor Grayskull".to_string()).await;
         let err = result.expect_err("Expected a recursion error");
         assert!(err.to_string().contains("Infinite loop"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn multi_replacement_test() -> io::Result<()> {
+        let mut processor = SendTextProcessor::default();
+        processor.register_matcher(
+            MatcherSpec::Regex {
+                options: Default::default(),
+                source: "^honor (.*)".to_string(),
+            }
+            .try_into()
+            .unwrap(),
+            |context| async move {
+                Ok(ProcessResult::ReplaceWith(format!(
+                    "yell For the honor of {}!",
+                    context.indexed[&1].plain
+                )))
+            },
+        );
+
+        processor.register_matcher(
+            MatcherSpec::Regex {
+                options: Default::default(),
+                source: "honor of ([a-z]+)".to_string(),
+            }
+            .try_into()
+            .unwrap(),
+            |context| async move {
+                Ok(ProcessResult::ReplaceWith(format!(
+                    "Honor of {}!",
+                    context.indexed[&1].plain.to_uppercase()
+                )))
+            },
+        );
+
+        let result = processor.process("honor grayskull".to_string()).await?;
+        assert_eq!(
+            result.expect("Processing was unexpectedly stopped"),
+            "yell For the Honor of GRAYSKULL!!"
+        );
 
         Ok(())
     }
