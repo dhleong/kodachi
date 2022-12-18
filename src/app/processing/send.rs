@@ -45,6 +45,10 @@ impl SendTextProcessor {
         R: 'static + (Fn(MatchContext) -> F) + Send + Sync,
         F: 'static + Future<Output = io::Result<ProcessResult>> + Send + Sync,
     {
+        if matcher.options.consume {
+            panic!("Matcher ({:?}) is unexpectedly `consume`", matcher);
+        }
+
         self.matchers.push(RegisteredMatcher {
             matcher,
             on_match: Box::new(move |context| Box::pin(on_match(context))),

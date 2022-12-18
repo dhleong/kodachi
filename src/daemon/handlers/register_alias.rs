@@ -1,7 +1,11 @@
 use std::io;
 
 use crate::{
-    app::{matchers::MatcherSpec, processing::send::ProcessResult, Id, LockableState},
+    app::{
+        matchers::{Matcher, MatcherSpec},
+        processing::send::ProcessResult,
+        Id, LockableState,
+    },
     daemon::{
         channel::Channel,
         requests::ServerRequest,
@@ -28,7 +32,7 @@ pub async fn handle(
         return;
     };
 
-    let compiled = match matcher.try_into() {
+    let compiled: Matcher = match matcher.try_into() {
         Ok(compiled) => compiled,
         Err(e) => {
             channel.respond(DaemonResponse::ErrorResult {
@@ -37,6 +41,13 @@ pub async fn handle(
             return;
         }
     };
+
+    if compiled.options.consume {
+        channel.respond(DaemonResponse::ErrorResult {
+            error: format!("Invalid matcher ({:?}); must NOT be `consume`", compiled),
+        });
+        return;
+    }
 
     let receiver = channel.for_connection(connection_id);
     processor_ref
