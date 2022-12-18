@@ -1,4 +1,4 @@
-local KodachiState = require'kodachi.state'
+local KodachiState = require 'kodachi.state'
 
 local M = {
   states = {},
@@ -36,11 +36,11 @@ function M.current_connected()
 end
 
 setmetatable(M, {
-  __index = function (_, bufnr)
+  __index = function(_, bufnr)
     return M.states[bufnr]
   end,
 
-  __newindex = function (_, bufnr, state)
+  __newindex = function(_, bufnr, state)
     if M.states[bufnr] or M.states[state.bufnr] then
       M.states[bufnr] = state
     end

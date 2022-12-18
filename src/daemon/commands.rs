@@ -44,6 +44,12 @@ pub enum ClientRequest {
         params: CompletionParams,
     },
 
+    RegisterAlias {
+        connection_id: Id,
+        matcher: MatcherSpec,
+        handler_id: Id,
+    },
+
     RegisterTrigger {
         connection_id: Id,
         matcher: MatcherSpec,

@@ -42,7 +42,7 @@ pub enum MatchResult {
 
 #[derive(Debug)]
 pub struct Matcher {
-    options: MatcherOptions,
+    pub options: MatcherOptions,
     pattern: Regex,
 }
 

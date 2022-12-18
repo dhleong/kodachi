@@ -32,6 +32,8 @@ pub async fn handle(
         }
     };
 
+    // TODO: We can probably refactor this to use channel.for_connection
+    // instead of needing BoxedReceiver...
     processor_ref.lock().unwrap().register_matcher(
         MatcherId::Handler(handler_id),
         compiled,

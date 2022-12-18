@@ -16,6 +16,7 @@ local with_socket = util.with_socket
 ---@field _events any|nil
 ---@field _mappings any
 ---@field _prompts PromptsManager|nil
+---@field _aliases Handlers|nil
 ---@field _triggers Handlers|nil
 local KodachiState = {}
 
@@ -28,6 +29,11 @@ end
 
 function KodachiState:cleanup()
   local cleared_any = false
+  if self._aliases then
+    self._aliases:clear()
+    cleared_any = true
+  end
+
   if self._triggers then
     self._triggers:clear()
     cleared_any = true
@@ -89,6 +95,30 @@ function KodachiState:on(event, handler)
 end
 
 ---@param matcher MatcherSpec|string
+function KodachiState:alias(matcher, handler)
+  matcher = matchers.inflate(matcher)
+  return with_socket(self, function(socket)
+    if type(handler) == "string" then
+      socket:request {
+        type = "RegisterSimpleAlias",
+        connection_id = self.connection_id,
+        matcher = matcher,
+        replacement_pattern = handler,
+      }
+    else
+      local aliases = self:_alias_handlers(socket)
+      local id = aliases:insert(handler)
+      socket:request {
+        type = "RegisterAlias",
+        connection_id = self.connection_id,
+        matcher = matcher,
+        handler_id = id,
+      }
+    end
+  end)
+end
+
+---@param matcher MatcherSpec|string
 ---@param handler fun(context)|nil If provided, a fn called with the same params as a trigger() handler,
 ---and whose return value will be used as the prompt content
 function KodachiState:prompt(matcher, handler)
@@ -128,6 +158,40 @@ function KodachiState:send(text)
       text = text,
     }
   end)
+end
+
+---@param socket Socket
+function KodachiState:_alias_handlers(socket)
+  local aliases = self._aliases
+  if not aliases then
+    local new_aliases = Handlers:new()
+    self._aliases = new_aliases
+    socket:listen(function(message)
+      if message.type == 'HandleAliasMatch' and message.connection_id == self.connection_id then
+        local matched_handler = self._aliases:get(message.handler_id)
+        if matched_handler then
+          vim.schedule(function()
+            local result = matched_handler(message.context)
+            if type(result) == 'string' then
+              socket:notify {
+                type = 'AliasMatchHandled',
+                request_id = message.id,
+                handler_id = message.handler_id,
+                replacement = result,
+              }
+            end
+          end)
+        else
+          vim.schedule(function()
+            print('WARNING: Alias handler missing...')
+          end)
+        end
+      end
+    end)
+    return new_aliases
+  end
+
+  return aliases
 end
 
 ---@param socket Socket

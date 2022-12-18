@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::app::Id;
 
@@ -30,4 +30,18 @@ pub enum DaemonResponse {
         new_content: String,
         cursor: Option<HistoryCursor>,
     },
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum ClientResponse {
+    AliasMatchHandled { replacement: Option<String> },
+}
+
+#[derive(Clone, Deserialize)]
+pub struct ResponseToServerRequest {
+    pub request_id: Id,
+
+    #[serde(flatten)]
+    pub payload: ClientResponse,
 }

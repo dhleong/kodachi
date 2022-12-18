@@ -8,6 +8,7 @@ mod commands;
 mod handlers;
 pub mod notifications;
 pub mod protocol;
+pub mod requests;
 pub mod responses;
 
 use crate::app::LockableState;
@@ -15,7 +16,7 @@ use crate::app::LockableState;
 use self::{
     channel::{Channel, ChannelSource},
     commands::{ClientNotification, ClientRequest},
-    protocol::Request,
+    protocol::{Request, RequestIdGenerator},
 };
 
 fn launch<T>(handler: T)
@@ -34,7 +35,9 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
     response: TResponse,
 ) -> io::Result<()> {
     let shared_state = LockableState::default();
-    let channels = ChannelSource::new(Box::new(response));
+    let (to_listeners, _) = tokio::sync::broadcast::channel(1);
+    let request_ids = RequestIdGenerator::default();
+    let channels = ChannelSource::new(Box::new(response), request_ids, to_listeners.clone());
 
     for read in input.lines() {
         let raw_json = read?;
@@ -56,6 +59,11 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
             } => {
                 let channel = channels.create_with_request_id(request_id);
                 dispatch_request(state, channel, payload);
+            }
+
+            Request::Response(response) => {
+                // NOTE: We ignore errors here; there may be no listeners, and that's okay
+                to_listeners.send(response).ok();
             }
 
             Request::Notification(ClientNotification::Clear { connection_id }) => {
@@ -106,6 +114,20 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
                 connection_id,
                 limit,
                 cursor,
+            ));
+        }
+
+        ClientRequest::RegisterAlias {
+            connection_id,
+            matcher,
+            handler_id,
+        } => {
+            tokio::spawn(handlers::register_alias::handle(
+                channel,
+                state,
+                connection_id,
+                matcher,
+                handler_id,
             ));
         }
 
