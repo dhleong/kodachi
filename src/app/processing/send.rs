@@ -55,7 +55,6 @@ impl SendTextProcessor {
         let mut result = input;
 
         for _ in 0..MAX_RECURSION {
-            println!("process {}", result);
             match self.process_once(result).await? {
                 ProcessResult::Unchanged(final_result) => {
                     // Nothing more to replace!
