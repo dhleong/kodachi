@@ -1,6 +1,3 @@
-// TODO: Remove this:
-#![allow(unused)]
-
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
@@ -30,7 +27,6 @@ impl<T: Default> Default for MarkovTrie<T> {
 }
 
 impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
-    // TODO: Can we use T: Borrow<Q> to support querying via &[&str] ?
     fn query_next(&self, sequence: &[T]) -> Vec<&T> {
         if sequence.is_empty() {
             // Special case: querying root node
