@@ -1,6 +1,7 @@
 // TODO: Remove this:
 #![allow(unused)]
 
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
@@ -29,12 +30,13 @@ impl<T: Default> Default for MarkovTrie<T> {
 }
 
 impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
+    // TODO: Can we use T: Borrow<Q> to support querying via &[&str] ?
     fn query_next(&self, sequence: &[T]) -> Vec<&T> {
-        if let Some(leaf) = self.root.find_node(sequence) {
-            let mut candidate_nodes: Vec<&MarkovNode<T>> =
-                leaf.transitions.transitions.values().collect();
-            candidate_nodes.sort_by_key(|node| node.incoming_count);
-            candidate_nodes.iter().map(|node| &node.value).collect()
+        if sequence.is_empty() {
+            // Special case: querying root node
+            self.root.gather_transitions()
+        } else if let Some(leaf) = self.root.find_node(sequence) {
+            leaf.transitions.gather_transitions()
         } else {
             vec![]
         }
@@ -87,16 +89,23 @@ impl<T: Default + Hash + Eq + Clone> MarkovTransitions<T> {
         }
     }
 
+    fn gather_transitions(&self) -> Vec<&T> {
+        let mut candidate_nodes: Vec<&MarkovNode<T>> = self.transitions.values().collect();
+        candidate_nodes.sort_by_key(|node| Reverse(node.incoming_count));
+        candidate_nodes.iter().map(|node| &node.value).collect()
+    }
+
     fn find_node(&self, sequence: &[T]) -> Option<&MarkovNode<T>> {
         if sequence.is_empty() {
             None
         } else {
             let next_value = &sequence[0];
             if let Some(next_node) = self.transitions.get(next_value) {
-                if sequence.len() < 1 {
+                let remaining_sequence = &sequence[1..];
+                if remaining_sequence.is_empty() {
                     Some(next_node)
                 } else {
-                    next_node.transitions.find_node(&sequence[1..])
+                    next_node.transitions.find_node(remaining_sequence)
                 }
             } else {
                 None
@@ -118,5 +127,55 @@ impl<T: Default> From<T> for MarkovNode<T> {
             incoming_count: 0,
             transitions: MarkovTransitions::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn process(trie: &mut MarkovTrie<String>, phrase: &str) {
+        let vec: Vec<String> = phrase.split_whitespace().map(|s| s.to_string()).collect();
+        trie.add_sequence(&vec);
+    }
+
+    fn trie() -> MarkovTrie<String> {
+        let mut trie = MarkovTrie::default();
+
+        // Process in weird order to demonstrate it's frequency based,
+        // not insert-order or alpha or anything
+        process(&mut trie, "Take my love");
+        process(&mut trie, "I'm still free");
+        process(&mut trie, "Take me where I cannot stand");
+        process(&mut trie, "I don't care");
+        process(&mut trie, "Take my land");
+
+        return trie;
+    }
+
+    #[test]
+    pub fn first_completions() {
+        let mut source = trie();
+        let suggestions = source.query_next(&[]);
+        assert_eq!(suggestions[0], "Take");
+    }
+
+    #[test]
+    pub fn sequence_completion() {
+        let mut source = trie();
+        let suggestions = source.query_next(&["Take".to_string()]);
+        assert_eq!(suggestions, vec!["my", "me"]);
+    }
+
+    #[test]
+    pub fn ignore_stop_words() {
+        let mut stop_words: HashSet<String> = HashSet::default();
+        stop_words.insert("say".into());
+
+        let mut source = MarkovTrie::with_stop_words(stop_words);
+        process(&mut source, "say Hello");
+
+        let suggestions = source.query_next(&[]);
+        assert!(suggestions.is_empty());
     }
 }
