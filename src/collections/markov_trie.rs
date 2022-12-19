@@ -1,7 +1,7 @@
 // TODO: Remove this:
 #![allow(unused)]
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 const DEFAULT_MAX_DEPTH: usize = 5;
@@ -40,14 +40,13 @@ impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
         }
     }
 
-    fn add_sequence<S: Into<VecDeque<T>>>(&mut self, sequence: S) {
-        let mut dequeue = sequence.into();
-        if dequeue.is_empty() {
+    fn add_sequence(&mut self, sequence: &[T]) {
+        if sequence.is_empty() {
             return;
         }
 
         self.root
-            .add_sequence(dequeue, self.stop_words.as_ref(), self.max_depth);
+            .add_sequence(sequence, self.stop_words.as_ref(), self.max_depth);
     }
 }
 
@@ -59,30 +58,31 @@ struct MarkovTransitions<T> {
 impl<T: Default + Hash + Eq + Clone> MarkovTransitions<T> {
     fn add_sequence(
         &mut self,
-        mut sequence: VecDeque<T>,
+        mut sequence: &[T],
         stop_words: Option<&HashSet<T>>,
         remaining_depth: usize,
     ) {
-        let next_value = match sequence.pop_front() {
-            Some(next_value) => next_value,
-            None => return,
-        };
-
+        let next_value = &sequence[0];
         if stop_words.map_or(false, |stop_words| stop_words.contains(&next_value)) {
             return;
         }
 
-        let mut transition = self
-            .transitions
-            .entry(next_value)
-            .or_insert_with_key(|key| MarkovNode::from(key.clone()));
+        let mut transition = if let Some(existing) = self.transitions.get_mut(&next_value) {
+            existing
+        } else {
+            self.transitions
+                .entry(next_value.clone())
+                .or_insert_with_key(|key| MarkovNode::from(key.clone()))
+        };
         transition.incoming_count += 1;
 
         if let Some(new_remaining_depth) = remaining_depth.checked_sub(1) {
             if sequence.len() > 1 {
-                transition
-                    .transitions
-                    .add_sequence(sequence, stop_words, new_remaining_depth);
+                transition.transitions.add_sequence(
+                    &sequence[1..],
+                    stop_words,
+                    new_remaining_depth,
+                );
             }
         }
     }
