@@ -4,6 +4,8 @@ use std::hash::Hash;
 
 const DEFAULT_MAX_DEPTH: usize = 5;
 
+const DEFAULT_STOP_WORDS: [&'static str; 3] = ["say", "emote", "pose"];
+
 pub struct MarkovTrie<T> {
     root: MarkovTransitions<T>,
     max_depth: usize,
@@ -20,9 +22,11 @@ impl<T: Default> MarkovTrie<T> {
     }
 }
 
-impl<T: Default> Default for MarkovTrie<T> {
+impl Default for MarkovTrie<String> {
     fn default() -> Self {
-        MarkovTrie::with_stop_words(Default::default())
+        MarkovTrie::with_stop_words(HashSet::from_iter(
+            DEFAULT_STOP_WORDS.iter().map(|s| s.to_string()),
+        ))
     }
 }
 
