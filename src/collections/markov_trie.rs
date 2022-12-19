@@ -43,8 +43,14 @@ impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
             return;
         }
 
+        let limited = if sequence.len() > self.max_depth {
+            &sequence[0..self.max_depth]
+        } else {
+            sequence
+        };
+
         self.root
-            .add_sequence(sequence, self.stop_words.as_ref(), self.max_depth);
+            .add_sequence(limited, self.stop_words.as_ref(), self.max_depth);
     }
 }
 
@@ -56,7 +62,7 @@ struct MarkovTransitions<T> {
 impl<T: Default + Hash + Eq + Clone> MarkovTransitions<T> {
     fn add_sequence(
         &mut self,
-        mut sequence: &[T],
+        sequence: &[T],
         stop_words: Option<&HashSet<T>>,
         remaining_depth: usize,
     ) {
@@ -151,14 +157,14 @@ mod tests {
 
     #[test]
     pub fn first_completions() {
-        let mut source = trie();
+        let source = trie();
         let suggestions = source.query_next(&[]);
         assert_eq!(suggestions[0], "Take");
     }
 
     #[test]
     pub fn sequence_completion() {
-        let mut source = trie();
+        let source = trie();
         let suggestions = source.query_next(&["Take".to_string()]);
         assert_eq!(suggestions, vec!["my", "me"]);
     }
