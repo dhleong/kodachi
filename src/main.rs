@@ -7,6 +7,7 @@ use cli::{Cli, Commands};
 
 mod app;
 mod cli;
+mod collections;
 mod daemon;
 mod logging;
 mod net;
