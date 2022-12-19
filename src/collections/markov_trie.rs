@@ -31,7 +31,7 @@ impl Default for MarkovTrie<String> {
 }
 
 impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
-    fn query_next(&self, sequence: &[T]) -> Vec<&T> {
+    pub fn query_next(&self, sequence: &[T]) -> Vec<&T> {
         if sequence.is_empty() {
             // Special case: querying root node
             self.root.gather_transitions()
@@ -42,7 +42,7 @@ impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
         }
     }
 
-    fn add_sequence(&mut self, sequence: &[T]) {
+    pub fn add_sequence(&mut self, sequence: &[T]) {
         if sequence.is_empty() {
             return;
         }
