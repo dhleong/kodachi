@@ -56,11 +56,7 @@ mod tests {
     #[test]
     fn first_completion_test() {
         let source = source();
-        let params = CompletionParams {
-            word_to_complete: "t".to_string(),
-            line_to_cursor: "t".to_string(),
-            line: "t".to_string(),
-        };
+        let params = CompletionParams::from_word("t");
         assert_eq!(
             source
                 .suggest(params)

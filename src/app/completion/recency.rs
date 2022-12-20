@@ -44,15 +44,9 @@ mod tests {
 
     #[test]
     fn capacity_test() {
-        let params = CompletionParams {
-            word_to_complete: "".to_string(),
-            line_to_cursor: "".to_string(),
-            line: "".to_string(),
-        };
-
         let mut completions = RecencyCompletionSource::with_capacity(2);
         completions.process_line("for the honor");
-        let suggestions: Vec<&String> = completions.suggest(params).collect();
+        let suggestions: Vec<&String> = completions.suggest(CompletionParams::empty()).collect();
         assert_eq!(suggestions, vec!["the", "honor"]);
     }
 }
