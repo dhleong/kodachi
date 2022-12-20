@@ -2,6 +2,7 @@ use super::{CompletionParams, CompletionSource};
 
 pub mod weighted;
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum SelectionResult {
     First,
     Second,
