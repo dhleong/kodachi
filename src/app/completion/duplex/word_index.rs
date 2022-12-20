@@ -17,7 +17,6 @@ impl DuplexSelectorFactory for WordIndexSelectorFactory {
 
     fn create(&self, params: CompletionParams) -> Self::Selector {
         let index = params.word_index().min(self.weights_by_index.len() - 1);
-        println!("word index = {}", index);
         let (first, second) = &self.weights_by_index[index];
         WeightedRandomSelectorFactory::with_weights(*first, *second).create(params)
     }
