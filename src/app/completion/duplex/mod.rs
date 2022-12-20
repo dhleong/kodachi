@@ -1,6 +1,7 @@
 use super::{CompletionParams, CompletionSource};
 
 pub mod weighted;
+pub mod word_index;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum SelectionResult {

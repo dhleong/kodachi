@@ -22,6 +22,15 @@ impl CompletionParams {
         }
     }
 
+    pub fn word_index(&self) -> usize {
+        // NOTE: If there's a single word (with no whitespace after) that should be the 0'th index
+        self.line_to_cursor
+            .split(' ')
+            .count()
+            .checked_sub(1)
+            .unwrap_or(0)
+    }
+
     /// Return a vector of the words before the cursor, NOT inclusive if any partial word
     /// directly touching the cursor.
     ///
