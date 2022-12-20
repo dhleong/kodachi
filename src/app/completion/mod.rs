@@ -1,10 +1,11 @@
 use serde::Deserialize;
 
 pub mod completions;
+pub mod duplex;
 pub mod markov;
 pub mod transforms;
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct CompletionParams {
     pub word_to_complete: String,
     pub line_to_cursor: String,
@@ -12,6 +13,15 @@ pub struct CompletionParams {
 }
 
 impl CompletionParams {
+    #[cfg(test)]
+    pub fn empty() -> Self {
+        Self {
+            word_to_complete: "".to_string(),
+            line_to_cursor: "".to_string(),
+            line: "".to_string(),
+        }
+    }
+
     /// Return a vector of the words before the cursor, NOT inclusive if any partial word
     /// directly touching the cursor.
     ///
@@ -30,6 +40,14 @@ impl CompletionParams {
         }
         return words;
     }
+}
+
+pub trait CompletionSource {
+    type Iter<'a>: Iterator<Item = &'a String>
+    where
+        Self: 'a;
+
+    fn suggest<'a>(&'a self, params: CompletionParams) -> Self::Iter<'a>;
 }
 
 #[cfg(test)]

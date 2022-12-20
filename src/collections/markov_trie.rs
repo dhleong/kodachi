@@ -1,6 +1,7 @@
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::vec::IntoIter;
 
 const DEFAULT_MAX_DEPTH: usize = 5;
 
@@ -31,14 +32,15 @@ impl Default for MarkovTrie<String> {
 }
 
 impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
-    pub fn query_next(&self, sequence: &[T]) -> Vec<&T> {
+    pub fn query_next<'a>(&'a self, sequence: &[T]) -> QueryNext<'a, T> {
         if sequence.is_empty() {
             // Special case: querying root node
-            self.root.gather_transitions()
+            QueryNext(&self.root)
         } else if let Some(leaf) = self.root.find_node(sequence) {
-            leaf.transitions.gather_transitions()
+            QueryNext(&leaf.transitions)
         } else {
-            vec![]
+            // vec![]
+            todo!()
         }
     }
 
@@ -136,6 +138,24 @@ impl<T: Default> From<T> for MarkovNode<T> {
     }
 }
 
+pub struct QueryNext<'a, T>(&'a MarkovTransitions<T>);
+
+impl<'a, T: Default + Hash + Eq + Clone> QueryNext<'a, T> {
+    pub fn iter(&'a self) -> impl Iterator<Item = &'a T> {
+        self.0.gather_transitions().into_iter()
+    }
+}
+
+impl<'a, T: Default + Hash + Eq + Clone> IntoIterator for QueryNext<'a, T> {
+    type Item = &'a T;
+
+    type IntoIter = IntoIter<&'a T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.gather_transitions().into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,17 +179,21 @@ mod tests {
         return trie;
     }
 
+    fn query_vec<'a>(source: &'a MarkovTrie<String>, query: &[String]) -> Vec<&'a String> {
+        source.query_next(query).into_iter().collect()
+    }
+
     #[test]
     pub fn first_completions() {
         let source = trie();
-        let suggestions = source.query_next(&[]);
+        let suggestions = query_vec(&source, &[]);
         assert_eq!(suggestions[0], "Take");
     }
 
     #[test]
     pub fn sequence_completion() {
         let source = trie();
-        let suggestions = source.query_next(&["Take".to_string()]);
+        let suggestions = query_vec(&source, &["Take".to_string()]);
         assert_eq!(suggestions, vec!["my", "me"]);
     }
 
@@ -181,7 +205,7 @@ mod tests {
         let mut source = MarkovTrie::with_stop_words(stop_words);
         process(&mut source, "say Hello");
 
-        let suggestions = source.query_next(&[]);
-        assert!(suggestions.is_empty());
+        let suggestions = source.query_next(&[]).into_iter().next();
+        assert_eq!(suggestions, None);
     }
 }

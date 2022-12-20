@@ -1,6 +1,6 @@
-use crate::collections::markov_trie::MarkovTrie;
+use crate::collections::markov_trie::{MarkovTrie, QueryNext};
 
-use super::CompletionParams;
+use super::{CompletionParams, CompletionSource};
 
 #[derive(Default)]
 pub struct MarkovCompletionSource {
@@ -16,14 +16,18 @@ impl MarkovCompletionSource {
             .collect();
         self.trie.add_sequence(&words);
     }
+}
 
-    pub fn suggest(&self, params: CompletionParams) -> Vec<&String> {
+impl CompletionSource for MarkovCompletionSource {
+    type Iter<'a> = <QueryNext<'a, String> as IntoIterator>::IntoIter;
+
+    fn suggest<'a>(&'a self, params: CompletionParams) -> Self::Iter<'a> {
         let words: Vec<String> = params
             .words_before_cursor()
             .iter()
             .map(|s| s.to_string())
             .collect();
-        self.trie.query_next(&words)
+        self.trie.query_next(&words).into_iter()
     }
 }
 
@@ -45,6 +49,10 @@ mod tests {
         return source;
     }
 
+    fn suggest_vec(source: &MarkovCompletionSource, query: CompletionParams) -> Vec<&String> {
+        source.suggest(query).collect()
+    }
+
     #[test]
     fn first_completion_test() {
         let source = source();
@@ -56,7 +64,8 @@ mod tests {
         assert_eq!(
             source
                 .suggest(params)
-                .first()
+                .into_iter()
+                .next()
                 .expect("Expected to have a suggestion")
                 .to_string(),
             "take"
@@ -71,6 +80,9 @@ mod tests {
             line_to_cursor: "take m".to_string(),
             line: "take m".to_string(),
         };
-        assert_eq!(source.suggest(params), vec!["my", "me"]);
+        assert_eq!(suggest_vec(&source, params.clone()), vec!["my", "me"]);
+
+        // Do it one more time to prove it wasn't a fluke
+        assert_eq!(suggest_vec(&source, params), vec!["my", "me"]);
     }
 }
