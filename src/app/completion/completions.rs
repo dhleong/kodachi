@@ -46,12 +46,11 @@ impl Completions {
         self.source.first.process_outgoing(&line);
     }
 
-    pub fn suggest(&self, params: CompletionParams) -> Vec<String> {
+    pub fn suggest(&self, params: CompletionParams) -> impl Iterator<Item = String> + '_ {
         let transformer = WordTransform::matching_word(params.word_to_complete.clone());
         self.source
             .suggest(params)
             .into_iter()
-            .map(|s| transformer.transform(s))
-            .collect()
+            .map(move |s| transformer.transform(s))
     }
 }
