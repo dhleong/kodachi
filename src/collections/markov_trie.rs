@@ -1,7 +1,6 @@
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::vec::IntoIter;
 
 const DEFAULT_MAX_DEPTH: usize = 5;
 
@@ -143,7 +142,7 @@ pub struct QueryNext<'a, T>(&'a MarkovTransitions<T>);
 impl<'a, T: Default + Hash + Eq + Clone> IntoIterator for QueryNext<'a, T> {
     type Item = &'a T;
 
-    type IntoIter = IntoIter<&'a T>;
+    type IntoIter = std::vec::IntoIter<&'a T>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.gather_transitions().into_iter()
