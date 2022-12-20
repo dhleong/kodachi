@@ -140,12 +140,6 @@ impl<T: Default> From<T> for MarkovNode<T> {
 
 pub struct QueryNext<'a, T>(&'a MarkovTransitions<T>);
 
-impl<'a, T: Default + Hash + Eq + Clone> QueryNext<'a, T> {
-    pub fn iter(&'a self) -> impl Iterator<Item = &'a T> {
-        self.0.gather_transitions().into_iter()
-    }
-}
-
 impl<'a, T: Default + Hash + Eq + Clone> IntoIterator for QueryNext<'a, T> {
     type Item = &'a T;
 

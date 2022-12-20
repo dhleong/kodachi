@@ -23,8 +23,8 @@ pub struct DuplexCompletionSource<
     B: CompletionSource,
     SF: DuplexSelectorFactory,
 > {
-    first: A,
-    second: B,
+    pub first: A,
+    pub second: B,
     selector: SF,
 }
 

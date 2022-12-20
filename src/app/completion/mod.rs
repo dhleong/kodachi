@@ -3,6 +3,8 @@ use serde::Deserialize;
 pub mod completions;
 pub mod duplex;
 pub mod markov;
+pub mod recency;
+mod sent;
 pub mod transforms;
 
 #[derive(Clone, Debug, Deserialize)]
