@@ -1,5 +1,6 @@
 use super::{
     duplex::{word_index::WordIndexSelectorFactory, DuplexCompletionSource},
+    filtering::FilteringCompletionSource,
     markov::MarkovCompletionSource,
     recency::RecencyCompletionSource,
     CompletionParams, CompletionSource,
@@ -7,8 +8,8 @@ use super::{
 
 pub struct SentCompletionSource(
     DuplexCompletionSource<
-        MarkovCompletionSource,
-        RecencyCompletionSource,
+        FilteringCompletionSource<MarkovCompletionSource>,
+        FilteringCompletionSource<RecencyCompletionSource>,
         WordIndexSelectorFactory,
     >,
 );
@@ -16,8 +17,8 @@ pub struct SentCompletionSource(
 impl Default for SentCompletionSource {
     fn default() -> Self {
         Self(DuplexCompletionSource::new(
-            MarkovCompletionSource::default(),
-            RecencyCompletionSource::default(),
+            FilteringCompletionSource(MarkovCompletionSource::default()),
+            FilteringCompletionSource(RecencyCompletionSource::default()),
             WordIndexSelectorFactory::with_weights_by_index(vec![
                 // The markov trie has a max depth of 5; at that point, we start to suspect
                 // that it's not a structured command, so we let recency have more weight
@@ -35,8 +36,8 @@ impl Default for SentCompletionSource {
 
 impl CompletionSource for SentCompletionSource {
     type Iter<'a> = <DuplexCompletionSource<
-        MarkovCompletionSource,
-        RecencyCompletionSource,
+        FilteringCompletionSource<MarkovCompletionSource>,
+        FilteringCompletionSource<RecencyCompletionSource>,
         WordIndexSelectorFactory,
     > as CompletionSource>::Iter<'a>;
 
@@ -47,7 +48,7 @@ impl CompletionSource for SentCompletionSource {
 
 impl SentCompletionSource {
     pub fn process_outgoing(&mut self, line: &str) {
-        self.0.first.process_line(line);
-        self.0.second.process_line(line);
+        self.0.first.0.process_line(line);
+        self.0.second.0.process_line(line);
     }
 }

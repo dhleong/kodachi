@@ -2,6 +2,7 @@ use serde::Deserialize;
 
 pub mod completions;
 pub mod duplex;
+mod filtering;
 pub mod markov;
 pub mod recency;
 mod sent;
@@ -21,6 +22,15 @@ impl CompletionParams {
             word_to_complete: "".to_string(),
             line_to_cursor: "".to_string(),
             line: "".to_string(),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn from_word(word: &str) -> Self {
+        Self {
+            word_to_complete: word.to_string(),
+            line_to_cursor: word.to_string(),
+            line: word.to_string(),
         }
     }
 
