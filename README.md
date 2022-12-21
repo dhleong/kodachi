@@ -24,7 +24,7 @@ it can be reused with whatever editors support embedding a terminal window.
 - [x] Triggers
 - [x] Prompts
 - [x] Aliases
-- [x] Intelligent auto-completion (WIP)
+- [x] Intelligent auto-completion
 - [x] Input history management
 - [x] Common MUD protocols: MCCP2 (more to come)
 
