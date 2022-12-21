@@ -5,7 +5,11 @@ use serde::Deserialize;
 
 use crate::daemon::notifications::{MatchContext, MatchedText};
 
+use self::simple::build_simple_matcher_regex;
+
 use super::processing::ansi::{Ansi, AnsiStripped};
+
+pub(crate) mod simple;
 
 #[derive(Debug, Default, Deserialize)]
 pub struct MatcherOptions {
@@ -107,23 +111,24 @@ impl Matcher {
 #[derive(Debug)]
 pub enum MatcherCompileError {
     SyntaxError(String),
-
-    /// TODO
-    Unsupported,
+    OutOfOrderIndexes,
 }
 
 impl TryInto<Matcher> for MatcherSpec {
     type Error = MatcherCompileError;
 
     fn try_into(self) -> Result<Matcher, Self::Error> {
-        match self {
-            MatcherSpec::Simple { .. } => Err(MatcherCompileError::Unsupported),
-            MatcherSpec::Regex { options, source } => {
-                match RegexBuilder::new(&source).multi_line(true).build() {
-                    Ok(pattern) => Ok(Matcher { options, pattern }),
-                    Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
-                }
+        let (options, regex_source) = match self {
+            MatcherSpec::Simple { options, source } => {
+                (options, build_simple_matcher_regex(&source)?)
             }
+
+            MatcherSpec::Regex { options, source } => (options, source),
+        };
+
+        match RegexBuilder::new(&regex_source).multi_line(true).build() {
+            Ok(pattern) => Ok(Matcher { options, pattern }),
+            Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
         }
     }
 }
