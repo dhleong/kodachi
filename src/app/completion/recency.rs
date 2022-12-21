@@ -25,8 +25,11 @@ impl RecencyCompletionSource {
 
     pub fn process_line(&mut self, line: &str) {
         let words_regex = Regex::new(r"(\w+)").unwrap();
-        self.history
-            .insert_many(words_regex.find_iter(&line).map(|m| m.as_str().to_string()));
+        self.history.insert_many(
+            words_regex
+                .find_iter(&line)
+                .map(|m| m.as_str().to_lowercase()),
+        );
     }
 }
 
@@ -46,6 +49,14 @@ mod tests {
     fn capacity_test() {
         let mut completions = RecencyCompletionSource::with_capacity(2);
         completions.process_line("for the honor");
+        let suggestions: Vec<&String> = completions.suggest(CompletionParams::empty()).collect();
+        assert_eq!(suggestions, vec!["the", "honor"]);
+    }
+
+    #[test]
+    fn case_insensitivity() {
+        let mut completions = RecencyCompletionSource::with_capacity(2);
+        completions.process_line("For The HONOR");
         let suggestions: Vec<&String> = completions.suggest(CompletionParams::empty()).collect();
         assert_eq!(suggestions, vec!["the", "honor"]);
     }

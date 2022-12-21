@@ -28,7 +28,7 @@ fn candidate_matches_params(params: &CompletionParams, candidate: &str) -> bool 
     'outer: loop {
         if let Some(next_char) = chars_to_include.next() {
             for ch in &mut candidate_chars {
-                if ch == next_char {
+                if ch.eq_ignore_ascii_case(&next_char) {
                     continue 'outer;
                 }
             }
@@ -70,6 +70,16 @@ mod tests {
     #[test]
     fn ordered_filtering_test() {
         let params = CompletionParams::from_word("ap");
+        assert_params_accept(&params, "alpastor", true);
+        assert_params_accept(&params, "andpinto", true);
+
+        // characters matched, but out of order
+        assert_params_accept(&params, "plus ultra", false);
+    }
+
+    #[test]
+    fn case_insensitivity() {
+        let params = CompletionParams::from_word("Ap");
         assert_params_accept(&params, "alpastor", true);
         assert_params_accept(&params, "andpinto", true);
 
