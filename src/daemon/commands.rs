@@ -12,7 +12,8 @@ pub struct Connect {
     pub uri: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
 pub enum AliasReplacement {
     Handler { handler_id: Id },
     Simple { replacement_pattern: FormatterSpec },

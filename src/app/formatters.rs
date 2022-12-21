@@ -8,7 +8,7 @@ use super::matchers::{
     MatcherCompileError,
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum FormatterSpec {
     Simple(String),

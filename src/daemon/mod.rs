@@ -15,7 +15,7 @@ use crate::app::LockableState;
 
 use self::{
     channel::{Channel, ChannelSource},
-    commands::{AliasReplacement, ClientNotification, ClientRequest},
+    commands::{ClientNotification, ClientRequest},
     protocol::{Request, RequestIdGenerator},
 };
 

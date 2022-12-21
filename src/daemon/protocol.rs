@@ -85,25 +85,69 @@ mod tests {
         assert_eq!(s, r#"{"connection_id":42,"type":"Connected"}"#);
     }
 
-    #[test]
-    fn request_deserialization_test() {
-        let mut r: Request = serde_json::from_str(r#"{"type":"Quit"}"#).unwrap();
-        match r {
-            Request::Notification(ClientNotification::Quit) => {}
-            _ => assert!(false, "Expected Quit Notification"),
+    #[cfg(test)]
+    mod deserialization_tests {
+        use crate::daemon::commands::AliasReplacement;
+
+        use super::*;
+
+        #[test]
+        fn request_test() {
+            let mut r: Request = serde_json::from_str(r#"{"type":"Quit"}"#).unwrap();
+            match r {
+                Request::Notification(ClientNotification::Quit) => {}
+                _ => assert!(false, "Expected Quit Notification"),
+            }
+
+            r = serde_json::from_str(r#"{"id": 9001, "type":"Disconnect", "connection_id": 42}"#)
+                .unwrap();
+            match r {
+                Request::ForResponse {
+                    id,
+                    payload: ClientRequest::Disconnect { connection_id },
+                } => {
+                    assert_eq!(id, 9001);
+                    assert_eq!(connection_id, 42);
+                }
+                _ => assert!(false, "Expected Disconnect Rquest"),
+            }
         }
 
-        r = serde_json::from_str(r#"{"id": 9001, "type":"Disconnect", "connection_id": 42}"#)
+        #[test]
+        fn register_alias_test() {
+            let r: Request = serde_json::from_str(
+                r#"{
+                    "id": 9001,
+                    "type": "RegisterAlias",
+                    "connection_id": 42,
+                    "matcher": {
+                        "type": "Regex",
+                        "source": "^burrito"
+                    },
+                    "handler_id": 22
+                }"#,
+            )
             .unwrap();
-        match r {
-            Request::ForResponse {
-                id,
-                payload: ClientRequest::Disconnect { connection_id },
-            } => {
-                assert_eq!(id, 9001);
-                assert_eq!(connection_id, 42);
-            }
-            _ => assert!(false, "Expected Disconnect Rquest"),
+
+            let (id, connection_id, _matcher, replacement) = match r {
+                Request::ForResponse {
+                    id,
+                    payload:
+                        ClientRequest::RegisterAlias {
+                            connection_id,
+                            matcher,
+                            replacement,
+                        },
+                } => (id, connection_id, matcher, replacement),
+                _ => {
+                    assert!(false, "Expected RegisterAlias");
+                    panic!();
+                }
+            };
+
+            assert_eq!(id, 9001);
+            assert_eq!(connection_id, 42);
+            assert_eq!(replacement, AliasReplacement::Handler { handler_id: 22 });
         }
     }
 
