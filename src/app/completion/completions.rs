@@ -1,67 +1,57 @@
-use regex::Regex;
+use crate::app::processing::ansi::Ansi;
 
-use crate::app::{history::History, processing::ansi::Ansi};
-
-use super::{transforms::WordTransform, CompletionParams};
-
-const DEFAULT_RECENCY_CAPACITY: usize = 5000;
+use super::{
+    duplex::{word_index::WordIndexSelectorFactory, DuplexCompletionSource},
+    filtering::FilteringCompletionSource,
+    recency::RecencyCompletionSource,
+    sent::SentCompletionSource,
+    transforms::WordTransform,
+    CompletionParams, CompletionSource,
+};
 
 pub struct Completions {
-    history: History<String>,
+    source: DuplexCompletionSource<
+        SentCompletionSource,
+        FilteringCompletionSource<RecencyCompletionSource>,
+        WordIndexSelectorFactory,
+    >,
 }
 
 impl Default for Completions {
     fn default() -> Self {
-        Self::with_capacity(DEFAULT_RECENCY_CAPACITY)
+        Self {
+            source: DuplexCompletionSource::new(
+                SentCompletionSource::default(),
+                FilteringCompletionSource(RecencyCompletionSource::default()),
+                WordIndexSelectorFactory::with_weights_by_index(vec![
+                    // First word? Prefer commandCompletions ALWAYS; We'll still
+                    // fallback to output if commandCompletion doesn't have anything
+                    (100, 0),
+                    // Second word? Actually, prefer output a bit
+                    // eg: get <thing>; enter <thing>; look <thing>
+                    (35, 65),
+                    // Otherwise, just split it evenly
+                    (50, 50),
+                ]),
+            ),
+        }
     }
 }
 
 impl Completions {
-    pub fn with_capacity(capacity: usize) -> Self {
-        Completions {
-            history: History::with_capacity(capacity),
-        }
-    }
-
     pub fn process_incoming(&mut self, line: &mut Ansi) {
-        let words_regex = Regex::new(r"(\w+)").unwrap();
-        self.history.insert_many(
-            words_regex
-                .find_iter(&line.strip_ansi())
-                .map(|m| m.as_str().to_string()),
-        );
+        self.source.second.0.process_line(&line.strip_ansi())
     }
 
     pub fn process_outgoing(&mut self, line: String) {
-        let words_regex = Regex::new(r"(\w+)").unwrap();
-        self.history
-            .insert_many(words_regex.find_iter(&line).map(|m| m.as_str().to_string()));
+        self.source.first.process_outgoing(&line);
     }
 
-    pub fn suggest(&self, params: CompletionParams) -> Vec<String> {
-        let transformer = WordTransform::matching_word(params.word_to_complete);
-        self.history
-            .iter()
-            .map(|s| transformer.transform(s))
-            .collect()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn capacity_test() {
-        let params = CompletionParams {
-            word_to_complete: "".to_string(),
-            line_to_cursor: "".to_string(),
-            line: "".to_string(),
-        };
-
-        let mut completions = Completions::with_capacity(2);
-        completions.process_incoming(&mut Ansi::from("for the honor"));
-        let suggestions = completions.suggest(params);
-        assert_eq!(suggestions, vec!["the", "honor"]);
+    pub fn suggest(&self, params: CompletionParams) -> impl Iterator<Item = String> + '_ {
+        let transformer = WordTransform::matching_word(params.word_to_complete.clone());
+        self.source
+            .suggest(params)
+            .into_iter()
+            .map(move |s| transformer.transform(s))
     }
 }

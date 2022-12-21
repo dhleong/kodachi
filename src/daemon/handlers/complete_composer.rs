@@ -22,7 +22,7 @@ pub async fn handle(
     };
 
     let completions = connection.completions.lock().unwrap();
-    let words = completions.suggest(params);
+    let words = completions.suggest(params).take(50).collect();
 
     channel.respond(DaemonResponse::CompleteResult { words });
     Ok(())
