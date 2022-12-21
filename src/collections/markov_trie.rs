@@ -34,12 +34,12 @@ impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
     pub fn query_next<'a>(&'a self, sequence: &[T]) -> QueryNext<'a, T> {
         if sequence.is_empty() {
             // Special case: querying root node
-            QueryNext(&self.root)
+            QueryNext(Some(&self.root))
         } else if let Some(leaf) = self.root.find_node(sequence) {
-            QueryNext(&leaf.transitions)
+            QueryNext(Some(&leaf.transitions))
         } else {
-            // vec![]
-            todo!()
+            // Path not found
+            QueryNext(None)
         }
     }
 
@@ -137,7 +137,7 @@ impl<T: Default> From<T> for MarkovNode<T> {
     }
 }
 
-pub struct QueryNext<'a, T>(&'a MarkovTransitions<T>);
+pub struct QueryNext<'a, T>(Option<&'a MarkovTransitions<T>>);
 
 impl<'a, T: Default + Hash + Eq + Clone> IntoIterator for QueryNext<'a, T> {
     type Item = &'a T;
@@ -145,7 +145,11 @@ impl<'a, T: Default + Hash + Eq + Clone> IntoIterator for QueryNext<'a, T> {
     type IntoIter = std::vec::IntoIter<&'a T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.0.gather_transitions().into_iter()
+        if let Some(transitions) = self.0 {
+            transitions.gather_transitions().into_iter()
+        } else {
+            vec![].into_iter()
+        }
     }
 }
 
@@ -174,6 +178,20 @@ mod tests {
 
     fn query_vec<'a>(source: &'a MarkovTrie<String>, query: &[String]) -> Vec<&'a String> {
         source.query_next(query).into_iter().collect()
+    }
+
+    #[test]
+    pub fn query_empty_trie() {
+        let source = MarkovTrie::default();
+        let suggestions = query_vec(&source, &[]);
+        assert!(suggestions.is_empty());
+    }
+
+    #[test]
+    pub fn query_path_in_empty_trie() {
+        let source = MarkovTrie::default();
+        let suggestions = query_vec(&source, &["Take".to_string()]);
+        assert!(suggestions.is_empty());
     }
 
     #[test]
