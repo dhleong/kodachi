@@ -147,8 +147,13 @@ fn build_simple_matcher_regex(mut source: &str) -> Result<String, MatcherCompile
 
             pattern.push_str("(.+)");
         } else {
+            let mut var_name = var.as_str();
+            if var_name.starts_with("{") {
+                // Strip the disambiguating brackets
+                var_name = &var_name[1..var_name.len() - 1];
+            }
             pattern.push_str("(?<");
-            pattern.push_str(var.as_str());
+            pattern.push_str(var_name);
             pattern.push_str(">.+)");
         }
 
@@ -377,6 +382,12 @@ mod tests {
         fn build_named_pattern_test() {
             let pattern = build_simple_matcher_regex("$first {activate} $second [now]").unwrap();
             assert_eq!(pattern, r"(?<first>.+) \{activate\} (?<second>.+) \[now\]");
+        }
+
+        #[test]
+        fn build_disambiguated_named_pattern_test() {
+            let pattern = build_simple_matcher_regex("${first}and${second}").unwrap();
+            assert_eq!(pattern, r"(?<first>.+)and(?<second>.+)");
         }
 
         #[test]
