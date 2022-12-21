@@ -107,23 +107,76 @@ impl Matcher {
 #[derive(Debug)]
 pub enum MatcherCompileError {
     SyntaxError(String),
+    OutOfOrderIndexes,
+}
 
-    /// TODO
-    Unsupported,
+fn build_simple_matcher_regex(mut source: &str) -> Result<String, MatcherCompileError> {
+    let mut pattern = String::new();
+    let var_regex = Regex::new(r"\$(\d+|\w+|(?:\{(\w+)\}))").unwrap();
+
+    // Special case to bind to start-of-line
+    if source.get(0..1) == Some("^") {
+        source = &source[1..];
+        pattern.push('^');
+    }
+
+    let mut last_var_end = 0;
+    let mut last_index: Option<usize> = None;
+    for capture in var_regex.captures_iter(source).into_iter() {
+        let range = capture.get(0).unwrap().range();
+        let start = range.start;
+        if start > 0 && &source[start - 1..start] == "$" {
+            // Escaped variable; keep moving. Normally we might use a negative lookbehind
+            // assertion for this, but the regex crate doesn't support those, so we do it
+            // manually here.
+            continue;
+        }
+
+        if start > last_var_end {
+            pattern.push_str(&regex::escape(&source[last_var_end..start]));
+        }
+
+        let var = capture.get(1).unwrap();
+        if let Ok(as_index) = var.as_str().parse::<usize>() {
+            if let Some(last_index) = last_index {
+                if as_index <= last_index {
+                    return Err(MatcherCompileError::OutOfOrderIndexes);
+                }
+            }
+            last_index = Some(as_index);
+
+            pattern.push_str("(.+)");
+        } else {
+            pattern.push_str("(?<");
+            pattern.push_str(var.as_str());
+            pattern.push_str(">.+)");
+        }
+
+        last_var_end = range.end;
+    }
+
+    if last_var_end < source.len() {
+        pattern.push_str(&regex::escape(&source[last_var_end..]));
+    }
+
+    return Ok(pattern);
 }
 
 impl TryInto<Matcher> for MatcherSpec {
     type Error = MatcherCompileError;
 
     fn try_into(self) -> Result<Matcher, Self::Error> {
-        match self {
-            MatcherSpec::Simple { .. } => Err(MatcherCompileError::Unsupported),
-            MatcherSpec::Regex { options, source } => {
-                match RegexBuilder::new(&source).multi_line(true).build() {
-                    Ok(pattern) => Ok(Matcher { options, pattern }),
-                    Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
-                }
+        let (options, regex_source) = match self {
+            MatcherSpec::Simple { options, source } => {
+                (options, build_simple_matcher_regex(&source)?)
             }
+
+            MatcherSpec::Regex { options, source } => (options, source),
+        };
+
+        match RegexBuilder::new(&regex_source).multi_line(true).build() {
+            Ok(pattern) => Ok(Matcher { options, pattern }),
+            Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
         }
     }
 }
@@ -307,6 +360,29 @@ mod tests {
             assert_eq!(&context.indexed[&0].plain, "For the honor of Grayskull!");
         } else {
             panic!("Expected {:?} to match... but it didn't", matcher);
+        }
+    }
+
+    #[cfg(test)]
+    mod simple_matcher_tests {
+        use super::*;
+
+        #[test]
+        fn build_indexed_pattern_test() {
+            let pattern = build_simple_matcher_regex("$1 {activate} $2 [now]").unwrap();
+            assert_eq!(pattern, r"(.+) \{activate\} (.+) \[now\]");
+        }
+
+        #[test]
+        fn build_named_pattern_test() {
+            let pattern = build_simple_matcher_regex("$first {activate} $second [now]").unwrap();
+            assert_eq!(pattern, r"(?<first>.+) \{activate\} (?<second>.+) \[now\]");
+        }
+
+        #[test]
+        fn accept_line_start_test() {
+            let pattern = build_simple_matcher_regex("^admire $thing").unwrap();
+            assert_eq!(pattern, r"^admire (?<thing>.+)");
         }
     }
 }
