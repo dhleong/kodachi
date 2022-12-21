@@ -34,8 +34,8 @@ impl Formatter {
                             .map_or("".to_string(), |m| m.plain.to_string()),
                     }
                 } else {
-                    // TODO
-                    captures.get(0).unwrap().as_str().to_string()
+                    // Not a var? Pass through as-is (dropping the leading $)
+                    captures.get(1).unwrap().as_str().to_string()
                 }
             })
             .to_string()
@@ -76,6 +76,20 @@ mod tests {
             full_match_range: 0..1,
         });
         assert_eq!(formatted, "activate Grayskull");
+    }
+
+    #[test]
+    fn format_non_vars() {
+        let pattern = "give $$3.50";
+        let formatter: Formatter = FormatterSpec::Simple(pattern.to_string())
+            .try_into()
+            .unwrap();
+        let formatted = formatter.format(MatchContext {
+            named: Default::default(),
+            indexed: Default::default(),
+            full_match_range: 0..1,
+        });
+        assert_eq!(formatted, "give $3.50");
     }
 
     #[test]
