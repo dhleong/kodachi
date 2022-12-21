@@ -5,6 +5,7 @@ use bytes::Bytes;
 use tokio::io::AsyncWrite;
 
 use self::{
+    msdp::MsdpOptionHandler,
     negotiator::{OptionsNegotiator, OptionsNegotiatorBuilder},
     ttype::TermTypeOptionHandler,
 };
@@ -12,6 +13,7 @@ use self::{
 use super::protocol::{NegotiationType, TelnetOption};
 
 pub mod mccp;
+pub mod msdp;
 pub mod negotiator;
 pub mod ttype;
 
@@ -46,9 +48,11 @@ impl Default for TelnetOptionsManager {
         let mut negotiator_builder = OptionsNegotiatorBuilder::default();
         let mut handlers: HashMap<TelnetOption, Box<dyn TelnetOptionHandler>> = Default::default();
 
+        let (msdp, _) = MsdpOptionHandler::new();
+
         // All handlers:
         let all_handlers: Vec<Box<dyn TelnetOptionHandler>> =
-            vec![Box::new(TermTypeOptionHandler::default())];
+            vec![Box::new(TermTypeOptionHandler::default()), Box::new(msdp)];
 
         // Register with the builder
         for handler in all_handlers {
