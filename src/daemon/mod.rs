@@ -15,7 +15,7 @@ use crate::app::LockableState;
 
 use self::{
     channel::{Channel, ChannelSource},
-    commands::{ClientNotification, ClientRequest},
+    commands::{AliasReplacement, ClientNotification, ClientRequest},
     protocol::{Request, RequestIdGenerator},
 };
 
@@ -120,14 +120,14 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
         ClientRequest::RegisterAlias {
             connection_id,
             matcher,
-            handler_id,
+            replacement,
         } => {
             tokio::spawn(handlers::register_alias::handle(
                 channel,
                 state,
                 connection_id,
                 matcher,
-                handler_id,
+                replacement,
             ));
         }
 

@@ -100,7 +100,7 @@ function KodachiState:alias(matcher, handler)
   return with_socket(self, function(socket)
     if type(handler) == "string" then
       socket:request {
-        type = "RegisterSimpleAlias",
+        type = "RegisterAlias",
         connection_id = self.connection_id,
         matcher = matcher,
         replacement_pattern = handler,

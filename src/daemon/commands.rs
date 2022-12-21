@@ -1,7 +1,8 @@
 use serde::Deserialize;
 
 use crate::app::{
-    completion::CompletionParams, history::HistoryScrollDirection, matchers::MatcherSpec, Id,
+    completion::CompletionParams, formatters::FormatterSpec, history::HistoryScrollDirection,
+    matchers::MatcherSpec, Id,
 };
 
 use super::protocol::cursors::HistoryCursor;
@@ -9,6 +10,12 @@ use super::protocol::cursors::HistoryCursor;
 #[derive(Debug, Deserialize)]
 pub struct Connect {
     pub uri: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum AliasReplacement {
+    Handler { handler_id: Id },
+    Simple { replacement_pattern: FormatterSpec },
 }
 
 #[derive(Deserialize)]
@@ -47,7 +54,9 @@ pub enum ClientRequest {
     RegisterAlias {
         connection_id: Id,
         matcher: MatcherSpec,
-        handler_id: Id,
+
+        #[serde(flatten)]
+        replacement: AliasReplacement,
     },
 
     RegisterTrigger {

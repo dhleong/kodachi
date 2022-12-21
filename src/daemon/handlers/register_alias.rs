@@ -1,24 +1,83 @@
-use std::io;
+use std::{io, sync::Arc};
+
+use tokio::sync::Mutex;
 
 use crate::{
     app::{
-        matchers::{Matcher, MatcherSpec},
-        processing::send::ProcessResult,
+        formatters::{Formatter, FormatterSpec},
+        matchers::{Matcher, MatcherCompileError, MatcherSpec},
+        processing::send::{ProcessResult, SendTextProcessor},
         Id, LockableState,
     },
     daemon::{
-        channel::Channel,
+        channel::{Channel, ConnectionChannel},
+        commands::AliasReplacement,
         requests::ServerRequest,
         responses::{ClientResponse, DaemonResponse},
     },
 };
+
+async fn register_handler_matcher(
+    channel: ConnectionChannel,
+    processor_ref: Arc<Mutex<SendTextProcessor>>,
+    matcher: Matcher,
+    handler_id: Id,
+) {
+    processor_ref
+        .lock()
+        .await
+        .register_matcher(matcher, move |context| {
+            let mut receiver = channel.clone();
+            async move {
+                let response = receiver
+                    .request(ServerRequest::HandleAliasMatch {
+                        handler_id,
+                        context,
+                    })
+                    .await?;
+
+                match response {
+                    ClientResponse::AliasMatchHandled {
+                        replacement: Some(replacement),
+                    } => Ok(ProcessResult::ReplaceWith(replacement)),
+
+                    ClientResponse::AliasMatchHandled { replacement: None } => {
+                        Ok(ProcessResult::Stop)
+                    }
+
+                    #[allow(unreachable_patterns)]
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Unexpected response: {:?}", response),
+                    )),
+                }
+            }
+        });
+}
+
+async fn register_formatter_matcher(
+    processor_ref: Arc<Mutex<SendTextProcessor>>,
+    matcher: Matcher,
+    formatter: FormatterSpec,
+) -> Result<(), MatcherCompileError> {
+    let formatter: Formatter = formatter.try_into()?;
+    processor_ref
+        .lock()
+        .await
+        .register_matcher(matcher, move |context| {
+            let replacement = formatter.format(context);
+            async move { Ok(ProcessResult::ReplaceWith(replacement)) }
+        });
+
+    Ok(())
+}
 
 pub async fn handle(
     channel: Channel,
     mut state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
-    handler_id: Id,
+    replacement: AliasReplacement,
 ) {
     let processor_ref = if let Some(reference) = state
         .lock()
@@ -49,37 +108,29 @@ pub async fn handle(
         return;
     }
 
-    let receiver = channel.for_connection(connection_id);
-    processor_ref
-        .lock()
-        .await
-        .register_matcher(compiled, move |context| {
-            let mut receiver = receiver.clone();
-            async move {
-                let response = receiver
-                    .request(ServerRequest::HandleAliasMatch {
-                        handler_id,
-                        context,
-                    })
-                    .await?;
+    match replacement {
+        AliasReplacement::Handler { handler_id } => {
+            register_handler_matcher(
+                channel.for_connection(connection_id),
+                processor_ref,
+                compiled,
+                handler_id,
+            )
+            .await;
+        }
 
-                match response {
-                    ClientResponse::AliasMatchHandled {
-                        replacement: Some(replacement),
-                    } => Ok(ProcessResult::ReplaceWith(replacement)),
-
-                    ClientResponse::AliasMatchHandled { replacement: None } => {
-                        Ok(ProcessResult::Stop)
-                    }
-
-                    #[allow(unreachable_patterns)]
-                    _ => Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("Unexpected response: {:?}", response),
-                    )),
-                }
+        AliasReplacement::Simple {
+            replacement_pattern: formatter,
+        } => {
+            let result = register_formatter_matcher(processor_ref, compiled, formatter).await;
+            if let Err(e) = result {
+                channel.respond(DaemonResponse::ErrorResult {
+                    error: format!("{:?}", e),
+                });
+                return;
             }
-        });
+        }
+    };
 
     channel.respond(DaemonResponse::OkResult);
 }

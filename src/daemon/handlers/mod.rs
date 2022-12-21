@@ -5,7 +5,6 @@ pub mod disconnect;
 pub mod get_history;
 pub mod register_alias;
 pub mod register_prompt;
-pub mod register_simple_alias;
 pub mod register_trigger;
 pub mod scroll_history;
 pub mod send;
