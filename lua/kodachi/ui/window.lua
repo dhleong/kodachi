@@ -19,6 +19,9 @@ function M.configure_current()
 
   vim.cmd [[ nnoremap <Plug>KodachiPrompt <cmd>lua require'kodachi.ui.history'.open()<cr>]]
   vim.cmd([[ nnoremap <buffer> qi <Plug>KodachiPrompt]] .. vim.o.cedit)
+
+  -- Ensure the cursor is at the bottom of the window so it scrolls with output initially
+  vim.cmd [[ normal! G ]]
 end
 
 return M
