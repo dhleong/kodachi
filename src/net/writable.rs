@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 
 use async_trait::async_trait;
 use bytes::{BufMut, Bytes, BytesMut};

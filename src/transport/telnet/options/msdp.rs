@@ -3,7 +3,10 @@ use std::{collections::HashMap, io};
 use async_trait::async_trait;
 
 use crate::{
-    net::writable::{ObjectWriteStream, Writable},
+    net::{
+        readable::Readable,
+        writable::{ObjectWriteStream, Writable},
+    },
     transport::telnet::{
         processor::TelnetEvent,
         protocol::{NegotiationType, TelnetOption},
@@ -49,9 +52,11 @@ impl Writable for MsdpName {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MsdpVal {
     String(String),
     Array(Vec<MsdpVal>),
+    FlatArray(Vec<MsdpVal>),
     Table(HashMap<String, MsdpVal>),
 }
 
@@ -67,12 +72,111 @@ impl Writable for MsdpVal {
                 }
                 stream.write_all(&[MSDP_ARRAY_CLOSE])
             }
+            MsdpVal::FlatArray(items) => {
+                for item in items {
+                    item.write(stream)?;
+                }
+                Ok(())
+            }
             MsdpVal::Table(items) => {
                 stream.write_all(&[MSDP_TABLE_OPEN])?;
                 for (key, val) in items {
                     MsdpVar(MsdpName::Other(key), val).write(stream)?;
                 }
                 stream.write_all(&[MSDP_TABLE_CLOSE])
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ReadableMsdpVal {
+    None,
+    Ok(MsdpVal),
+    ArrayClose,
+    TableClose,
+}
+
+impl Readable for ReadableMsdpVal {
+    fn read<S: io::BufRead>(stream: &mut S) -> io::Result<Self> {
+        let bytes = stream.fill_buf()?;
+        let header = match bytes.get(0) {
+            Some(byte) => *byte,
+            None => return Ok(ReadableMsdpVal::None),
+        };
+        let next_byte = bytes.get(1).map(|byte| *byte);
+        stream.consume(1);
+
+        match header {
+            MSDP_VAL | MSDP_VAR => {} // Normal; fall through to parsing below
+            MSDP_ARRAY_CLOSE => {
+                return Ok(ReadableMsdpVal::ArrayClose);
+            }
+            MSDP_TABLE_CLOSE => {
+                return Ok(ReadableMsdpVal::TableClose);
+            }
+            unexpected => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Expected MSDP_VAL but got {}", unexpected),
+                ));
+            }
+        }
+
+        match next_byte {
+            None => Ok(ReadableMsdpVal::None),
+            Some(MSDP_ARRAY_OPEN) => {
+                stream.consume(1);
+                let mut vec = Vec::new();
+                while let ReadableMsdpVal::Ok(val) = Self::read(stream)? {
+                    vec.push(val);
+                }
+                Ok(ReadableMsdpVal::Ok(MsdpVal::Array(vec)))
+            }
+            Some(MSDP_TABLE_OPEN) => {
+                stream.consume(1);
+                let mut map = HashMap::new();
+                loop {
+                    let name = match Self::read(stream)? {
+                        ReadableMsdpVal::Ok(MsdpVal::String(name)) => name,
+                        ReadableMsdpVal::TableClose => {
+                            break;
+                        }
+                        unexpected => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("Expected MSDP_VAR but got {:?}", unexpected),
+                            ));
+                        }
+                    };
+                    let value = match Self::read(stream)? {
+                        ReadableMsdpVal::Ok(value) => value,
+                        unexpected => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("Expected MSDP_VAL but got {:?}", unexpected),
+                            ));
+                        }
+                    };
+                    map.insert(name, value);
+                }
+                Ok(ReadableMsdpVal::Ok(MsdpVal::Table(map)))
+            }
+            Some(_) => {
+                let buf = stream.fill_buf()?;
+                for i in 0..buf.len() {
+                    match buf[i] {
+                        MSDP_VAR | MSDP_VAL | MSDP_ARRAY_CLOSE | MSDP_TABLE_CLOSE => {
+                            let content = String::from_utf8_lossy(&buf[0..i]).to_string();
+                            let value = MsdpVal::String(content);
+                            stream.consume(i);
+                            // TODO if the next byte is MSDP_VAL this is a FlatArray
+                            return Ok(ReadableMsdpVal::Ok(value));
+                        }
+                        _ => continue,
+                    };
+                }
+                todo!();
             }
         }
     }
@@ -141,7 +245,7 @@ impl TelnetOptionHandler for MsdpOptionHandler {
 
 #[cfg(test)]
 mod tests {
-    use bytes::Bytes;
+    use bytes::{Buf, Bytes};
 
     use super::*;
 
@@ -150,5 +254,29 @@ mod tests {
         let to_send = MsdpVar(MsdpName::List, MsdpVal::String("COMMANDS".to_string()));
         let bytes = to_send.into_bytes();
         assert_eq!(bytes, Bytes::from("\x01LIST\x02COMMANDS"));
+    }
+
+    #[test]
+    fn read_simple_array_value_test() {
+        let original = MsdpVal::Array(vec![
+            MsdpVal::String("LIST".to_string()),
+            MsdpVal::String("REPORT".to_string()),
+        ]);
+        let source = original.clone().into_bytes();
+
+        let data = ReadableMsdpVal::read(&mut source.reader()).unwrap();
+        assert_eq!(data, ReadableMsdpVal::Ok(original));
+    }
+
+    #[test]
+    fn read_simple_table_value_test() {
+        let original = MsdpVal::Table(HashMap::from([(
+            "LIST".to_string(),
+            MsdpVal::String("REPORT".to_string()),
+        )]));
+        let source = original.clone().into_bytes();
+
+        let data = ReadableMsdpVal::read(&mut source.reader()).unwrap();
+        assert_eq!(data, ReadableMsdpVal::Ok(original));
     }
 }

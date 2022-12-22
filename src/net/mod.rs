@@ -1,3 +1,4 @@
+pub mod readable;
 mod uri;
 pub mod writable;
 
