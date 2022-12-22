@@ -19,13 +19,33 @@ const MSDP_TABLE_CLOSE: u8 = 4;
 const MSDP_ARRAY_OPEN: u8 = 5;
 const MSDP_ARRAY_CLOSE: u8 = 6;
 
-struct MsdpVar(String, MsdpVal);
+struct MsdpVar(MsdpName, MsdpVal);
 
 impl Writable for MsdpVar {
     fn write<S: io::Write>(self, stream: &mut S) -> io::Result<()> {
-        stream.write_all(&[MSDP_VAR])?;
-        stream.write_all(&self.0.as_bytes())?;
+        self.0.write(stream)?;
         self.1.write(stream)
+    }
+}
+
+#[derive(Debug)]
+pub enum MsdpName {
+    List,
+    Report,
+    Unreport,
+    Other(String),
+}
+
+impl Writable for MsdpName {
+    fn write<S: io::Write>(self, stream: &mut S) -> io::Result<()> {
+        stream.write_all(&[MSDP_VAR])?;
+        match self {
+            MsdpName::Other(s) => stream.write_all(s.as_bytes()),
+            named => {
+                let s = format!("{:?}", named);
+                stream.write_all(s.to_uppercase().as_bytes())
+            }
+        }
     }
 }
 
@@ -50,7 +70,7 @@ impl Writable for MsdpVal {
             MsdpVal::Table(items) => {
                 stream.write_all(&[MSDP_TABLE_OPEN])?;
                 for (key, val) in items {
-                    MsdpVar(key, val).write(stream)?;
+                    MsdpVar(MsdpName::Other(key), val).write(stream)?;
                 }
                 stream.write_all(&[MSDP_TABLE_CLOSE])
             }
@@ -96,7 +116,7 @@ impl TelnetOptionHandler for MsdpOptionHandler {
             }
 
             NegotiationType::Will => {
-                let to_send = MsdpVar("LIST".to_string(), MsdpVal::String("COMMANDS".to_string()));
+                let to_send = MsdpVar(MsdpName::List, MsdpVal::String("COMMANDS".to_string()));
                 let command = TelnetEvent::Subnegotiate(TelnetOption::MSDP, to_send.into_bytes());
 
                 log::trace!(target: "telnet", ">> MSDP LIST COMMANDS");
@@ -116,5 +136,19 @@ impl TelnetOptionHandler for MsdpOptionHandler {
         log::trace!(target: "telnet", "<< MSDP (TODO) {:?}", data);
         // TODO Parse MSDP data and stash somewhere
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bytes::Bytes;
+
+    use super::*;
+
+    #[test]
+    fn serialize_list_command_test() {
+        let to_send = MsdpVar(MsdpName::List, MsdpVal::String("COMMANDS".to_string()));
+        let bytes = to_send.into_bytes();
+        assert_eq!(bytes, Bytes::from("\x01LIST\x02COMMANDS"));
     }
 }
