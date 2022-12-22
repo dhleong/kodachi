@@ -95,9 +95,21 @@ pub enum MsdpVal {
     Table(HashMap<String, MsdpVal>),
 }
 
+impl MsdpVal {
+    fn is_flat_array(&self) -> bool {
+        match self {
+            Self::FlatArray(_) => true,
+            _ => false,
+        }
+    }
+}
+
 impl Writable for MsdpVal {
     fn write<S: io::Write>(self, stream: &mut S) -> io::Result<()> {
-        stream.write_all(&[MSDP_VAL])?;
+        if !self.is_flat_array() {
+            stream.write_all(&[MSDP_VAL])?;
+        }
+
         match self {
             MsdpVal::String(s) => stream.write_all(&s.as_bytes()),
             MsdpVal::Array(items) => {
@@ -162,10 +174,15 @@ impl Readable for ReadableMsdpVal {
             None => Ok(ReadableMsdpVal::None),
             Some(MSDP_ARRAY_OPEN) => {
                 stream.consume(1);
-                let mut vec = Vec::new();
-                while let ReadableMsdpVal::Ok(val) = Self::read(stream)? {
-                    vec.push(val);
-                }
+                let vec = match Self::read(stream)? {
+                    ReadableMsdpVal::Ok(MsdpVal::FlatArray(vec)) => vec,
+                    unexpected => {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("Expected MSDP_VAL (for array) but got {:?}", unexpected),
+                        ));
+                    }
+                };
                 Ok(ReadableMsdpVal::Ok(MsdpVal::Array(vec)))
             }
             Some(MSDP_TABLE_OPEN) => {
@@ -190,13 +207,27 @@ impl Readable for ReadableMsdpVal {
                             let content = String::from_utf8_lossy(&buf[0..i]).to_string();
                             let value = MsdpVal::String(content);
                             stream.consume(i);
-                            // TODO if the next byte is MSDP_VAL this is a FlatArray
+
+                            let buf = stream.fill_buf()?;
+                            if header == MSDP_VAL && buf.get(0) == Some(&MSDP_VAL) {
+                                let mut vec = vec![value];
+                                while let ReadableMsdpVal::Ok(val) = Self::read(stream)? {
+                                    vec.push(val);
+                                }
+                                return Ok(ReadableMsdpVal::Ok(MsdpVal::FlatArray(vec)));
+                            }
+
                             return Ok(ReadableMsdpVal::Ok(value));
                         }
                         _ => continue,
                     };
                 }
-                todo!();
+
+                let string_len = buf.len();
+                let content = String::from_utf8_lossy(buf).to_string();
+                let value = MsdpVal::String(content);
+                stream.consume(string_len);
+                return Ok(ReadableMsdpVal::Ok(value));
             }
         }
     }
@@ -308,6 +339,21 @@ mod tests {
                 "LIST".to_string(),
                 MsdpVal::String("REPORT".to_string()),
             )])),
+        );
+        let source = original.clone().into_bytes();
+
+        let data = MsdpVar::read(&mut source.reader()).unwrap();
+        assert_eq!(data, original);
+    }
+
+    #[test]
+    fn read_flat_array_test() {
+        let original = MsdpVar(
+            MsdpName::Report,
+            MsdpVal::FlatArray(vec![
+                MsdpVal::String("NAME".to_string()),
+                MsdpVal::String("LEVEL".to_string()),
+            ]),
         );
         let source = original.clone().into_bytes();
 
