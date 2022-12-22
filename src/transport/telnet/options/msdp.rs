@@ -22,6 +22,7 @@ const MSDP_TABLE_CLOSE: u8 = 4;
 const MSDP_ARRAY_OPEN: u8 = 5;
 const MSDP_ARRAY_CLOSE: u8 = 6;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 struct MsdpVar(MsdpName, MsdpVal);
 
 impl Writable for MsdpVar {
@@ -31,7 +32,38 @@ impl Writable for MsdpVar {
     }
 }
 
-#[derive(Debug)]
+impl Readable for MsdpVar {
+    fn read<S: io::BufRead>(stream: &mut S) -> io::Result<Self> {
+        let name = match ReadableMsdpVal::read(stream)? {
+            ReadableMsdpVal::Ok(MsdpVal::String(name)) => match name.as_str() {
+                "LIST" => MsdpName::List,
+                "REPORT" => MsdpName::Report,
+                "UNREPORT" => MsdpName::Unreport,
+                _ => MsdpName::Other(name),
+            },
+            unexpected => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Expected MSDP_VAR but got {:?}", unexpected),
+                ));
+            }
+        };
+
+        let value = match ReadableMsdpVal::read(stream)? {
+            ReadableMsdpVal::Ok(value) => value,
+            unexpected => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Expected MSDP_VAL but got {:?}", unexpected),
+                ));
+            }
+        };
+
+        Ok(MsdpVar(name, value))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MsdpName {
     List,
     Report,
@@ -39,16 +71,19 @@ pub enum MsdpName {
     Other(String),
 }
 
+impl MsdpName {
+    fn into_string(self) -> String {
+        match self {
+            MsdpName::Other(s) => s,
+            named => format!("{:?}", named).to_uppercase(),
+        }
+    }
+}
+
 impl Writable for MsdpName {
     fn write<S: io::Write>(self, stream: &mut S) -> io::Result<()> {
         stream.write_all(&[MSDP_VAR])?;
-        match self {
-            MsdpName::Other(s) => stream.write_all(s.as_bytes()),
-            named => {
-                let s = format!("{:?}", named);
-                stream.write_all(s.to_uppercase().as_bytes())
-            }
-        }
+        stream.write_all(self.into_string().as_bytes())
     }
 }
 
@@ -137,28 +172,13 @@ impl Readable for ReadableMsdpVal {
                 stream.consume(1);
                 let mut map = HashMap::new();
                 loop {
-                    let name = match Self::read(stream)? {
-                        ReadableMsdpVal::Ok(MsdpVal::String(name)) => name,
-                        ReadableMsdpVal::TableClose => {
-                            break;
-                        }
-                        unexpected => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("Expected MSDP_VAR but got {:?}", unexpected),
-                            ));
-                        }
-                    };
-                    let value = match Self::read(stream)? {
-                        ReadableMsdpVal::Ok(value) => value,
-                        unexpected => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("Expected MSDP_VAL but got {:?}", unexpected),
-                            ));
-                        }
-                    };
-                    map.insert(name, value);
+                    let buf = stream.fill_buf()?;
+                    if buf.get(0) == Some(&MSDP_TABLE_CLOSE) {
+                        break;
+                    }
+
+                    let var = MsdpVar::read(stream)?;
+                    map.insert(var.0.into_string(), var.1);
                 }
                 Ok(ReadableMsdpVal::Ok(MsdpVal::Table(map)))
             }
@@ -278,5 +298,20 @@ mod tests {
 
         let data = ReadableMsdpVal::read(&mut source.reader()).unwrap();
         assert_eq!(data, ReadableMsdpVal::Ok(original));
+    }
+
+    #[test]
+    fn read_var_test() {
+        let original = MsdpVar(
+            MsdpName::List,
+            MsdpVal::Table(HashMap::from([(
+                "LIST".to_string(),
+                MsdpVal::String("REPORT".to_string()),
+            )])),
+        );
+        let source = original.clone().into_bytes();
+
+        let data = MsdpVar::read(&mut source.reader()).unwrap();
+        assert_eq!(data, original);
     }
 }
