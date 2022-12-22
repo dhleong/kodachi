@@ -1,6 +1,8 @@
 use std::{collections::HashMap, io};
 
 use async_trait::async_trait;
+use bytes::Buf;
+use tokio::sync::broadcast::{self, Receiver, Sender};
 
 use crate::{
     net::{
@@ -35,12 +37,7 @@ impl Writable for MsdpVar {
 impl Readable for MsdpVar {
     fn read<S: io::BufRead>(stream: &mut S) -> io::Result<Self> {
         let name = match ReadableMsdpVal::read(stream)? {
-            ReadableMsdpVal::Ok(MsdpVal::String(name)) => match name.as_str() {
-                "LIST" => MsdpName::List,
-                "REPORT" => MsdpName::Report,
-                "UNREPORT" => MsdpName::Unreport,
-                _ => MsdpName::Other(name),
-            },
+            ReadableMsdpVal::Ok(MsdpVal::String(name)) => MsdpName::from_string(name),
             unexpected => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -65,6 +62,7 @@ impl Readable for MsdpVar {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MsdpName {
+    Commands,
     List,
     Report,
     Unreport,
@@ -72,6 +70,16 @@ pub enum MsdpName {
 }
 
 impl MsdpName {
+    fn from_string(name: String) -> MsdpName {
+        match name.as_str() {
+            "COMMANDS" => MsdpName::Commands,
+            "LIST" => MsdpName::List,
+            "REPORT" => MsdpName::Report,
+            "UNREPORT" => MsdpName::Unreport,
+            _ => MsdpName::Other(name),
+        }
+    }
+
     fn into_string(self) -> String {
         match self {
             MsdpName::Other(s) => s,
@@ -233,21 +241,28 @@ impl Readable for ReadableMsdpVal {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum MsdpEvent {
     Reset,
     UpdateVar(String, MsdpVal),
 }
 
-pub struct MsdpOptionHandler {}
+pub struct MsdpOptionHandler {
+    events: Sender<MsdpEvent>,
+}
 
 impl MsdpOptionHandler {
-    pub fn new() -> (Self, Option<usize>) {
-        (MsdpOptionHandler {}, None)
+    pub fn new() -> (Self, Receiver<MsdpEvent>) {
+        let (sender, receiver) = broadcast::channel(1);
+        (MsdpOptionHandler { events: sender }, receiver)
     }
 }
 
 impl MsdpOptionHandler {
-    fn reset(&self) {}
+    fn reset(&self) {
+        // Don't worry if nobody's around to receive
+        self.events.send(MsdpEvent::Reset).ok();
+    }
 }
 
 #[async_trait]
@@ -288,8 +303,21 @@ impl TelnetOptionHandler for MsdpOptionHandler {
         data: bytes::Bytes,
         _stream: DynWriteStream<'_>,
     ) -> io::Result<()> {
-        log::trace!(target: "telnet", "<< MSDP (TODO) {:?}", data);
-        // TODO Parse MSDP data and stash somewhere
+        let var: MsdpVar = MsdpVar::read(&mut data.reader())?;
+        log::trace!(target: "telnet", "<< MSDP {:?} {:?}", var.0, var.1);
+
+        match var.0 {
+            MsdpName::Commands => {
+                // TODO stash capabilities
+            }
+            _ => {} // ignore
+        }
+
+        // TODO Should we store anywhere?
+        self.events
+            .send(MsdpEvent::UpdateVar(var.0.into_string(), var.1))
+            .ok();
+
         Ok(())
     }
 }
