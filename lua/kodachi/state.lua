@@ -6,7 +6,7 @@ local PromptsManager = require 'kodachi.prompts'
 local util = require 'kodachi.util.state'
 local with_socket = util.with_socket
 
----@alias KodachiEvent 'connected'|'disconnected'
+---@alias KodachiEvent 'connected'|'disconnected'|'event'
 
 ---@class KodachiState
 ---@field bufnr number
@@ -76,16 +76,18 @@ function KodachiState:map(lhs, rhs)
   )
 end
 
----Register a generic handler for any RPC event
----@param event KodachiEvent
+---Register an event handler for events on this connection.
+---@param event KodachiEvent|EventSpec If a string is provided for `event`, it
+--will be treated as an RPC message type. Otherwise, it should be a `{ns, name}` or `{ns}`
+--tuple as a convenience for `event` RPC messages.
 function KodachiState:on(event, handler)
   if not self._events then
     self._events = {}
     self.socket:listen(function(message)
-      local events = self._events[string.lower(message.type)]
-      if events and self.connection_id == message.connection_id then
+      local handlers = self._events[string.lower(message.type)]
+      if handlers and self.connection_id == message.connection_id then
         vim.schedule(function()
-          for _, saved_handler in ipairs(events) do
+          for _, saved_handler in ipairs(handlers) do
             saved_handler(message)
           end
         end)

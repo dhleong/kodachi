@@ -1,4 +1,6 @@
----@param event_spec table
+---@alias EventSpec table
+
+---@param event_spec EventSpec
 local function event_data_matches(event_spec, message)
   if event_spec[1] ~= message.ns then
     return false
