@@ -1,3 +1,4 @@
+local events = require 'kodachi.events'
 local Handlers = require 'kodachi.handlers'
 local matchers = require 'kodachi.matchers'
 local PromptsManager = require 'kodachi.prompts'
@@ -75,14 +76,14 @@ function KodachiState:map(lhs, rhs)
   )
 end
 
----Register an event handler
+---Register a generic handler for any RPC event
 ---@param event KodachiEvent
 function KodachiState:on(event, handler)
   if not self._events then
     self._events = {}
     self.socket:listen(function(message)
       local events = self._events[string.lower(message.type)]
-      if events then
+      if events and self.connection_id == message.connection_id then
         vim.schedule(function()
           for _, saved_handler in ipairs(events) do
             saved_handler(message)
@@ -101,6 +102,7 @@ function KodachiState:on(event, handler)
     self._events[event] = {}
   end
 
+  local event, handler = events.wrap(event, handler)
   table.insert(self._events[event], handler)
 end
 
