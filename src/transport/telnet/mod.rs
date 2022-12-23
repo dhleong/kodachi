@@ -6,6 +6,7 @@ use log::trace;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
+    select,
 };
 use tokio_native_tls::{TlsConnector, TlsStream};
 
@@ -119,14 +120,25 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> Transport for TelnetTransport<S> 
             }
         }
 
-        let read = self.stream.read_buf(&mut self.buffer).await?;
-        if read == 0 && self.buffer.is_empty() {
-            return Err(io::ErrorKind::UnexpectedEof.into());
-        }
+        select! {
+            read = self.stream.read_buf(&mut self.buffer) => {
+                if read? == 0 && self.buffer.is_empty() {
+                    return Err(io::ErrorKind::UnexpectedEof.into());
+                }
 
-        self.process_buffer()
-            .await
-            .map(|option| option.unwrap_or(TransportEvent::Nop))
+                self.process_buffer()
+                    .await
+                    .map(|option| option.unwrap_or(TransportEvent::Nop))
+            },
+
+            event = self.options.recv_event() => {
+                if let Some(event) = event {
+                    Ok(TransportEvent::Event(event))
+                } else {
+                    Ok(TransportEvent::Nop)
+                }
+            },
+        }
     }
 
     async fn write(&mut self, data: &[u8]) -> io::Result<usize> {

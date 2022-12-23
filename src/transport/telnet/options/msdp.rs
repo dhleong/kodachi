@@ -2,20 +2,26 @@ use std::{collections::HashMap, io};
 
 use async_trait::async_trait;
 use bytes::Buf;
-use tokio::sync::broadcast::{self, Receiver, Sender};
+use tokio::sync::broadcast::Sender;
 
 use crate::{
     net::{
         readable::Readable,
         writable::{ObjectWriteStream, Writable},
     },
-    transport::telnet::{
-        processor::TelnetEvent,
-        protocol::{NegotiationType, TelnetOption},
+    transport::{
+        telnet::{
+            processor::TelnetEvent,
+            protocol::{NegotiationType, TelnetOption},
+        },
+        EventData, TransportEventValue,
     },
 };
 
 use super::{negotiator::OptionsNegotiatorBuilder, DynWriteStream, TelnetOptionHandler};
+
+const NAMESPACE: &str = "MSDP";
+const RESET_EVENT: &str = "RESET";
 
 const MSDP_VAR: u8 = 1;
 const MSDP_VAL: u8 = 2;
@@ -37,7 +43,7 @@ impl Writable for MsdpVar {
 impl Readable for MsdpVar {
     fn read<S: io::BufRead>(stream: &mut S) -> io::Result<Self> {
         let name = match ReadableMsdpVal::read(stream)? {
-            ReadableMsdpVal::Ok(MsdpVal::String(name)) => MsdpName::from_string(name),
+            ReadableMsdpVal::Ok(TransportEventValue::String(name)) => MsdpName::from_string(name),
             unexpected => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
@@ -56,7 +62,7 @@ impl Readable for MsdpVar {
             }
         };
 
-        Ok(MsdpVar(name, value))
+        Ok(MsdpVar(name, MsdpVal(value, Default::default())))
     }
 }
 
@@ -95,21 +101,31 @@ impl Writable for MsdpName {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum MsdpVal {
-    String(String),
-    Array(Vec<MsdpVal>),
-    #[allow(dead_code)]
-    FlatArray(Vec<MsdpVal>),
-    Table(HashMap<String, MsdpVal>),
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct MsdpValOptions {
+    flat_array: bool,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MsdpVal(TransportEventValue, MsdpValOptions);
+
 impl MsdpVal {
+    #[cfg(test)]
+    fn array(items: Vec<TransportEventValue>) -> Self {
+        Self(TransportEventValue::Vec(items), Default::default())
+    }
+
+    #[cfg(test)]
+    fn table(items: HashMap<String, TransportEventValue>) -> Self {
+        Self(TransportEventValue::Map(items), Default::default())
+    }
+
+    fn string(s: String) -> Self {
+        Self(TransportEventValue::String(s), Default::default())
+    }
+
     fn is_flat_array(&self) -> bool {
-        match self {
-            Self::FlatArray(_) => true,
-            _ => false,
-        }
+        self.1.flat_array
     }
 }
 
@@ -119,25 +135,26 @@ impl Writable for MsdpVal {
             stream.write_all(&[MSDP_VAL])?;
         }
 
-        match self {
-            MsdpVal::String(s) => stream.write_all(&s.as_bytes()),
-            MsdpVal::Array(items) => {
+        match (self.0, self.1.flat_array) {
+            (TransportEventValue::String(s), _) => stream.write_all(&s.as_bytes()),
+            (TransportEventValue::Vec(items), false) => {
                 stream.write_all(&[MSDP_ARRAY_OPEN])?;
                 for item in items {
-                    item.write(stream)?;
+                    MsdpVal(item, Default::default()).write(stream)?;
                 }
                 stream.write_all(&[MSDP_ARRAY_CLOSE])
             }
-            MsdpVal::FlatArray(items) => {
+            (TransportEventValue::Vec(items), true) => {
                 for item in items {
-                    item.write(stream)?;
+                    MsdpVal(item, Default::default()).write(stream)?;
                 }
                 Ok(())
             }
-            MsdpVal::Table(items) => {
+            (TransportEventValue::Map(items), _) => {
                 stream.write_all(&[MSDP_TABLE_OPEN])?;
                 for (key, val) in items {
-                    MsdpVar(MsdpName::Other(key), val).write(stream)?;
+                    MsdpVar(MsdpName::Other(key), MsdpVal(val, Default::default()))
+                        .write(stream)?;
                 }
                 stream.write_all(&[MSDP_TABLE_CLOSE])
             }
@@ -148,7 +165,7 @@ impl Writable for MsdpVal {
 #[derive(Debug, PartialEq, Eq)]
 enum ReadableMsdpVal {
     None,
-    Ok(MsdpVal),
+    Ok(TransportEventValue),
     ArrayClose,
     TableClose,
 }
@@ -187,7 +204,7 @@ impl Readable for ReadableMsdpVal {
                 while let ReadableMsdpVal::Ok(val) = Self::read(stream)? {
                     vec.push(val);
                 }
-                Ok(ReadableMsdpVal::Ok(MsdpVal::Array(vec)))
+                Ok(ReadableMsdpVal::Ok(TransportEventValue::Vec(vec)))
             }
             Some(MSDP_TABLE_OPEN) => {
                 stream.consume(1);
@@ -199,9 +216,10 @@ impl Readable for ReadableMsdpVal {
                     }
 
                     let var = MsdpVar::read(stream)?;
-                    map.insert(var.0.into_string(), var.1);
+                    let val = var.1;
+                    map.insert(var.0.into_string(), val.0);
                 }
-                Ok(ReadableMsdpVal::Ok(MsdpVal::Table(map)))
+                Ok(ReadableMsdpVal::Ok(TransportEventValue::Map(map)))
             }
             Some(_) => {
                 let buf = stream.fill_buf()?;
@@ -209,7 +227,7 @@ impl Readable for ReadableMsdpVal {
                     match buf[i] {
                         MSDP_VAR | MSDP_VAL | MSDP_ARRAY_CLOSE | MSDP_TABLE_CLOSE => {
                             let content = String::from_utf8_lossy(&buf[0..i]).to_string();
-                            let value = MsdpVal::String(content);
+                            let value = TransportEventValue::String(content);
                             stream.consume(i);
                             return Ok(ReadableMsdpVal::Ok(value));
                         }
@@ -219,7 +237,7 @@ impl Readable for ReadableMsdpVal {
 
                 let string_len = buf.len();
                 let content = String::from_utf8_lossy(buf).to_string();
-                let value = MsdpVal::String(content);
+                let value = TransportEventValue::String(content);
                 stream.consume(string_len);
                 return Ok(ReadableMsdpVal::Ok(value));
             }
@@ -227,27 +245,26 @@ impl Readable for ReadableMsdpVal {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum MsdpEvent {
-    Reset,
-    UpdateVar(String, MsdpVal),
-}
-
 pub struct MsdpOptionHandler {
-    events: Sender<MsdpEvent>,
+    events: Sender<EventData>,
 }
 
 impl MsdpOptionHandler {
-    pub fn new() -> (Self, Receiver<MsdpEvent>) {
-        let (sender, receiver) = broadcast::channel(1);
-        (MsdpOptionHandler { events: sender }, receiver)
+    pub fn new(sender: Sender<EventData>) -> Self {
+        MsdpOptionHandler { events: sender }
     }
 }
 
 impl MsdpOptionHandler {
     fn reset(&self) {
         // Don't worry if nobody's around to receive
-        self.events.send(MsdpEvent::Reset).ok();
+        self.events
+            .send(EventData {
+                ns: NAMESPACE.to_string(),
+                name: RESET_EVENT.to_string(),
+                payload: None,
+            })
+            .ok();
     }
 }
 
@@ -272,7 +289,7 @@ impl TelnetOptionHandler for MsdpOptionHandler {
             }
 
             NegotiationType::Will => {
-                let to_send = MsdpVar(MsdpName::List, MsdpVal::String("COMMANDS".to_string()));
+                let to_send = MsdpVar(MsdpName::List, MsdpVal::string("COMMANDS".to_string()));
                 let command = TelnetEvent::Subnegotiate(TelnetOption::MSDP, to_send.into_bytes());
 
                 log::trace!(target: "telnet", ">> MSDP LIST COMMANDS");
@@ -299,9 +316,12 @@ impl TelnetOptionHandler for MsdpOptionHandler {
             _ => {} // ignore
         }
 
-        // TODO Should we store anywhere?
         self.events
-            .send(MsdpEvent::UpdateVar(var.0.into_string(), var.1))
+            .send(EventData {
+                ns: NAMESPACE.to_string(),
+                name: var.0.into_string(),
+                payload: Some((var.1).0),
+            })
             .ok();
 
         Ok(())
@@ -316,43 +336,43 @@ mod tests {
 
     #[test]
     fn serialize_list_command_test() {
-        let to_send = MsdpVar(MsdpName::List, MsdpVal::String("COMMANDS".to_string()));
+        let to_send = MsdpVar(MsdpName::List, MsdpVal::string("COMMANDS".to_string()));
         let bytes = to_send.into_bytes();
         assert_eq!(bytes, Bytes::from("\x01LIST\x02COMMANDS"));
     }
 
     #[test]
     fn read_simple_array_value_test() {
-        let original = MsdpVal::Array(vec![
-            MsdpVal::String("LIST".to_string()),
-            MsdpVal::String("REPORT".to_string()),
+        let original = MsdpVal::array(vec![
+            TransportEventValue::String("LIST".to_string()),
+            TransportEventValue::String("REPORT".to_string()),
         ]);
         let source = original.clone().into_bytes();
 
         let data = ReadableMsdpVal::read(&mut source.reader()).unwrap();
-        assert_eq!(data, ReadableMsdpVal::Ok(original));
+        assert_eq!(data, ReadableMsdpVal::Ok(original.0));
     }
 
     #[test]
     fn read_simple_table_value_test() {
-        let original = MsdpVal::Table(HashMap::from([(
+        let original = MsdpVal::table(HashMap::from([(
             "LIST".to_string(),
-            MsdpVal::String("REPORT".to_string()),
+            TransportEventValue::String("REPORT".to_string()),
         )]));
         let source = original.clone().into_bytes();
 
         let data = ReadableMsdpVal::read(&mut source.reader()).unwrap();
-        assert_eq!(data, ReadableMsdpVal::Ok(original));
+        assert_eq!(data, ReadableMsdpVal::Ok(original.0));
     }
 
     #[test]
     fn read_list_var_test() {
         let original = MsdpVar(
             MsdpName::Commands,
-            MsdpVal::Array(vec![
-                MsdpVal::String("LIST".to_string()),
-                MsdpVal::String("REPORT".to_string()),
-                MsdpVal::String("RESET".to_string()),
+            MsdpVal::array(vec![
+                TransportEventValue::String("LIST".to_string()),
+                TransportEventValue::String("REPORT".to_string()),
+                TransportEventValue::String("RESET".to_string()),
             ]),
         );
         let source = original.clone().into_bytes();
@@ -365,9 +385,9 @@ mod tests {
     fn read_table_var_test() {
         let original = MsdpVar(
             MsdpName::List,
-            MsdpVal::Table(HashMap::from([(
+            MsdpVal::table(HashMap::from([(
                 "LIST".to_string(),
-                MsdpVal::String("REPORT".to_string()),
+                TransportEventValue::String("REPORT".to_string()),
             )])),
         );
         let source = original.clone().into_bytes();
@@ -381,10 +401,13 @@ mod tests {
     fn read_flat_array_test() {
         let original = MsdpVar(
             MsdpName::Report,
-            MsdpVal::FlatArray(vec![
-                MsdpVal::String("NAME".to_string()),
-                MsdpVal::String("LEVEL".to_string()),
-            ]),
+            MsdpVal(
+                TransportEventValue::Vec(vec![
+                    TransportEventValue::String("NAME".to_string()),
+                    TransportEventValue::String("LEVEL".to_string()),
+                ]),
+                MsdpValOptions { flat_array: true },
+            ),
         );
         let source = original.clone().into_bytes();
 

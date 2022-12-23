@@ -36,6 +36,11 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
 
                     receiver.end_chunk()?;
                 },
+
+                TransportEvent::Event(data) => {
+                    receiver.notification(DaemonNotification::Event(data))?;
+                },
+
                 TransportEvent::Nop => {},
             },
 
