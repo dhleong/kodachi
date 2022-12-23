@@ -1,3 +1,4 @@
+local events = require 'kodachi.events'
 local Handlers = require 'kodachi.handlers'
 local matchers = require 'kodachi.matchers'
 local PromptsManager = require 'kodachi.prompts'
@@ -5,7 +6,7 @@ local PromptsManager = require 'kodachi.prompts'
 local util = require 'kodachi.util.state'
 local with_socket = util.with_socket
 
----@alias KodachiEvent 'connected'|'disconnected'
+---@alias KodachiEvent 'connected'|'disconnected'|'event'
 
 ---@class KodachiState
 ---@field bufnr number
@@ -32,6 +33,12 @@ function KodachiState:cleanup()
   if self._aliases then
     self._aliases:clear()
     cleared_any = true
+  end
+
+  if self._events then
+    -- NOTE: We don't need to set cleared_any because the server is not tracking
+    -- any state for us for events.
+    self._events = nil
   end
 
   if self._triggers then
@@ -69,16 +76,18 @@ function KodachiState:map(lhs, rhs)
   )
 end
 
----Register an event handler
----@param event KodachiEvent
+---Register an event handler for events on this connection.
+---@param event KodachiEvent|EventSpec If a string is provided for `event`, it
+--will be treated as an RPC message type. Otherwise, it should be a `{ns, name}` or `{ns}`
+--tuple as a convenience for `event` RPC messages.
 function KodachiState:on(event, handler)
   if not self._events then
     self._events = {}
     self.socket:listen(function(message)
-      local events = self._events[string.lower(message.type)]
-      if events then
+      local handlers = self._events[string.lower(message.type)]
+      if handlers and self.connection_id == message.connection_id then
         vim.schedule(function()
-          for _, saved_handler in ipairs(events) do
+          for _, saved_handler in ipairs(handlers) do
             saved_handler(message)
           end
         end)
@@ -91,7 +100,12 @@ function KodachiState:on(event, handler)
     end
   end
 
-  self._events[event] = handler
+  if not self._events[event] then
+    self._events[event] = {}
+  end
+
+  local event, handler = events.wrap(event, handler)
+  table.insert(self._events[event], handler)
 end
 
 ---@param matcher MatcherSpec|string

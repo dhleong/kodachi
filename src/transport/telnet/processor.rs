@@ -3,6 +3,8 @@ use std::io;
 use bytes::{Buf, Bytes, BytesMut};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
+use crate::net::writable::Writable;
+
 use super::protocol::{
     NegotiationType, TelnetCommand, TelnetOption, DO, DONT, IAC, SB, SE, WILL, WONT,
 };
@@ -37,6 +39,24 @@ impl TelnetEvent {
 
                 stream.write_u8(IAC).await?;
                 stream.write_u8(SE).await
+            }
+        }
+    }
+}
+
+impl Writable for TelnetEvent {
+    fn write<S: io::Write>(self, stream: &mut S) -> io::Result<()> {
+        match self {
+            TelnetEvent::Data(mut bytes) => stream.write_all(&mut bytes),
+            TelnetEvent::Command(command) => stream.write_all(&[IAC, command.byte()]),
+            TelnetEvent::Negotiate(negotiation, option) => {
+                stream.write_all(&[IAC, negotiation.byte(), option.byte()])
+            }
+
+            TelnetEvent::Subnegotiate(option, mut bytes) => {
+                stream.write_all(&[IAC, SB, option.byte()])?;
+                stream.write_all(&mut bytes)?;
+                stream.write_all(&[IAC, SE])
             }
         }
     }

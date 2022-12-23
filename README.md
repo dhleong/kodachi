@@ -26,7 +26,8 @@ it can be reused with whatever editors support embedding a terminal window.
 - [x] Aliases
 - [x] Intelligent auto-completion
 - [x] Input history management
-- [x] Common MUD protocols: MCCP2 (more to come)
+- [x] Common MUD protocols: [MTTS][mtts], [MCCP2][mccp2], [MSDP][msdp]
+- [x] Secure connections over TLS
 
 
 ## How?
@@ -100,3 +101,6 @@ require 'null-ls'.setup {
 [rust]: https://www.rust-lang.org
 [plug]: https://github.com/junegunn/vim-plug
 [null-ls]: https://github.com/jose-elias-alvarez/null-ls.nvim
+[mtts]: https://mudhalla.net/tintin/protocols/mtts/
+[mccp2]: https://tintin.mudhalla.net/protocols/mccp/
+[msdp]: https://tintin.mudhalla.net/protocols/msdp/

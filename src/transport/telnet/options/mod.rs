@@ -2,9 +2,15 @@ use std::{collections::HashMap, io};
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use tokio::io::AsyncWrite;
+use tokio::{
+    io::AsyncWrite,
+    sync::broadcast::{self, Receiver},
+};
+
+use crate::transport::EventData;
 
 use self::{
+    msdp::MsdpOptionHandler,
     negotiator::{OptionsNegotiator, OptionsNegotiatorBuilder},
     ttype::TermTypeOptionHandler,
 };
@@ -12,6 +18,7 @@ use self::{
 use super::protocol::{NegotiationType, TelnetOption};
 
 pub mod mccp;
+pub mod msdp;
 pub mod negotiator;
 pub mod ttype;
 
@@ -39,6 +46,7 @@ pub trait TelnetOptionHandler: Send {
 pub struct TelnetOptionsManager {
     negotiator: OptionsNegotiator,
     handlers: HashMap<TelnetOption, Box<dyn TelnetOptionHandler>>,
+    events: Receiver<EventData>,
 }
 
 impl Default for TelnetOptionsManager {
@@ -46,9 +54,12 @@ impl Default for TelnetOptionsManager {
         let mut negotiator_builder = OptionsNegotiatorBuilder::default();
         let mut handlers: HashMap<TelnetOption, Box<dyn TelnetOptionHandler>> = Default::default();
 
+        let (events_sender, events) = broadcast::channel(1);
+        let msdp = MsdpOptionHandler::new(events_sender);
+
         // All handlers:
         let all_handlers: Vec<Box<dyn TelnetOptionHandler>> =
-            vec![Box::new(TermTypeOptionHandler::default())];
+            vec![Box::new(TermTypeOptionHandler::default()), Box::new(msdp)];
 
         // Register with the builder
         for handler in all_handlers {
@@ -62,11 +73,19 @@ impl Default for TelnetOptionsManager {
         TelnetOptionsManager {
             negotiator,
             handlers,
+            events,
         }
     }
 }
 
 impl TelnetOptionsManager {
+    pub async fn recv_event(&mut self) -> Option<EventData> {
+        match self.events.recv().await {
+            Ok(event) => Some(event),
+            _ => None,
+        }
+    }
+
     pub async fn negotiate<S: AsyncWrite + Unpin + Send>(
         &mut self,
         negotiation: NegotiationType,

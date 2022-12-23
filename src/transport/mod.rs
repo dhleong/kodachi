@@ -1,7 +1,8 @@
-use std::io;
+use std::{collections::HashMap, io};
 
 use async_trait::async_trait;
 use bytes::Bytes;
+use serde::Serialize;
 
 use crate::net::Uri;
 
@@ -9,8 +10,24 @@ use self::telnet::TelnetTransport;
 
 pub mod telnet;
 
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum TransportEventValue {
+    String(String),
+    Vec(Vec<TransportEventValue>),
+    Map(HashMap<String, TransportEventValue>),
+}
+
+#[derive(Clone, Serialize)]
+pub struct EventData {
+    ns: String,
+    name: String,
+    payload: Option<TransportEventValue>,
+}
+
 pub enum TransportEvent {
     Data(Bytes),
+    Event(EventData),
     Nop,
 }
 

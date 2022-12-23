@@ -2,7 +2,10 @@ use std::{collections::HashMap, ops::Range};
 
 use serde::Serialize;
 
-use crate::app::{processing::ansi::Ansi, Id};
+use crate::{
+    app::{processing::ansi::Ansi, Id},
+    transport::EventData,
+};
 
 #[derive(Clone, Serialize)]
 pub struct MatchedText {
@@ -46,4 +49,5 @@ pub enum DaemonNotification {
         handler_id: Id,
         context: MatchContext,
     },
+    Event(EventData),
 }
