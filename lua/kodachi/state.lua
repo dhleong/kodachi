@@ -34,6 +34,12 @@ function KodachiState:cleanup()
     cleared_any = true
   end
 
+  if self._events then
+    -- NOTE: We don't need to set cleared_any because the server is not tracking
+    -- any state for us for events.
+    self._events = nil
+  end
+
   if self._triggers then
     self._triggers:clear()
     cleared_any = true
@@ -91,7 +97,11 @@ function KodachiState:on(event, handler)
     end
   end
 
-  self._events[event] = handler
+  if not self._events[event] then
+    self._events[event] = {}
+  end
+
+  table.insert(self._events[event], handler)
 end
 
 ---@param matcher MatcherSpec|string
