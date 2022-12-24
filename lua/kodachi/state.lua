@@ -19,6 +19,7 @@ local with_socket = util.with_socket
 ---@field _prompts PromptsManager|nil
 ---@field _aliases Handlers|nil
 ---@field _triggers Handlers|nil
+---@field _just_connected true|nil
 local KodachiState = {}
 
 function KodachiState:new(o)
@@ -94,8 +95,10 @@ function KodachiState:on(event, handler)
       end
     end)
 
-    -- Special cases:
-    if event == 'connected' and self.connection_id then
+    -- Special case: We don't actually let users register events until we get
+    -- an initial Connected event, so we go ahead and fire immediately *if* we
+    -- "just connected." This is not great but seems the cleanest....
+    if event == 'connected' and self.connection_id and self._just_connected then
       handler { id = self.connection_id }
     end
   end

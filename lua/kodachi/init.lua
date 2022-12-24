@@ -34,9 +34,9 @@ function M.with_connection(uri, on_connection)
           return message.type == 'Connected'
         end,
         vim.schedule_wrap(function()
-          state.just_connected = true
+          state._just_connected = true
           on_connection(state)
-          state.just_connected = nil
+          state._just_connected = nil
         end)
       )
     end
