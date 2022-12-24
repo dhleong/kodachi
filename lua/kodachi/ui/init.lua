@@ -13,7 +13,7 @@ local function reuse_or_create_window()
   if existing then
     local connected = not existing.exited and existing.connection_id
     if connected and vim.fn.bufwinnr(existing.bufnr) ~= -1 then
-      print('kodachi: A connection is already live in this buffer')
+      -- A connection is already live in this buffer; likely a script reload
       return
     elseif not existing.exited and initial_bufnr == existing.initial_bufnr and
         vim.fn.winheight(existing.initial_winid) ~= -1 then
