@@ -166,11 +166,16 @@ end
 ---@param text string
 function KodachiState:send(text)
   return with_socket(self, function(socket)
-    socket:request {
-      type = "Send",
-      connection_id = self.connection_id,
-      text = text,
-    }
+    socket:request(
+      {
+        type = "Send",
+        connection_id = self.connection_id,
+        text = text,
+      },
+      vim.schedule_wrap(function()
+        require 'kodachi.ui.window'.on_send(self)
+      end)
+    )
   end)
 end
 

@@ -24,4 +24,21 @@ function M.configure_current()
   vim.cmd [[ normal! G ]]
 end
 
+---@param state KodachiState
+function M.on_send(state)
+  if not state.bufnr then
+    return
+  end
+
+  local win = vim.fn.bufwinid(state.bufnr)
+  if win == -1 then
+    return
+  end
+
+  -- Scroll to the bottom after sending something
+  vim.api.nvim_win_call(win, function()
+    vim.cmd.normal { bang = true, args = { 'G' } }
+  end)
+end
+
 return M
