@@ -15,17 +15,7 @@ use super::ansi::{Ansi, AnsiMut};
 
 const NEWLINE_BYTE: u8 = b'\n';
 
-pub struct BoxedReceiver<'a> {
-    receiver: Box<&'a mut dyn ProcessorOutputReceiver>,
-}
-
-impl<'a> BoxedReceiver<'a> {
-    pub fn notify(&mut self, notification: DaemonNotification) -> io::Result<()> {
-        self.receiver.notification(notification)
-    }
-}
-
-type MatchHandler = dyn FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send;
+type MatchHandler = dyn FnMut(MatchContext) -> io::Result<()> + Send;
 type LineHandler = dyn Fn(&mut Ansi) -> io::Result<()> + Send;
 
 #[derive(PartialEq)]
@@ -131,10 +121,7 @@ impl TextProcessor {
                     consumed,
                 } => {
                     if let Some(handler) = handler {
-                        let boxed = BoxedReceiver {
-                            receiver: Box::new(receiver),
-                        };
-                        (handler.on_match)(context, boxed)?;
+                        (handler.on_match)(context)?;
                     }
 
                     if consumed && self.saving_position {
@@ -151,9 +138,7 @@ impl TextProcessor {
         Ok(())
     }
 
-    pub fn register_matcher<
-        R: 'static + FnMut(MatchContext, BoxedReceiver) -> io::Result<()> + Send,
-    >(
+    pub fn register_matcher<R: 'static + FnMut(MatchContext) -> io::Result<()> + Send>(
         &mut self,
         id: MatcherId,
         matcher: Matcher,

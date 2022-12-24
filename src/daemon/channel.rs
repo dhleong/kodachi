@@ -10,6 +10,7 @@ use tokio::{sync::broadcast::Sender, time::timeout};
 use crate::app::Id;
 
 use super::{
+    notifications::DaemonNotification,
     protocol::{Notification, RequestIdGenerator, Response},
     requests::ServerRequest,
     responses::{ClientResponse, DaemonResponse, ResponseToServerRequest},
@@ -96,6 +97,15 @@ pub struct ConnectionChannel {
 }
 
 impl ConnectionChannel {
+    pub fn notify(&mut self, notification: DaemonNotification) {
+        self.writer
+            .write_json(&Notification::ForConnection {
+                connection_id: self.connection_id,
+                notification,
+            })
+            .unwrap();
+    }
+
     pub async fn request(&mut self, payload: ServerRequest) -> io::Result<ClientResponse> {
         let id = self.request_ids.next().await;
         self.writer

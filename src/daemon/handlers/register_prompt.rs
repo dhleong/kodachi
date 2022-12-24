@@ -43,7 +43,7 @@ pub async fn handle(
     processor_ref
         .lock()
         .unwrap()
-        .register_matcher(id, compiled, move |mut context, _| {
+        .register_matcher(id, compiled, move |mut context| {
             set_prompt_content::try_handle(
                 state.clone(),
                 connection_id,
