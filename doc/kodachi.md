@@ -29,7 +29,9 @@ end)
 
 # Aliases, Triggers, and Prompts
 
-# Matchers
+Kodachi provides rich support for aliases, triggers, and prompts. Aliases can format the the output directly using [matchers](#matchers), or the output can be computed by lua function.
+
+## Matchers
 
 Matchers power alias, prompts, and triggers. Kodachi supports two variants: simple and regex. Simple matchers should be intuitive, with familiar syntax, while regex gives you the full power to match exactly what you want. Regex matchers are powered by the Rust [regex][regex] crate; in particular, be aware that this crate does not support zero-width lookaround assertions.
 
