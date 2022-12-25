@@ -15,7 +15,6 @@ jobs:
         uses: kdheepak/panvimdoc@main
         with:
           vimdoc: kodachi
-          description: "A tiny but powerful MUD client that lives in your favorite editor"
           pandoc: "doc/kodachi.md"
           toc: true
           version: "NVIM v0.7.0"
