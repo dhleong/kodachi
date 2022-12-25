@@ -1,19 +1,15 @@
-*kodachi.txt*A tiny but powerful MUD client that lives in your favorite editor
+*kodachi.txt*           For NVIM v0.7.0          Last change: 2022 December 25
 
 ==============================================================================
 Table of Contents                                  *kodachi-table-of-contents*
 
-1. kodachi                                                   |kodachi-kodachi|
-2. Quick Start                                           |kodachi-quick-start|
+1. Quick Start                                           |kodachi-quick-start|
   - Scripting                                              |kodachi-scripting|
-3. Aliases, Triggers, and Prompts     |kodachi-aliases,-triggers,-and-prompts|
-4. Matchers                                                 |kodachi-matchers|
+2. Aliases, Triggers, and Prompts     |kodachi-aliases,-triggers,-and-prompts|
+  - Matchers                                                |kodachi-matchers|
 
 ==============================================================================
-1. kodachi                                                   *kodachi-kodachi*
-
-==============================================================================
-2. Quick Start                                           *kodachi-quick-start*
+1. Quick Start                                           *kodachi-quick-start*
 
 Once installed, the quickest way to get started is with the `:KodachiConnect`
 command.
@@ -48,10 +44,13 @@ Here’s a sample script:
 
 
 ==============================================================================
-3. Aliases, Triggers, and Prompts     *kodachi-aliases,-triggers,-and-prompts*
+2. Aliases, Triggers, and Prompts     *kodachi-aliases,-triggers,-and-prompts*
 
-==============================================================================
-4. Matchers                                                 *kodachi-matchers*
+Kodachi provides rich support for aliases, triggers, and prompts. Aliases can
+format the the output directly using |kodachi-matchers|, or the output can be
+computed by lua function.
+
+MATCHERS                                                    *kodachi-matchers*
 
 Matchers power alias, prompts, and triggers. Kodachi supports two variants:
 simple and regex. Simple matchers should be intuitive, with familiar syntax,
