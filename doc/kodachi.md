@@ -83,27 +83,27 @@ Your primary entrypoint, `with_connection` accepts a URI (eg: `"yourmud.com:1234
 
 The `KodachiState` object is provided to you from the [with_connection](#with_connection)
 
-#### alias{(matcher, handler)}
+#### alias(matcher, handler) {doc=kodachi-alias}
 
 TK
 
-#### map{(keys, handler)}
+#### map(keys, handler) {doc=kodachi-map}
 
 TK
 
-#### on{(event, handler)}
+#### on(event, handler) {doc=kodachi-on}
 
 TK
 
-#### send{(String)}
+#### send(String) {doc=kodachi-send}
 
 Send the given String to the server
 
-#### prompt{(matcher, handler)}
+#### prompt(matcher, handler) {doc=kodachi-prompt}
 
 TK
 
-#### trigger{(matcher, handler)}
+#### trigger(matcher, handler) {doc=kodachi-trigger}
 
 TK
 
