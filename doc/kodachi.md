@@ -71,7 +71,7 @@ If you don't return anything from an Alias function, nothing will be sent. If yo
 
 Most users will want to configure their connections using the provided Lua scripting API.
 
-## `with_connection`
+## with_connection
 
 ```lua
 require 'kodachi'.with_connection(URI, handler)
