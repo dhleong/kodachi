@@ -71,14 +71,24 @@ pub async fn handle(
     let connection_id = connection.id;
 
     let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
-
-    let transport = BoxedTransport::connect_uri(uri, 4096).await?;
+    let receiver_state = connection.state.ui_state.clone();
     let stdout = io::stdout();
+    let mut receiver = AnsiTerminalWriteUI::create(receiver_state, connection.id, notifier, stdout);
+
+    let transport = match BoxedTransport::connect_uri(uri, 4096).await {
+        Ok(transport) => transport,
+        Err(err) => {
+            receiver.begin_chunk()?;
+            receiver.reset_colors()?;
+            receiver.text(format!("Failed to connect: {}\n", err).into())?;
+            receiver.end_chunk()?;
+            receiver.notification(DaemonNotification::Disconnected)?;
+            return Ok(());
+        }
+    };
 
     register_processors(state.clone(), &mut connection);
 
-    let receiver_state = connection.state.ui_state.clone();
-    let mut receiver = AnsiTerminalWriteUI::create(receiver_state, connection.id, notifier, stdout);
     receiver.notification(DaemonNotification::Connected)?;
 
     let result = process_connection(transport, connection, &mut receiver).await;
