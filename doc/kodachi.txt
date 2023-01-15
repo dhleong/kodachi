@@ -1,4 +1,4 @@
-*kodachi.txt*           For NVIM v0.7.0          Last change: 2022 December 26
+*kodachi.txt*           For NVIM v0.7.0           Last change: 2023 January 15
 
 ==============================================================================
 Table of Contents                                  *kodachi-table-of-contents*
