@@ -1,3 +1,7 @@
+---
+vimdoctitle: "kodachi"
+---
+
 # Quick Start
 
 Once installed, the quickest way to get started is with the `:KodachiConnect` command.
