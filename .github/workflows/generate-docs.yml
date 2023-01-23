@@ -2,6 +2,7 @@ name: Generate Docs
 
 on:
   push:
+    branches: [main]
     paths:
       - "doc/kodachi.md"
 
