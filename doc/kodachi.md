@@ -89,6 +89,8 @@ The `KodachiState` object is provided to you from the [with_connection](#with_co
 
 #### state:alias
 
+Create an alias for the connection.
+
 ```lua
 s:alias(matcher, handler)
 ```
@@ -96,6 +98,8 @@ s:alias(matcher, handler)
 TK
 
 #### state:map
+
+Create a normal-mode mapping.
 
 ```lua
 s:map(keys, handler)
@@ -105,6 +109,8 @@ TK
 
 #### state:on
 
+Register an event handler.
+
 ```lua
 s:on(event, handler)
 ```
@@ -113,13 +119,15 @@ TK
 
 #### state:send
 
+Send the given String to the server
+
 ```lua
 s:send(String)
 ```
 
-Send the given String to the server
-
 #### state:prompt
+
+Register a prompt.
 
 ```lua
 s:prompt(matcher, handler)
@@ -128,6 +136,8 @@ s:prompt(matcher, handler)
 TK
 
 #### state:trigger
+
+Register a trigger.
 
 ```lua
 s:trigger(matcher, handler)
