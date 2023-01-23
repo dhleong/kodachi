@@ -31,13 +31,11 @@ end)
 
 # Aliases, Triggers, and Prompts
 
-Kodachi provides rich support for aliases, triggers, and prompts. Aliases can format the the output directly using [matchers](#matchers), or the output can be computed by lua function.
+Kodachi provides rich support for aliases, triggers, and prompts. Aliases can format the output directly using matchers, or the output can be computed by lua function.
 
-## Matchers
+Matchers power aliases, prompts, and triggers. Kodachi supports two variants: simple and regex. [Simple matchers](#simple-matchers) should be intuitive, with familiar syntax, while [regex](#regex-matchers) gives you the full power to match exactly what you want. Regex matchers are powered by the Rust [regex][regex] crate; in particular, be aware that this crate does not support zero-width lookaround assertions.
 
-Matchers power alias, prompts, and triggers. Kodachi supports two variants: simple and regex. Simple matchers should be intuitive, with familiar syntax, while regex gives you the full power to match exactly what you want. Regex matchers are powered by the Rust [regex][regex] crate; in particular, be aware that this crate does not support zero-width lookaround assertions.
-
-### Simple Matchers
+## Simple Matchers
 
 Simple matchers use `$`-prefixed symbols to capture some input; aliases may also use the same syntax to reference those matches. For example:
 
@@ -55,7 +53,15 @@ s:alias('^grill $food', 'put $food on grill')
 
 Also supported is indexed symbols (eg: `$1`, `$2`, etc.) and disambiguated symbols, wrapping a name with curly braces (eg: `${food}`), which may be useful if you need to capture text that immediately preceeds other text.
 
-### Functional matches
+## Regex Matchers
+
+```lua
+local m = require 'kodachi.matchers'
+
+s:alias(m.regex '^grill ([a-z]+)', 'put $1 on grill')
+```
+
+## Functional match handlers
 
 This syntax works for both Aliases and Triggers. The "context" of the match is provided as the first argument to the function. For example:
 
@@ -89,37 +95,47 @@ The `KodachiState` object is provided to you from the [with_connection](#with_co
 
 #### state:alias
 
-Create an alias for the connection.
+Create an alias for the connection. Aliases allow you to reduce repeated work by automatically expanding simple phrases into more complex ones.
 
 ```lua
 s:alias(matcher, handler)
 ```
 
-TK
+For most purposes, you can combine a [simple matcher](#simple-matchers) with a simple handler, like so:
+
+```lua
+s:alias('^grill $food', 'put $food on grill')
+```
 
 #### state:map
 
-Create a normal-mode mapping.
-
+Create a normal-mode mapping. Similar to creating an nmap in vim, using this method will cause key sequences entered in normal mode in the connection buffer to trigger actions.
 ```lua
 s:map(keys, handler)
 ```
 
-TK
+If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; that function will be provided with the state object for you to then call [s:send()](#state:send) with whatever you want to send.
+
 
 #### state:on
 
-Register an event handler.
+Register an event handler. Most commonly, you will probably want to use these to listen to "events." To do so, pass a `{ns, name}` table as the event parameter.
 
 ```lua
 s:on(event, handler)
 ```
 
-TK
+For example, to listen to the `ROOM` var received over `MSDP`, use:
+
+```lua
+s:on({"MSDP", "ROOM"}, function (room)
+    -- Do something with the room object
+end)
+```
 
 #### state:send
 
-Send the given String to the server
+Send the given String to the server.
 
 ```lua
 s:send(String)
@@ -127,22 +143,20 @@ s:send(String)
 
 #### state:prompt
 
-Register a prompt.
+Register a prompt. `handler` is optional, and may be used to transform the matched line before rendering.
 
 ```lua
 s:prompt(matcher, handler)
 ```
 
-TK
-
 #### state:trigger
 
-Register a trigger.
+Register a trigger. Triggers "fire" when the `matcher` matches on a line received from the server.
 
 ```lua
 s:trigger(matcher, handler)
 ```
 
-TK
+The handler of a trigger *must* be a function.
 
 [regex]: https://docs.rs/regex/latest/regex/
