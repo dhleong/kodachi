@@ -10,7 +10,7 @@ Table of Contents                                  *kodachi-table-of-contents*
   - Functional match handlers              |kodachi-functional-match-handlers|
 3. Scripting                                               |kodachi-scripting|
   - with_connection                                  |kodachi-with_connection|
-  - KodachiState                                        |kodachi-kodachistate|
+  - State Object                                        |kodachi-state-object|
 
 ==============================================================================
 1. Quick Start                                           *kodachi-quick-start*
@@ -131,12 +131,14 @@ WITH_CONNECTION                                      *kodachi-with_connection*
 
 Your primary entrypoint, `with_connection` accepts a URI (eg:
 `"yourmud.com:1234"`) and a handler function. The handler function is provided
-a |kodachi-kodachistate| object on connected and also if the script is sourced
+a |kodachi-state-object| object on connected and also if the script is sourced
 while connected.
 
-KODACHISTATE                                            *kodachi-kodachistate*
+STATE OBJECT                                            *kodachi-state-object*
 
 The `KodachiState` object is provided to you from the |kodachi-with_connection|
+function. It is your primary means of configuring the connection, and houses
+all of the following methods for doing so.
 
                                                          *kodachi-state:alias*
 
