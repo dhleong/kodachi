@@ -87,11 +87,11 @@ Most users will want to configure their connections using the provided Lua scrip
 require 'kodachi'.with_connection(URI, handler)
 ```
 
-Your primary entrypoint, `with_connection` accepts a URI (eg: `"yourmud.com:1234"`) and a handler function. The handler function is provided a [KodachiState](#kodachistate) object on connected and also if the script is sourced while connected.
+Your primary entrypoint, `with_connection` accepts a URI (eg: `"yourmud.com:1234"`) and a handler function. The handler function is provided a [State Object](#state-object) object on connected and also if the script is sourced while connected.
 
-## KodachiState
+## State Object
 
-The `KodachiState` object is provided to you from the [with_connection](#with_connection)
+The `KodachiState` object is provided to you from the [with_connection](#with_connection) function. It is your primary means of configuring the connection, and houses all of the following methods for doing so.
 
 #### state:alias
 
