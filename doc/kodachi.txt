@@ -114,7 +114,7 @@ The `context` object also includes `indexed` symbols in eg
 
 If you don’t return anything from an Alias function, nothing will be sent. If
 you want to handle sending yourself for whatever reason, you may use the
-`s:send()` function.
+|kodachi-state:send| method.
 
 ==============================================================================
 3. Scripting                                               *kodachi-scripting*
@@ -175,7 +175,7 @@ state:map                              Create a normal-mode mapping. Similar to
 
 If a string is provided as the handler, that string will be sent literally.
 More commonly, you may provide a function to be executed; that function will be
-provided with the state object for you to then call |kodachi-s:send()| with
+provided with the state object for you to then call |kodachi-state:send| with
 whatever you want to send.
 
                                                             *kodachi-state:on*
