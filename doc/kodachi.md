@@ -75,7 +75,7 @@ Note that each "match" is an object, containing both the `plain` output (strippe
 
 The `context` object also includes `indexed` symbols in eg `context.indexed[1]`.
 
-If you don't return anything from an Alias function, nothing will be sent. If you want to handle sending yourself for whatever reason, you may use the `s:send()` function.
+If you don't return anything from an Alias function, nothing will be sent. If you want to handle sending yourself for whatever reason, you may use the [state:send](#state-send) method.
 
 # Scripting
 
@@ -114,7 +114,7 @@ Create a normal-mode mapping. Similar to creating an nmap in vim, using this met
 s:map(keys, handler)
 ```
 
-If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; that function will be provided with the state object for you to then call [s:send()](#state:send) with whatever you want to send.
+If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; that function will be provided with the state object for you to then call [state:send](#state:send) with whatever you want to send.
 
 
 #### state:on
