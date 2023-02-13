@@ -46,6 +46,10 @@ Plug 'dhleong/kodachi'
 You will also need to [set up Rust](https://www.rust-lang.org/learn/get-started) to build
 that process; we don't currently provide pre-built binaries.
 
+Once installed, you can use `:help kodachi` to learn more (also available online [here][help-kodachi]) or follow the quick start guide below.
+
+#### Quick Start
+
 From there, we provide a lua API for connecting and configuring:
 
 ```lua
@@ -104,3 +108,4 @@ require 'null-ls'.setup {
 [mtts]: https://mudhalla.net/tintin/protocols/mtts/
 [mccp2]: https://tintin.mudhalla.net/protocols/mccp/
 [msdp]: https://tintin.mudhalla.net/protocols/msdp/
+[help-kodachi]: doc/kodachi.md
