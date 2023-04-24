@@ -110,11 +110,22 @@ s:alias('^grill $food', 'put $food on grill')
 #### state:map
 
 Create a normal-mode mapping. Similar to creating an nmap in vim, using this method will cause key sequences entered in normal mode in the connection buffer to trigger actions.
+
 ```lua
 s:map(keys, handler)
 ```
 
 If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; that function will be provided with the state object for you to then call [state:send](#state:send) with whatever you want to send.
+
+#### state:command
+
+Create a command that can be executed in the connection buffer.
+
+```lua
+s:command(name, handler)
+```
+
+The command `name` must begin with a capital letter. `handler` behaves like `map`
 
 
 #### state:on

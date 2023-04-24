@@ -8,11 +8,21 @@ local with_socket = util.with_socket
 
 ---@alias KodachiEvent 'connected'|'disconnected'|'event'
 
-local function describe_mapping(mapping)
+local function describe_callback_handler(mapping)
   if type(mapping) == 'string' then
     return 'Send: ' .. mapping
   else
     return '<callback>'
+  end
+end
+
+local function wrap_callback_handler(state, handler)
+  if type(handler) == 'string' then
+    return function()
+      state:send(handler)
+    end
+  else
+    return handler
   end
 end
 
@@ -66,27 +76,41 @@ function KodachiState:cleanup()
   end
 end
 
+---Create a vim user command for the buffer associated with this state. These commands
+-- will also be available in the composer, for convenience.
+-- `handler` may be:
+-- - string: Text to be sent
+-- - fn: A function to be invoked; called with the same params as a normal nvim user command
+-- `opts`: See `nvim_create_user_command`
+function KodachiState:command(name, handler, opts)
+  local callback = wrap_callback_handler(self, handler)
+  local desc = describe_callback_handler(handler)
+  local full_opts = vim.tbl_extend('force', {
+    desc = desc,
+    force = true,
+  }, opts or {})
+
+  -- TODO also create in the composer
+  vim.api.nvim_buf_create_user_command(self.bufnr, name, callback, full_opts)
+end
+
 ---Create a keymapping in normal mode for the buffer associated with this state. These mappings
 -- will also be available in the composer, for convenience.
 -- `rhs` may be:
 -- - string: Text to be sent
--- - fn: A function to be invoked with the state
+-- - fn: A function to be invoked
 function KodachiState:map(lhs, rhs)
-  vim.api.nvim_buf_set_keymap(
-    self.bufnr, 'n', lhs, '',
-    {
-      noremap = true,
-      silent = true,
-      desc = describe_mapping(rhs),
-      callback = function()
-        if type(rhs) == 'string' then
-          self:send(rhs)
-        elseif type(rhs) == 'function' then
-          rhs(self)
-        end
-      end,
-    }
-  )
+  local callback = wrap_callback_handler(self, rhs)
+  local desc = describe_callback_handler(rhs)
+  local opts = {
+    noremap = true,
+    silent = true,
+    desc = desc,
+    callback = callback,
+  }
+
+  -- TODO: Also create in the composer
+  vim.api.nvim_buf_set_keymap(self.bufnr, 'n', lhs, '', opts)
 end
 
 ---Register an event handler for events on this connection.
@@ -119,7 +143,7 @@ function KodachiState:on(event, handler)
     self._events[event] = {}
   end
 
-  local event, handler = events.wrap(event, handler)
+  event, handler = events.wrap(event, handler)
   table.insert(self._events[event], handler)
 end
 
