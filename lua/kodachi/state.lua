@@ -8,6 +8,14 @@ local with_socket = util.with_socket
 
 ---@alias KodachiEvent 'connected'|'disconnected'|'event'
 
+local function describe_mapping(mapping)
+  if type(mapping) == 'string' then
+    return 'Send: ' .. mapping
+  else
+    return '<callback>'
+  end
+end
+
 ---@class KodachiState
 ---@field bufnr number
 ---@field connection_id number|nil
@@ -15,7 +23,6 @@ local with_socket = util.with_socket
 ---@field exited boolean|nil
 ---@field socket Socket
 ---@field _events any|nil
----@field _mappings any
 ---@field _prompts PromptsManager|nil
 ---@field _aliases Handlers|nil
 ---@field _triggers Handlers|nil
@@ -23,7 +30,6 @@ local with_socket = util.with_socket
 local KodachiState = {}
 
 function KodachiState:new(o)
-  o._mappings = o._mappings or {}
   setmetatable(o, self)
   self.__index = self
   return o
@@ -66,13 +72,19 @@ end
 -- - string: Text to be sent
 -- - fn: A function to be invoked with the state
 function KodachiState:map(lhs, rhs)
-  self._mappings[lhs] = rhs
   vim.api.nvim_buf_set_keymap(
-    self.bufnr, 'n', lhs,
-    self:_state_method_cmd("_perform_map('" .. lhs .. "')"),
+    self.bufnr, 'n', lhs, '',
     {
       noremap = true,
       silent = true,
+      desc = describe_mapping(rhs),
+      callback = function()
+        if type(rhs) == 'string' then
+          self:send(rhs)
+        elseif type(rhs) == 'function' then
+          rhs(self)
+        end
+      end,
     }
   )
 end
@@ -240,20 +252,6 @@ function KodachiState:_trigger_handlers(socket)
   end
 
   return triggers
-end
-
-function KodachiState:_perform_map(lhs)
-  local rhs = self._mappings[lhs]
-  if not rhs then
-    print('Nothing mapped to:', lhs)
-    return
-  end
-
-  if type(rhs) == 'string' then
-    self:send(rhs)
-  elseif type(rhs) == 'function' then
-    rhs(self)
-  end
 end
 
 function KodachiState:_state_method_call(method_call)
