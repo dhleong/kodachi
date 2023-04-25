@@ -1,16 +1,16 @@
-*kodachi*             For NVIM v0.7.0             Last change: 2023 January 23
+*kodachi.txt*            For NVIM v0.7.0            Last change: 2023 April 25
 
 ==============================================================================
 Table of Contents                                  *kodachi-table-of-contents*
 
 1. Quick Start                                           |kodachi-quick-start|
 2. Aliases, Triggers, and Prompts     |kodachi-aliases,-triggers,-and-prompts|
-  - Simple Matchers                                  |kodachi-simple-matchers|
-  - Regex Matchers                                    |kodachi-regex-matchers|
-  - Functional match handlers              |kodachi-functional-match-handlers|
+  - Simple Matchers   |kodachi-aliases,-triggers,-and-prompts-simple-matchers|
+  - Regex Matchers     |kodachi-aliases,-triggers,-and-prompts-regex-matchers|
+  - Functional match handlers|kodachi-aliases,-triggers,-and-prompts-functional-match-handlers|
 3. Scripting                                               |kodachi-scripting|
-  - with_connection                                  |kodachi-with_connection|
-  - State Object                                        |kodachi-state-object|
+  - with_connection                        |kodachi-scripting-with_connection|
+  - State Object                              |kodachi-scripting-state-object|
 
 ==============================================================================
 1. Quick Start                                           *kodachi-quick-start*
@@ -25,7 +25,7 @@ since kodachi supports hot-reloading configs for an active connection; I use
 
 Here’s a sample script:
 
->
+>lua
     local kodachi = require 'kodachi'
     
     local uri = 'myfavorite.game:1234'
@@ -59,51 +59,50 @@ you want. Regex matchers are powered by the Rust regex
 <https://docs.rs/regex/latest/regex/> crate; in particular, be aware that this
 crate does not support zero-width lookaround assertions.
 
-SIMPLE MATCHERS                                      *kodachi-simple-matchers*
+
+SIMPLE MATCHERS       *kodachi-aliases,-triggers,-and-prompts-simple-matchers*
 
 Simple matchers use `$`-prefixed symbols to capture some input; aliases may
 also use the same syntax to reference those matches. For example:
 
->
+>lua
     -- This will capture (for example) "grill a burrito" and expand to "put a burrito on grill"
     s:alias('grill $food', 'put $food on grill')
 <
-
 
 Aliases typically can be expanded into other aliases. To reduce ambiguity, you
 may want your alias only to match at the beginning of the line. This can be
 done similar to regex with the `^` symbol:
 
->
+>lua
     -- This will NOT match "say grill sandwich" (which *would* be matched above)
     s:alias('^grill $food', 'put $food on grill')
 <
-
 
 Also supported is indexed symbols (eg: `$1`, `$2`, etc.) and disambiguated
 symbols, wrapping a name with curly braces (eg: `${food}`), which may be useful
 if you need to capture text that immediately preceeds other text.
 
-REGEX MATCHERS                                        *kodachi-regex-matchers*
 
->
+REGEX MATCHERS         *kodachi-aliases,-triggers,-and-prompts-regex-matchers*
+
+>lua
     local m = require 'kodachi.matchers'
     
     s:alias(m.regex '^grill ([a-z]+)', 'put $1 on grill')
 <
 
 
-FUNCTIONAL MATCH HANDLERS                  *kodachi-functional-match-handlers*
+FUNCTIONAL MATCH HANDLERS*kodachi-aliases,-triggers,-and-prompts-functional-match-handlers*
 
 This syntax works for both Aliases and Triggers. The "context" of the match is
 provided as the first argument to the function. For example:
 
->
+>lua
     s:alias('^grill $food', function (context)
       return 'put ' .. context.named.food.plain .. ' on grill'
     end)
 <
-
 
 Note that each "match" is an object, containing both the `plain` output
 (stripped of color symbols) and the `ansi` output (exactly what the server
@@ -116,126 +115,126 @@ If you don’t return anything from an Alias function, nothing will be sent. If
 you want to handle sending yourself for whatever reason, you may use the
 |kodachi-state:send| method.
 
+
 ==============================================================================
 3. Scripting                                               *kodachi-scripting*
 
 Most users will want to configure their connections using the provided Lua
 scripting API.
 
-WITH_CONNECTION                                      *kodachi-with_connection*
 
->
+WITH_CONNECTION                            *kodachi-scripting-with_connection*
+
+>lua
     require 'kodachi'.with_connection(URI, handler)
 <
-
 
 Your primary entrypoint, `with_connection` accepts a URI (eg:
 `"yourmud.com:1234"`) and a handler function. The handler function is provided
 a |kodachi-state-object| object on connected and also if the script is sourced
 while connected.
 
-STATE OBJECT                                            *kodachi-state-object*
+
+STATE OBJECT                                  *kodachi-scripting-state-object*
 
 The `KodachiState` object is provided to you from the |kodachi-with_connection|
 function. It is your primary means of configuring the connection, and houses
 all of the following methods for doing so.
 
-                                                         *kodachi-state:alias*
 
-state:alias                            Create an alias for the connection.
-                                       Aliases allow you to reduce repeated
-                                       work by automatically expanding simple
-                                       phrases into more complex ones.
+STATE:ALIAS
 
+Create an alias for the connection. Aliases allow you to reduce repeated work
+by automatically expanding simple phrases into more complex ones.
 
->
+>lua
     s:alias(matcher, handler)
 <
-
 
 For most purposes, you can combine a |kodachi-simple-matcher| with a simple
 handler, like so:
 
->
+>lua
     s:alias('^grill $food', 'put $food on grill')
 <
 
 
-                                                           *kodachi-state:map*
+STATE:MAP
 
-state:map                              Create a normal-mode mapping. Similar to
-                                       creating an nmap in vim, using this
-                                       method will cause key sequences entered
-                                       in normal mode in the connection buffer
-                                       to trigger actions.
+Create a normal-mode mapping. Similar to creating an nmap in vim, using this
+method will cause key sequences entered in normal mode in the connection buffer
+to trigger actions.
 
-
->
+>lua
     s:map(keys, handler)
 <
 
-
 If a string is provided as the handler, that string will be sent literally.
-More commonly, you may provide a function to be executed; that function will be
-provided with the state object for you to then call |kodachi-state:send| with
-whatever you want to send.
-
-                                                            *kodachi-state:on*
-
-state:on                               Register an event handler. Most
-                                       commonly, you will probably want to use
-                                       these to listen to "events." To do so,
-                                       pass a `{ns, name}` table as the event
-                                       parameter.
+More commonly, you may provide a function to be executed; in that function you
+can use the same state reference to then call |kodachi-state:send| with
+whatever you want to send (if anything).
 
 
->
+STATE:COMMAND
+
+Create a command that can be executed in the connection buffer.
+
+>lua
+    s:command(name, handler, *opts)
+<
+
+The command `name` must begin with a capital letter. `handler` behaves like
+`map`, but receives the same argument as passed to the neovim command handler
+(See |nvim_create_user_command|). `opts` similarly will be passed to
+|nvim_create_user_command|.
+
+
+STATE:ON
+
+Register an event handler. Most commonly, you will probably want to use these
+to listen to "events." To do so, pass a `{ns, name}` table as the event
+parameter.
+
+>lua
     s:on(event, handler)
 <
 
-
 For example, to listen to the `ROOM` var received over `MSDP`, use:
 
->
+>lua
     s:on({"MSDP", "ROOM"}, function (room)
         -- Do something with the room object
     end)
 <
 
 
-                                                          *kodachi-state:send*
+STATE:SEND
 
-state:send                             Send the given String to the server.
+Send the given String to the server.
 
-
->
+>lua
     s:send(String)
 <
 
 
-                                                        *kodachi-state:prompt*
+STATE:PROMPT
 
-state:prompt                           Register a prompt. `handler` is
-                                       optional, and may be used to transform
-                                       the matched line before rendering.
+Register a prompt. `handler` is optional, and may be used to transform the
+matched line before rendering.
 
-
->
+>lua
     s:prompt(matcher, handler)
 <
 
 
-                                                       *kodachi-state:trigger*
+STATE:TRIGGER
 
-state:trigger                          Register a trigger. Triggers "fire" when
-                                       the `matcher` matches on a line received
-                                       from the server.
+Register a trigger. Triggers "fire" when the `matcher` matches on a line
+received from the server.
 
-
->
+>lua
     s:trigger(matcher, handler)
 <
-
 
 The handler of a trigger _must_ be a function.
 
