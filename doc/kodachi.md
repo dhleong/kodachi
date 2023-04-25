@@ -125,7 +125,7 @@ Create a command that can be executed in the connection buffer.
 s:command(name, handler, *opts)
 ```
 
-The command `name` must begin with a capital letter. `handler` behaves like `map`, but receives the same argument as passed to the neovim command handler (See [nvim_create_user_command]). `opts` similarly will be passed to [nvim_create_user_command].
+The command `name` must begin with a capital letter. `handler` behaves like `map`, but receives the same argument as passed to the neovim command handler (See [nvim_create_user_command][nvim_create_user_command]). `opts` similarly will be passed to [nvim_create_user_command][nvim_create_user_command].
 
 
 #### state:on
@@ -171,3 +171,4 @@ s:trigger(matcher, handler)
 The handler of a trigger *must* be a function.
 
 [regex]: https://docs.rs/regex/latest/regex/
+[nvim_create_user_command]: https://neovim.io/doc/user/api.html#api-command
