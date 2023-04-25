@@ -110,11 +110,22 @@ s:alias('^grill $food', 'put $food on grill')
 #### state:map
 
 Create a normal-mode mapping. Similar to creating an nmap in vim, using this method will cause key sequences entered in normal mode in the connection buffer to trigger actions.
+
 ```lua
 s:map(keys, handler)
 ```
 
-If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; that function will be provided with the state object for you to then call [state:send](#state:send) with whatever you want to send.
+If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; in that function you can use the same state reference to then call [state:send](#state:send) with whatever you want to send (if anything).
+
+#### state:command
+
+Create a command that can be executed in the connection buffer.
+
+```lua
+s:command(name, handler, *opts)
+```
+
+The command `name` must begin with a capital letter. `handler` behaves like `map`, but receives the same argument as passed to the neovim command handler (See [nvim_create_user_command][nvim_create_user_command]). `opts` similarly will be passed to [nvim_create_user_command][nvim_create_user_command].
 
 
 #### state:on
@@ -160,3 +171,4 @@ s:trigger(matcher, handler)
 The handler of a trigger *must* be a function.
 
 [regex]: https://docs.rs/regex/latest/regex/
+[nvim_create_user_command]: https://neovim.io/doc/user/api.html#api-command
