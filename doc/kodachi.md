@@ -122,10 +122,10 @@ If a string is provided as the handler, that string will be sent literally. More
 Create a command that can be executed in the connection buffer.
 
 ```lua
-s:command(name, handler)
+s:command(name, handler, *opts)
 ```
 
-The command `name` must begin with a capital letter. `handler` behaves like `map`
+The command `name` must begin with a capital letter. `handler` behaves like `map`, but receives the same argument as passed to the neovim command handler (See [nvim_create_user_command]). `opts` similarly will be passed to [nvim_create_user_command].
 
 
 #### state:on
