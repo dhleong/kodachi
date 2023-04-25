@@ -115,7 +115,7 @@ Create a normal-mode mapping. Similar to creating an nmap in vim, using this met
 s:map(keys, handler)
 ```
 
-If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; that function will be provided with the state object for you to then call [state:send](#state:send) with whatever you want to send.
+If a string is provided as the handler, that string will be sent literally. More commonly, you may provide a function to be executed; in that function you can use the same state reference to then call [state:send](#state:send) with whatever you want to send (if anything).
 
 #### state:command
 
