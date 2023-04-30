@@ -19,6 +19,8 @@ end
 -- sourced while the connection is active).
 -- If called when a connection exists for another URI, this function is a nop
 -- (and the callback will not be called).
+---@param uri string
+---@param on_connection fun(s:KodachiState)
 function M.with_connection(uri, on_connection)
   local state = require 'kodachi.states'.current { silent = true }
 
