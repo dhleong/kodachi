@@ -57,6 +57,7 @@ local function configure_current_as_composer(state)
   -- Make it natural to leave
   vim.cmd [[inoremap <buffer> <c-c> <esc>ZQ]]
   vim.cmd [[nnoremap <buffer> <c-c> ZQ]]
+  vim.cmd [[nnoremap <buffer> <esc> ZQ]]
 
   -- In-line History navigation
   vim.cmd [[nnoremap <buffer> k <cmd>lua require'kodachi.ui.composer'.maybe_history('Older')<cr>]]
