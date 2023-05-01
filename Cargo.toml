@@ -29,3 +29,4 @@ log = { version = "0.4.17", features = ["std"] }
 regex = "1.5.4"
 ritelinked = "0.3.2"
 rand = "0.8.5"
+itertools = "0.10.5"

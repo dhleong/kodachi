@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::io;
 
 use crate::{
@@ -22,7 +23,7 @@ pub async fn handle(
     };
 
     let completions = connection.completions.lock().unwrap();
-    let words = completions.suggest(params).take(50).collect();
+    let words = completions.suggest(params).unique().take(50).collect();
 
     channel.respond(DaemonResponse::CompleteResult { words });
     Ok(())
