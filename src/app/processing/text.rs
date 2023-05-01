@@ -95,6 +95,13 @@ impl TextProcessor {
         receiver: &mut R,
     ) -> io::Result<()> {
         if !has_full_line {
+            if self.pending_line.has_incomplete_code() {
+                // If there's some incomplete ANSI code, this becomes a no-op; we'll
+                // wait for the next chunk to come in from the network to avoid breaking
+                // that up.
+                return Ok(());
+            }
+
             // If we *don't* have a full line (and, if we don't already have a SavePosition
             // set, IE from a previous partial line, SavePosition first) then emit the pending
             if !self.saving_position {

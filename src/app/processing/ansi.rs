@@ -63,6 +63,13 @@ impl AnsiMut {
         let bytes = self.take_bytes();
         Ansi::from_bytes(bytes.freeze())
     }
+
+    pub fn has_incomplete_code(&self) -> bool {
+        // Would be nice if this didn't require so much copying:
+        let arr: &[u8] = &self.0;
+        let bytes = (&arr[..]).copy_to_bytes(arr.len());
+        strip_ansi(bytes).has_incomplete
+    }
 }
 
 #[derive(Clone)]
@@ -250,6 +257,7 @@ fn strip_ansi(bytes: Bytes) -> AnsiStripped {
         value: Bytes::from(without_ansi),
         original: bytes,
         ansi_ranges,
+        has_incomplete: in_csi || maybe_csi,
     }
 }
 
@@ -258,6 +266,7 @@ pub struct AnsiStripped {
     value: Bytes,
     original: Bytes,
     ansi_ranges: Vec<Range<usize>>,
+    has_incomplete: bool,
 }
 
 impl Debug for AnsiStripped {
@@ -326,6 +335,21 @@ mod tests {
     fn trim_trailing_newlines() {
         let ansi = Ansi::from("grayskull\r\n");
         assert_eq!(&ansi.trim_trailing_newlines()[..], "grayskull");
+    }
+
+    #[test]
+    fn detect_incomplete_ansi_codes() {
+        assert_eq!(AnsiMut::from("grayskull\x1b").has_incomplete_code(), true);
+        assert_eq!(AnsiMut::from("grayskull\x1b[").has_incomplete_code(), true);
+        assert_eq!(AnsiMut::from("grayskull\x1b[3").has_incomplete_code(), true);
+        assert_eq!(
+            AnsiMut::from("grayskull\x1b[32").has_incomplete_code(),
+            true
+        );
+        assert_eq!(
+            AnsiMut::from("grayskull\x1b[32m").has_incomplete_code(),
+            false
+        );
     }
 
     #[cfg(test)]
