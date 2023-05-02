@@ -171,17 +171,21 @@ function KodachiState:alias(matcher, handler)
   end)
 end
 
----@param matcher MatcherSpec|string
----@param handler fun(context)|nil If provided, a fn called with the same params as a trigger() handler,
----and whose return value will be used as the prompt content
-function KodachiState:prompt(matcher, handler)
+function KodachiState:prompts()
   local prompts = self._prompts
   if not prompts then
     local new_prompts = PromptsManager:new()
     self._prompts = new_prompts
     prompts = new_prompts
   end
+  return prompts
+end
 
+---@param matcher MatcherSpec|string
+---@param handler fun(context)|nil If provided, a fn called with the same params as a trigger() handler,
+---and whose return value will be used as the prompt content
+function KodachiState:prompt(matcher, handler)
+  local prompts = self:prompts()
   local group = prompts:group(0)
   return group:add(matcher, handler)
 end
