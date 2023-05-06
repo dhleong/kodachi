@@ -80,7 +80,7 @@ pub fn build_simple_matcher_regex(mut source: &str) -> Result<String, MatcherCom
                 pattern.push_str("(.+)");
             }
             VarLabel::Name(as_name) => {
-                pattern.push_str("(?<");
+                pattern.push_str("(?P<");
                 pattern.push_str(as_name);
                 pattern.push_str(">.+)");
             }
@@ -109,18 +109,21 @@ mod tests {
     #[test]
     fn build_named_pattern_test() {
         let pattern = build_simple_matcher_regex("$first {activate} $second [now]").unwrap();
-        assert_eq!(pattern, r"(?<first>.+) \{activate\} (?<second>.+) \[now\]");
+        assert_eq!(
+            pattern,
+            r"(?P<first>.+) \{activate\} (?P<second>.+) \[now\]"
+        );
     }
 
     #[test]
     fn build_disambiguated_named_pattern_test() {
         let pattern = build_simple_matcher_regex("${first}and${second}").unwrap();
-        assert_eq!(pattern, r"(?<first>.+)and(?<second>.+)");
+        assert_eq!(pattern, r"(?P<first>.+)and(?P<second>.+)");
     }
 
     #[test]
     fn accept_line_start_test() {
         let pattern = build_simple_matcher_regex("^admire $thing").unwrap();
-        assert_eq!(pattern, r"^admire (?<thing>.+)");
+        assert_eq!(pattern, r"^admire (?P<thing>.+)");
     }
 }

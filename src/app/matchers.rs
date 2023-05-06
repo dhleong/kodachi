@@ -314,4 +314,20 @@ mod tests {
             panic!("Expected {:?} to match... but it didn't", matcher);
         }
     }
+
+    #[test]
+    fn simple() {
+        let spec = MatcherSpec::Simple {
+            options: Default::default(),
+            source: "^wrap $burrito".to_string(),
+        };
+        let input = "wrap alpastor";
+
+        let matcher: Matcher = spec.try_into().unwrap();
+        if let MatchResult::Matched { context, .. } = matcher.try_match(input.into()) {
+            assert_eq!(&context.named[&"burrito".to_string()].plain, "alpastor");
+        } else {
+            panic!("Expected {:?} to match... but it didn't", matcher);
+        }
+    }
 }
