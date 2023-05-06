@@ -101,10 +101,10 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
         self.output.write_all(&text.as_bytes())?;
 
-        let (_, h) = ::crossterm::terminal::size()?;
-        let (x, y) = ::crossterm::cursor::position()?;
-
         if !state.prompts.is_empty() {
+            let (_, h) = ::crossterm::terminal::size()?;
+            let (x, y) = ::crossterm::cursor::position()?;
+
             let prompts_count = state.prompts.len() as u16;
             ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
             ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
