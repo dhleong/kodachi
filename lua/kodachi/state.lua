@@ -174,7 +174,7 @@ end
 function KodachiState:prompts()
   local prompts = self._prompts
   if not prompts then
-    local new_prompts = PromptsManager:new()
+    local new_prompts = PromptsManager:new(self)
     self._prompts = new_prompts
     prompts = new_prompts
   end
