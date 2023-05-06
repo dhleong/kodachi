@@ -87,7 +87,7 @@ mod tests {
 
     #[cfg(test)]
     mod deserialization_tests {
-        use crate::daemon::commands::AliasReplacement;
+        use crate::{app::formatters::FormatterSpec, daemon::commands::AliasReplacement};
 
         use super::*;
 
@@ -148,6 +148,48 @@ mod tests {
             assert_eq!(id, 9001);
             assert_eq!(connection_id, 42);
             assert_eq!(replacement, AliasReplacement::Handler { handler_id: 22 });
+        }
+
+        #[test]
+        fn register_alias_replacement_test() {
+            let r: Request = serde_json::from_str(
+                r#"{
+                    "id": 9001,
+                    "type": "RegisterAlias",
+                    "connection_id": 42,
+                    "matcher": {
+                        "type": "Regex",
+                        "source": "^burrito"
+                    },
+                    "replacement_pattern": "make burrito"
+                }"#,
+            )
+            .unwrap();
+
+            let (id, connection_id, _matcher, replacement) = match r {
+                Request::ForResponse {
+                    id,
+                    payload:
+                        ClientRequest::RegisterAlias {
+                            connection_id,
+                            matcher,
+                            replacement,
+                        },
+                } => (id, connection_id, matcher, replacement),
+                _ => {
+                    assert!(false, "Expected RegisterAlias");
+                    panic!();
+                }
+            };
+
+            assert_eq!(id, 9001);
+            assert_eq!(connection_id, 42);
+            assert_eq!(
+                replacement,
+                AliasReplacement::Simple {
+                    replacement_pattern: FormatterSpec::Simple("make burrito".to_string())
+                }
+            );
         }
     }
 

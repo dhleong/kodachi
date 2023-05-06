@@ -9,7 +9,7 @@ use super::matchers::{
 };
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
-#[serde(tag = "type")]
+#[serde(untagged)]
 pub enum FormatterSpec {
     Simple(String),
 }
