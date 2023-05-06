@@ -94,6 +94,14 @@ impl TextProcessor {
         has_full_line: bool,
         receiver: &mut R,
     ) -> io::Result<()> {
+        // Handle trailing carriage returns from previous lines:
+        if self.pending_line.chars().next() == Some('\r') {
+            // This is particularly important for matchers of whole lines, such as prompts
+            let mut old_bytes = self.pending_line.take_bytes();
+            let trimmed_bytes = old_bytes.split_off(1);
+            self.pending_line = AnsiMut::from_bytes(trimmed_bytes);
+        }
+
         if !has_full_line {
             if self.pending_line.has_incomplete_code() {
                 // If there's some incomplete ANSI code, this becomes a no-op; we'll
@@ -259,5 +267,17 @@ mod tests {
         assert_text_eq(&receiver.outputs[1], "Everything\n");
 
         // NOTE: The third line of output should have a "save position" control + "Is"
+    }
+
+    #[test]
+    fn text_processor_carriage_returns() {
+        let mut processor = TextProcessor::default();
+        let mut receiver = TextReceiver::default();
+        processor
+            .process("Everything\n\rIs\n".into(), &mut receiver)
+            .unwrap();
+        assert_eq!(receiver.outputs.len(), 2);
+        assert_text_eq(&receiver.outputs[0], "Everything\n");
+        assert_text_eq(&receiver.outputs[1], "Is\n");
     }
 }

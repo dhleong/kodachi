@@ -7,7 +7,7 @@ use crate::{
     transport::EventData,
 };
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct MatchedText {
     #[serde(skip_serializing)]
     pub raw: Ansi,
@@ -25,7 +25,7 @@ impl MatchedText {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct MatchContext {
     pub named: HashMap<String, MatchedText>,
     pub indexed: HashMap<usize, MatchedText>,
