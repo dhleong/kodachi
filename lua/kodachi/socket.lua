@@ -85,9 +85,14 @@ function Socket:request(request, cb)
   -- Submit the request:
   self:notify(request)
 
-  if cb then
-    self:await_request_id(request.id, cb)
-  end
+  self:await_request_id(request.id, function(response)
+    if cb then
+      cb(response)
+    elseif response.type ~= 'OkResult' then
+      -- TODO can we add a diagnostic to the source file?
+      print(request.type, ' => ', vim.inspect(response))
+    end
+  end)
 
   return request.id
 end
