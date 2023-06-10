@@ -18,7 +18,7 @@ function M.spawn_unix(opts)
   local session_name = vim.fn.rand()
 
   local env = {
-    DEBUG = vim.g.KODACHI_DEBUG,
+    DEBUG = vim.g.KODACHI_DEBUG or '',
   }
 
   local cmd = vim.tbl_flatten {
@@ -67,7 +67,6 @@ function M.spawn_unix(opts)
           end)
         end
       end
-
     end,
   })
 
