@@ -18,7 +18,7 @@ const NEWLINE_BYTE: u8 = b'\n';
 type MatchHandler = dyn FnMut(MatchContext) -> io::Result<()> + Send;
 type LineHandler = dyn Fn(&mut Ansi) -> io::Result<()> + Send;
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum MatcherId {
     Handler(Id),
     Prompt { group: Id, index: usize },
@@ -40,6 +40,7 @@ pub struct TextProcessor {
     matchers: Vec<RegisteredMatcher>,
     processors: Vec<RegisteredLineProcessor>,
     pending_line: AnsiMut,
+    printed_index: usize,
     saving_position: bool,
 }
 
@@ -116,12 +117,18 @@ impl TextProcessor {
                 self.saving_position = true;
                 receiver.save_position()?;
             }
-            receiver.text(self.pending_line.take_bytes().into())?;
+
+            // Print any un-printed text on this pending line (but keep
+            // the text in there for matching whenever we get a full line!)
+            let new_end = self.pending_line.len();
+            receiver.text((&self.pending_line[self.printed_index..new_end]).into())?;
+            self.printed_index = new_end;
         } else {
             // If we *do* have a full line in pending_line, pop it off and feed it to matchers;
             // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
             // emit RestorePosition + Clear first
             let mut to_match = self.pending_line.take();
+            self.printed_index = 0; // reset
 
             // Do some passive processing first
             self.perform_processing(&mut to_match)?;
