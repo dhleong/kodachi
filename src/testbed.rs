@@ -1,5 +1,5 @@
 use crate::app::processing::ansi::Ansi;
-use crate::app::processing::text::ProcessorOutputReceiver;
+use crate::app::processing::text::{ProcessorOutputReceiver, TextProcessor};
 use std::io::{self, stdout};
 use std::io::{stderr, Write};
 use std::sync::{Arc, Mutex};
@@ -9,10 +9,19 @@ use crate::daemon::channel::ChannelSource;
 use crate::daemon::protocol::RequestIdGenerator;
 use crate::daemon::responses::DaemonResponse;
 
-fn receive<T: ProcessorOutputReceiver>(ui: &mut T, to_receive: &str) -> io::Result<()> {
-    ui.begin_chunk()?;
-    ui.text(to_receive.into())?;
-    ui.end_chunk()
+struct TestBed<R: ProcessorOutputReceiver> {
+    ui: R,
+    processor: TextProcessor,
+}
+
+impl<R: ProcessorOutputReceiver> TestBed<R> {
+    fn receive(&mut self, to_receive: &str) -> io::Result<()> {
+        self.ui.begin_chunk()?;
+
+        self.processor.process(to_receive.into(), &mut self.ui)?;
+
+        self.ui.end_chunk()
+    }
 }
 
 pub fn run() -> io::Result<()> {
@@ -30,14 +39,14 @@ pub fn run() -> io::Result<()> {
     let notifier = channels
         .create_with_request_id(0)
         .respond(DaemonResponse::OkResult);
-    let mut ui = AnsiTerminalWriteUI::create(state, 0, notifier, out);
+    let ui = AnsiTerminalWriteUI::create(state, 0, notifier, out);
+    let processor = TextProcessor::default();
+    let mut testbed = TestBed { ui, processor };
 
-    receive(&mut ui, "Output line 1\r\n")?;
-    receive(
-        &mut ui,
-        "Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n",
-    )?;
-    receive(&mut ui, "Output line 3\r\n")?;
+    testbed.receive("Output line 1\r\n")?;
+    testbed.receive("Lorem ipsum dolor sit amit bacon")?;
+    testbed.receive("~Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n")?;
+    testbed.receive("Output line 3\r\n")?;
 
     Ok(())
 }
