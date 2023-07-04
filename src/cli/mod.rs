@@ -10,11 +10,14 @@ pub struct Cli {
     pub command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, PartialEq)]
 pub enum Commands {
     /// Run in daemon mode using stdio streams
     Stdio,
 
     /// Run in daemon mode using a unix domain socket
     Unix { path: String },
+
+    #[clap(hide = true)]
+    Testbed,
 }

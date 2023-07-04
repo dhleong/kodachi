@@ -11,6 +11,7 @@ mod collections;
 mod daemon;
 mod logging;
 mod net;
+mod testbed;
 mod transport;
 
 use cli::stdio::StdinReader;
@@ -34,6 +35,8 @@ async fn run(cli: Cli) -> io::Result<()> {
             let response = socket;
             daemon::daemon(input, response).await
         }
+
+        Commands::Testbed => panic!(),
     }
 }
 
@@ -42,6 +45,10 @@ fn main() -> io::Result<()> {
 
     log::set_boxed_logger(Box::new(KodachiLogger::default())).unwrap();
     log::set_max_level(log::LevelFilter::Trace);
+
+    if cli.command == Commands::Testbed {
+        return testbed::run();
+    }
 
     let rt = tokio::runtime::Runtime::new()?;
     let result = rt.block_on(run(cli));
