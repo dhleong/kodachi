@@ -36,6 +36,9 @@ pub fn try_handle(
         }
     };
 
+    // Prompts should always consume:
+    compiled.options.consume = true;
+
     let id = MatcherId::Prompt {
         group: group_id,
         index: prompt_index,
