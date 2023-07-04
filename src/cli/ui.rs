@@ -1,9 +1,9 @@
 pub mod prompts;
 
 use crossterm::{
-    cursor::{MoveTo, MoveToNextLine, RestorePosition, SavePosition},
-    style::ResetColor,
-    terminal::{Clear, ClearType, ScrollDown, ScrollUp},
+    cursor::{MoveTo, MoveToNextLine, MoveToPreviousLine, RestorePosition, SavePosition},
+    style::{Print, ResetColor},
+    terminal::{Clear, ClearType},
 };
 use std::{
     io::{self, Write},
@@ -84,6 +84,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
     }
 
     fn clear_from_cursor_down(&mut self) -> io::Result<()> {
+        self.internal.rendered_prompt_lines = 0;
         ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
     }
 
@@ -96,32 +97,40 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         let state = self.state.lock().unwrap();
         let last_prompts_count = self.internal.rendered_prompt_lines;
         if last_prompts_count > 0 {
-            ::crossterm::queue!(self.output, ScrollDown(last_prompts_count))?;
+            // let (_, h) = ::crossterm::terminal::size()?;
+            // let (_, y) = ::crossterm::cursor::position()?;
+            // ::crossterm::queue!(self.output, MoveTo(0, y - last_prompts_count))?;
+
+            ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count))?;
+            ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))?;
+
+            // ::crossterm::queue!(self.output, MoveTo(x, y))?;
         }
 
         self.output.write_all(&text.as_bytes())?;
 
         if !state.prompts.is_empty() {
-            let (_, h) = ::crossterm::terminal::size()?;
-            let (x, y) = ::crossterm::cursor::position()?;
+            // let (_, h) = ::crossterm::terminal::size()?;
+            // let (x, y) = ::crossterm::cursor::position()?;
 
             let prompts_count = state.prompts.len() as u16;
-            ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
-            ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
+            // ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
+            // ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
 
             for prompt in state.prompts.iter() {
                 if let Some(prompt) = prompt {
                     self.output.write_all(&prompt.as_bytes())?;
+                    self.output.write_all("\r\n".as_bytes())?;
 
                     // NOTE: This can be convenient for testing redraws:
                     // self.output
                     //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
 
-                    ::crossterm::queue!(self.output, MoveToNextLine(1))?;
+                    // ::crossterm::queue!(self.output, MoveToNextLine(1))?;
                 }
             }
 
-            ::crossterm::queue!(self.output, MoveTo(x, y + prompts_count),)?;
+            // ::crossterm::queue!(self.output, MoveTo(x, y + prompts_count),)?;
             self.internal.rendered_prompt_lines = prompts_count;
         }
 
