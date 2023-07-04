@@ -1,18 +1,21 @@
 use crate::{
-    app::{matchers::MatcherSpec, processing::text::MatcherId, Id, LockableState},
+    app::{
+        matchers::{Matcher, MatcherSpec},
+        processing::text::MatcherId,
+        Id, LockableState,
+    },
     daemon::{channel::Channel, responses::DaemonResponse},
 };
 
 use super::set_prompt_content;
 
-pub async fn handle(
-    channel: Channel,
+pub fn try_handle(
     mut state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
     group_id: Id,
     prompt_index: usize,
-) {
+) -> DaemonResponse {
     let processor_ref = if let Some(reference) = state
         .lock()
         .unwrap()
@@ -21,17 +24,15 @@ pub async fn handle(
     {
         reference.clone()
     } else {
-        channel.respond(DaemonResponse::OkResult);
-        return;
+        return DaemonResponse::OkResult;
     };
 
-    let compiled = match matcher.try_into() {
+    let mut compiled: Matcher = match matcher.try_into() {
         Ok(compiled) => compiled,
         Err(e) => {
-            channel.respond(DaemonResponse::ErrorResult {
+            return DaemonResponse::ErrorResult {
                 error: format!("{:?}", e).to_string(),
-            });
-            return;
+            };
         }
     };
 
@@ -55,5 +56,22 @@ pub async fn handle(
             Ok(())
         });
 
-    channel.respond(DaemonResponse::OkResult);
+    return DaemonResponse::OkResult;
+}
+
+pub async fn handle(
+    channel: Channel,
+    state: LockableState,
+    connection_id: Id,
+    matcher: MatcherSpec,
+    group_id: Id,
+    prompt_index: usize,
+) {
+    channel.respond(try_handle(
+        state,
+        connection_id,
+        matcher,
+        group_id,
+        prompt_index,
+    ));
 }
