@@ -52,7 +52,7 @@ pub struct Matcher {
 
 impl Matcher {
     pub fn try_match(&self, mut subject: Ansi) -> MatchResult {
-        let stripped = subject.strip_ansi();
+        let stripped: AnsiStripped = subject.clone().trim_trailing_newlines().strip_ansi();
         if let Some(found) = self.pattern.captures(&stripped) {
             let context = self.extract_match_context(&stripped, found);
 
@@ -126,7 +126,7 @@ impl TryInto<Matcher> for MatcherSpec {
             MatcherSpec::Regex { options, source } => (options, source),
         };
 
-        match RegexBuilder::new(&regex_source).multi_line(true).build() {
+        match RegexBuilder::new(&regex_source).build() {
             Ok(pattern) => Ok(Matcher { options, pattern }),
             Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
         }
