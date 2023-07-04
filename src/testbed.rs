@@ -1,3 +1,6 @@
+use crossterm::cursor::{MoveToColumn, MoveToPreviousLine, RestorePosition, SavePosition};
+use crossterm::terminal::{Clear, ClearType};
+
 use crate::app::matchers::MatcherSpec;
 use crate::app::processing::text::ProcessorOutputReceiver;
 use crate::app::{Id, LockableState};
@@ -63,6 +66,13 @@ pub fn run() -> io::Result<()> {
         ui,
     };
 
+    // // ::crossterm::execute!(stdout(), SavePosition)?;
+    // stdout().write_all(b"Lorem Ipsum Dolor sit amet bacon brisket ")?;
+    // ::crossterm::execute!(stdout(), MoveToColumn(1), Clear(ClearType::FromCursorDown))?;
+    // stdout().write_all(b"bACON")?;
+    // stdout().flush()?;
+    // return Ok(());
+
     testbed.register_prompt(0, 0, "^Prompt ([a-c]+).*$");
     testbed.register_prompt(0, 1, "^Prompt ([d-f]+).*$");
 
@@ -71,7 +81,8 @@ pub fn run() -> io::Result<()> {
     testbed.receive("Lorem ipsum dolor sit amit bacon")?;
     testbed.receive("~Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n")?;
 
-    // testbed.receive("Prompt 0\r\nPrompt 1")?;
+    // testbed.receive("Prompt cba")?;
+    testbed.receive("Prompt cba\r\nPrompt fed")?;
     // testbed.receive("\r\nOutput line 3\r\n")?;
     // testbed.receive("Lorem ipsum dolor sit amit bacon")?;
     // testbed.receive("~Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n")?;

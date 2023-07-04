@@ -55,6 +55,7 @@ pub trait ProcessorOutputReceiver {
     fn save_position(&mut self) -> io::Result<()>;
     fn restore_position(&mut self) -> io::Result<()>;
     fn clear_from_cursor_down(&mut self) -> io::Result<()>;
+    fn restore_printed_line(&mut self, columns: usize) -> io::Result<()>;
     fn reset_colors(&mut self) -> io::Result<()>;
 
     fn text(&mut self, text: Ansi) -> io::Result<()>;
@@ -128,7 +129,19 @@ impl TextProcessor {
             // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
             // emit RestorePosition + Clear first
             let mut to_match = self.pending_line.take();
+            let printed_index = self.printed_index;
             self.printed_index = 0; // reset
+
+            // TODO: compute *visible* columns
+            let printed_columns = {
+                let mut ansi: Ansi = (&to_match[0..printed_index]).into();
+                ansi.strip_ansi().len()
+            };
+
+            if printed_columns > 0 {
+                receiver.restore_printed_line(printed_columns)?;
+                // receiver.end_chunk()?; // STOPSHIP
+            }
 
             // Do some passive processing first
             self.perform_processing(&mut to_match)?;
@@ -140,19 +153,20 @@ impl TextProcessor {
                 MatchResult::Matched {
                     remaining,
                     context,
-                    consumed,
+                    consumed: _,
                 } => {
                     if let Some(handler) = handler {
                         (handler.on_match)(context)?;
                     }
 
-                    if consumed && self.saving_position {
-                        self.saving_position = false;
-                        receiver.restore_position()?;
-                        receiver.clear_from_cursor_down()?;
-                    }
+                    // if consumed && self.saving_position {
+                    //     self.saving_position = false;
+                    //     receiver.restore_position()?;
+                    //     receiver.clear_from_cursor_down()?;
+                    // }
 
                     receiver.text(remaining)?;
+                    // receiver.end_chunk()?; // STOPSHIP
                 }
             }
         }
@@ -227,6 +241,10 @@ mod tests {
         }
 
         fn restore_position(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn restore_printed_line(&mut self, _columns: usize) -> io::Result<()> {
             Ok(())
         }
 

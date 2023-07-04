@@ -1,7 +1,7 @@
 pub mod prompts;
 
 use crossterm::{
-    cursor::{MoveToPreviousLine, RestorePosition, SavePosition},
+    cursor::{MoveToColumn, MoveToPreviousLine, RestorePosition, SavePosition},
     style::ResetColor,
     terminal::{Clear, ClearType},
 };
@@ -76,11 +76,36 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
     }
 
     fn save_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, SavePosition)
+        let rendered_lines = self.internal.rendered_prompt_lines;
+        if rendered_lines > 0 {
+            // ::crossterm::queue!(self.output, MoveToPreviousLine(rendered_lines - 1))?;
+            // self.internal.rendered_prompt_lines = 0;
+        }
+        // ::crossterm::queue!(self.output, SavePosition)
+        Ok(())
     }
 
     fn restore_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, RestorePosition)
+        // ::crossterm::queue!(self.output, RestorePosition)
+        Ok(())
+    }
+
+    fn restore_printed_line(&mut self, columns: usize) -> io::Result<()> {
+        let (width, _) = ::crossterm::terminal::size()?;
+        let lines: u16 = columns.saturating_div(width as usize) as u16;
+        if lines == 0 {
+            ::crossterm::queue!(
+                self.output,
+                MoveToColumn(1),
+                Clear(ClearType::FromCursorDown)
+            )
+        } else {
+            ::crossterm::queue!(
+                self.output,
+                MoveToPreviousLine(lines),
+                Clear(ClearType::FromCursorDown)
+            )
+        }
     }
 
     fn clear_from_cursor_down(&mut self) -> io::Result<()> {
@@ -102,7 +127,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
             // let (_, y) = ::crossterm::cursor::position()?;
             // ::crossterm::queue!(self.output, MoveTo(0, y - last_prompts_count))?;
 
-            ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count))?;
+            ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count - 1))?;
             ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))?;
 
             // ::crossterm::queue!(self.output, MoveTo(x, y))?;
@@ -116,11 +141,12 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
             for prompt in state.prompts.iter() {
                 if let Some(prompt) = prompt {
                     self.output.write_all(&prompt.as_bytes())?;
-                    self.output.write_all("\r\n".as_bytes())?;
 
                     // NOTE: This can be convenient for testing redraws:
                     // self.output
                     //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
+
+                    self.output.write_all("\r\n".as_bytes())?;
                 }
             }
 
