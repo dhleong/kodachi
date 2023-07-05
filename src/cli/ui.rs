@@ -92,6 +92,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
     fn restore_printed_line(&mut self, columns: usize) -> io::Result<()> {
         let (width, _) = ::crossterm::terminal::size()?;
+        self.internal.rendered_prompt_lines = 0;
         let lines: u16 = columns.saturating_div(width as usize) as u16;
         if lines == 0 {
             ::crossterm::queue!(
@@ -127,7 +128,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
             // let (_, y) = ::crossterm::cursor::position()?;
             // ::crossterm::queue!(self.output, MoveTo(0, y - last_prompts_count))?;
 
-            ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count - 1))?;
+            ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count))?;
             ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))?;
 
             // ::crossterm::queue!(self.output, MoveTo(x, y))?;
@@ -135,7 +136,8 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
         self.output.write_all(&text.as_bytes())?;
 
-        let has_full_line = text.ends_with("\n");
+        let has_full_line = text.is_empty() || text.ends_with("\n");
+        let texts = text.clone().strip_ansi().to_string();
         if !state.prompts.is_empty() && has_full_line {
             let prompts_count = state.prompts.len() as u16;
             for prompt in state.prompts.iter() {

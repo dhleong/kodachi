@@ -140,7 +140,6 @@ impl TextProcessor {
 
             if printed_columns > 0 {
                 receiver.restore_printed_line(printed_columns)?;
-                // receiver.end_chunk()?; // STOPSHIP
             }
 
             // Do some passive processing first
@@ -166,7 +165,6 @@ impl TextProcessor {
                     // }
 
                     receiver.text(remaining)?;
-                    // receiver.end_chunk()?; // STOPSHIP
                 }
             }
         }
