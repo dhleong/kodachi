@@ -1,7 +1,7 @@
 pub mod prompts;
 
 use crossterm::{
-    cursor::{MoveToColumn, MoveToPreviousLine, RestorePosition, SavePosition},
+    cursor::{MoveToColumn, MoveToPreviousLine},
     style::ResetColor,
     terminal::{Clear, ClearType},
 };
@@ -75,21 +75,6 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         self.output.flush()
     }
 
-    fn save_position(&mut self) -> io::Result<()> {
-        let rendered_lines = self.internal.rendered_prompt_lines;
-        if rendered_lines > 0 {
-            // ::crossterm::queue!(self.output, MoveToPreviousLine(rendered_lines - 1))?;
-            // self.internal.rendered_prompt_lines = 0;
-        }
-        // ::crossterm::queue!(self.output, SavePosition)
-        Ok(())
-    }
-
-    fn restore_position(&mut self) -> io::Result<()> {
-        // ::crossterm::queue!(self.output, RestorePosition)
-        Ok(())
-    }
-
     fn restore_printed_line(&mut self, columns: usize) -> io::Result<()> {
         let (width, _) = ::crossterm::terminal::size()?;
         self.internal.rendered_prompt_lines = 0;
@@ -124,20 +109,14 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         let last_prompts_count = self.internal.rendered_prompt_lines;
         if last_prompts_count > 0 {
             self.internal.rendered_prompt_lines = 0;
-            // let (_, h) = ::crossterm::terminal::size()?;
-            // let (_, y) = ::crossterm::cursor::position()?;
-            // ::crossterm::queue!(self.output, MoveTo(0, y - last_prompts_count))?;
 
             ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count))?;
             ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))?;
-
-            // ::crossterm::queue!(self.output, MoveTo(x, y))?;
         }
 
         self.output.write_all(&text.as_bytes())?;
 
         let has_full_line = text.is_empty() || text.ends_with("\n");
-        let texts = text.clone().strip_ansi().to_string();
         if !state.prompts.is_empty() && has_full_line {
             let prompts_count = state.prompts.len() as u16;
             for prompt in state.prompts.iter() {

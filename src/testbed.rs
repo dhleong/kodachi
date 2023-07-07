@@ -86,9 +86,13 @@ pub fn run() -> io::Result<()> {
     testbed.receive("\r\n")?;
     testbed.receive("Prompt fed")?;
     testbed.receive("\r\nOutput line 3\r\n")?;
-    // testbed.receive("Lorem ipsum dolor sit amit bacon")?;
-    // testbed.receive("~Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n")?;
-    // testbed.receive("Output line 4\r\n")?;
+    testbed.receive("Lorem ipsum dolor sit amit bacon")?;
+    testbed.receive("~Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n")?;
+    testbed.receive("Output line 4\r\n")?;
+
+    testbed.receive("Prompt cab")?;
+    testbed.receive("\r\n")?;
+    testbed.receive("Prompt fde")?;
 
     Ok(())
 }

@@ -41,7 +41,6 @@ pub struct TextProcessor {
     processors: Vec<RegisteredLineProcessor>,
     pending_line: AnsiMut,
     printed_index: usize,
-    saving_position: bool,
 }
 
 pub trait ProcessorOutputReceiver {
@@ -52,8 +51,6 @@ pub trait ProcessorOutputReceiver {
         Ok(())
     }
 
-    fn save_position(&mut self) -> io::Result<()>;
-    fn restore_position(&mut self) -> io::Result<()>;
     fn clear_from_cursor_down(&mut self) -> io::Result<()>;
     fn restore_printed_line(&mut self, columns: usize) -> io::Result<()>;
     fn reset_colors(&mut self) -> io::Result<()>;
@@ -112,13 +109,6 @@ impl TextProcessor {
                 return Ok(());
             }
 
-            // If we *don't* have a full line (and, if we don't already have a SavePosition
-            // set, IE from a previous partial line, SavePosition first) then emit the pending
-            if !self.saving_position {
-                self.saving_position = true;
-                receiver.save_position()?;
-            }
-
             // Print any un-printed text on this pending line (but keep
             // the text in there for matching whenever we get a full line!)
             let new_end = self.pending_line.len();
@@ -157,12 +147,6 @@ impl TextProcessor {
                     if let Some(handler) = handler {
                         (handler.on_match)(context)?;
                     }
-
-                    // if consumed && self.saving_position {
-                    //     self.saving_position = false;
-                    //     receiver.restore_position()?;
-                    //     receiver.clear_from_cursor_down()?;
-                    // }
 
                     receiver.text(remaining)?;
                 }
@@ -234,14 +218,6 @@ mod tests {
     }
 
     impl ProcessorOutputReceiver for TextReceiver {
-        fn save_position(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-
-        fn restore_position(&mut self) -> io::Result<()> {
-            Ok(())
-        }
-
         fn restore_printed_line(&mut self, _columns: usize) -> io::Result<()> {
             Ok(())
         }
