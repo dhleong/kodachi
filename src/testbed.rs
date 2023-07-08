@@ -85,10 +85,14 @@ pub fn run() -> io::Result<()> {
     testbed.receive("Prompt cba")?;
     testbed.receive("\r\n")?;
     testbed.receive("Prompt fed")?;
-    testbed.receive("\r\nOutput line 3\r\n")?;
+
+    testbed.receive("\r\n")?;
+    // println!("\n\n{}", testbed.ui.dump_state());
+
+    testbed.receive("\r\nOutput line 2\r\n")?;
     testbed.receive("Lorem ipsum dolor sit amit bacon")?;
     testbed.receive("~Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n")?;
-    testbed.receive("Output line 4\r\n")?;
+    testbed.receive("Output line 3\r\n")?;
 
     testbed.receive("Prompt cab")?;
     testbed.receive("\r\n")?;

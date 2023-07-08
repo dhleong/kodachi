@@ -55,8 +55,15 @@ pub trait ProcessorOutputReceiver {
     fn restore_printed_line(&mut self, columns: usize) -> io::Result<()>;
     fn reset_colors(&mut self) -> io::Result<()>;
 
+    fn new_line(&mut self) -> io::Result<()>;
+    fn finish_line(&mut self) -> io::Result<()>;
+
     fn text(&mut self, text: Ansi) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
+
+    fn dump_state(&self) -> String {
+        "".to_string()
+    }
 }
 
 impl TextProcessor {
@@ -101,6 +108,10 @@ impl TextProcessor {
             self.pending_line = AnsiMut::from_bytes(trimmed_bytes);
         }
 
+        if self.printed_index == 0 {
+            receiver.new_line()?;
+        }
+
         if !has_full_line {
             if self.pending_line.has_incomplete_code() {
                 // If there's some incomplete ANSI code, this becomes a no-op; we'll
@@ -115,9 +126,7 @@ impl TextProcessor {
             receiver.text((&self.pending_line[self.printed_index..new_end]).into())?;
             self.printed_index = new_end;
         } else {
-            // If we *do* have a full line in pending_line, pop it off and feed it to matchers;
-            // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
-            // emit RestorePosition + Clear first
+            // If we *do* have a full line in pending_line, pop it off and feed it to matchers.
             let mut to_match = self.pending_line.take();
             let printed_index = self.printed_index;
             self.printed_index = 0; // reset
@@ -140,9 +149,7 @@ impl TextProcessor {
                 MatchResult::Ignored(to_emit) => receiver.text(to_emit)?,
 
                 MatchResult::Matched {
-                    remaining,
-                    context,
-                    consumed: _,
+                    remaining, context, ..
                 } => {
                     if let Some(handler) = handler {
                         (handler.on_match)(context)?;
@@ -151,6 +158,8 @@ impl TextProcessor {
                     receiver.text(remaining)?;
                 }
             }
+
+            receiver.finish_line()?;
         }
 
         Ok(())
@@ -223,6 +232,14 @@ mod tests {
         }
 
         fn clear_from_cursor_down(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn new_line(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+
+        fn finish_line(&mut self) -> io::Result<()> {
             Ok(())
         }
 
