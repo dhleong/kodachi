@@ -28,6 +28,7 @@ struct RegisteredMatcher {
     #[allow(dead_code)]
     id: MatcherId,
     matcher: Matcher,
+    mode: MatcherMode,
     on_match: Box<MatchHandler>,
 }
 
@@ -40,7 +41,6 @@ pub struct TextProcessor {
     matchers: Vec<RegisteredMatcher>,
     processors: Vec<RegisteredLineProcessor>,
     pending_line: AnsiMut,
-    printed_index: usize,
 }
 
 pub trait ProcessorOutputReceiver {
@@ -51,19 +51,55 @@ pub trait ProcessorOutputReceiver {
         Ok(())
     }
 
-    fn clear_from_cursor_down(&mut self) -> io::Result<()>;
-    fn restore_printed_line(&mut self, columns: usize) -> io::Result<()>;
     fn reset_colors(&mut self) -> io::Result<()>;
 
     fn new_line(&mut self) -> io::Result<()>;
     fn finish_line(&mut self) -> io::Result<()>;
 
+    /// If we haven't printed a complete line, clear whatever's pending
+    fn clear_partial_line(&mut self) -> io::Result<()>;
+
     fn text(&mut self, text: Ansi) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
+
+    fn print_local_send(&mut self, text: String) -> io::Result<()> {
+        // self.clear_partial_line()?;
+        // // self.finish_line()?;
+
+        // self.new_line()?;
+        // self.reset_colors()?;
+        // self.text(text.into())?;
+        // self.text("\r\n".into())?;
+        // self.finish_line()?;
+        // Ok(())
+
+        self.begin_chunk()?;
+
+        self.clear_partial_line()?;
+        self.new_line()?;
+        self.reset_colors()?;
+        self.text("\r\n".into())?;
+        self.finish_line()?;
+
+        self.clear_partial_line()?;
+        self.new_line()?;
+        self.text(text.into())?;
+        self.text("\r\n".into())?;
+        self.finish_line()?;
+
+        self.end_chunk()?;
+        Ok(())
+    }
 
     fn dump_state(&self) -> String {
         "".to_string()
     }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub enum MatcherMode {
+    PartialLine,
+    FullLine,
 }
 
 impl TextProcessor {
@@ -108,59 +144,42 @@ impl TextProcessor {
             self.pending_line = AnsiMut::from_bytes(trimmed_bytes);
         }
 
-        if self.printed_index == 0 {
-            receiver.new_line()?;
+        if self.pending_line.has_incomplete_code() {
+            // If there's some incomplete ANSI code, this becomes a no-op; we'll
+            // wait for the next chunk to come in from the network to avoid breaking
+            // that up.
+            return Ok(());
         }
 
-        if !has_full_line {
-            if self.pending_line.has_incomplete_code() {
-                // If there's some incomplete ANSI code, this becomes a no-op; we'll
-                // wait for the next chunk to come in from the network to avoid breaking
-                // that up.
-                return Ok(());
-            }
+        receiver.clear_partial_line()?;
+        receiver.new_line()?;
 
-            // Print any un-printed text on this pending line (but keep
-            // the text in there for matching whenever we get a full line!)
-            let new_end = self.pending_line.len();
-            receiver.text((&self.pending_line[self.printed_index..new_end]).into())?;
-            self.printed_index = new_end;
+        let (match_mode, to_match) = if has_full_line {
+            let mut full_line = self.pending_line.take();
+
+            self.perform_processing(&mut full_line)?;
+
+            (MatcherMode::FullLine, full_line)
         } else {
-            // If we *do* have a full line in pending_line, pop it off and feed it to matchers.
-            let mut to_match = self.pending_line.take();
-            let printed_index = self.printed_index;
-            self.printed_index = 0; // reset
+            (MatcherMode::PartialLine, self.pending_line.clone().into())
+        };
 
-            // TODO: compute *visible* columns
-            let printed_columns = {
-                let mut ansi: Ansi = (&to_match[0..printed_index]).into();
-                ansi.strip_ansi().len()
-            };
-
-            if printed_columns > 0 {
-                receiver.restore_printed_line(printed_columns)?;
-            }
-
-            // Do some passive processing first
-            self.perform_processing(&mut to_match)?;
-
-            let (handler, result) = self.perform_match(to_match);
-            match result {
-                MatchResult::Ignored(to_emit) => receiver.text(to_emit)?,
-
+        let to_print = match self.perform_match(to_match, match_mode) {
+            (
+                Some(handler),
                 MatchResult::Matched {
-                    remaining, context, ..
-                } => {
-                    if let Some(handler) = handler {
-                        (handler.on_match)(context)?;
-                    }
-
-                    receiver.text(remaining)?;
-                }
+                    context, remaining, ..
+                },
+            ) => {
+                (handler.on_match)(context)?;
+                remaining
             }
+            (_, MatchResult::Ignored(text)) => text,
+            _ => panic!("Matched without a handler"),
+        };
 
-            receiver.finish_line()?;
-        }
+        receiver.text(to_print)?;
+        receiver.finish_line()?;
 
         Ok(())
     }
@@ -169,11 +188,13 @@ impl TextProcessor {
         &mut self,
         id: MatcherId,
         matcher: Matcher,
+        mode: MatcherMode,
         on_match: R,
     ) {
         self.matchers.push(RegisteredMatcher {
             id,
             matcher,
+            mode,
             on_match: Box::new(on_match),
         })
     }
@@ -197,8 +218,12 @@ impl TextProcessor {
     fn perform_match(
         &mut self,
         mut to_match: Ansi,
+        mode: MatcherMode,
     ) -> (Option<&mut RegisteredMatcher>, MatchResult) {
         for m in &mut self.matchers {
+            if mode < m.mode {
+                continue;
+            }
             to_match = match m.matcher.try_match(to_match) {
                 MatchResult::Ignored(ansi) => ansi,
                 matched => {
@@ -227,11 +252,7 @@ mod tests {
     }
 
     impl ProcessorOutputReceiver for TextReceiver {
-        fn restore_printed_line(&mut self, _columns: usize) -> io::Result<()> {
-            Ok(())
-        }
-
-        fn clear_from_cursor_down(&mut self) -> io::Result<()> {
+        fn clear_partial_line(&mut self) -> io::Result<()> {
             Ok(())
         }
 

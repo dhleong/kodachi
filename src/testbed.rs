@@ -98,5 +98,18 @@ pub fn run() -> io::Result<()> {
     testbed.receive("\r\n")?;
     testbed.receive("Prompt fde")?;
 
+    // Send some text:
+    // testbed.ui.print_local_send("(look)".to_string())?;
+    testbed.receive("\r\n(look)\r\n")?;
+    // testbed.receive("\r\n")?;
+    // testbed.receive("(look)\r\n")?;
+
+    testbed.receive("look1\r\n")?;
+    testbed.receive("look2\r\n")?;
+
+    testbed.receive("Prompt bca")?;
+    testbed.receive("\r\n")?;
+    testbed.receive("Prompt dfe")?;
+
     Ok(())
 }

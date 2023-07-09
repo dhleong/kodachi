@@ -40,6 +40,7 @@ impl Clearable for UiState {
 #[derive(Default)]
 struct InternalState {
     rendered_prompt_lines: u16,
+    printed_columns: u16,
 }
 
 /// This UI expects to interact with an ANSI-powered terminal UI
@@ -75,11 +76,14 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         self.output.flush()
     }
 
-    fn restore_printed_line(&mut self, columns: usize) -> io::Result<()> {
-        self.internal.rendered_prompt_lines = 0;
+    fn clear_partial_line(&mut self) -> io::Result<()> {
+        let columns = self.internal.printed_columns;
+        if columns == 0 {
+            return Ok(());
+        }
 
         let (width, _) = ::crossterm::terminal::size()?;
-        let printed_lines = columns.saturating_div(width as usize) as u16;
+        let printed_lines = columns / width;
 
         // Also clear any "clean" prompt lines when dirty, since we're preparing
         // to print a line, which will result in prompts being fully restored
@@ -108,16 +112,13 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         }
     }
 
-    fn clear_from_cursor_down(&mut self) -> io::Result<()> {
-        self.internal.rendered_prompt_lines = 0;
-        ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
-    }
-
     fn reset_colors(&mut self) -> io::Result<()> {
         ::crossterm::queue!(self.output, ResetColor)
     }
 
     fn new_line(&mut self) -> io::Result<()> {
+        self.internal.printed_columns = 0;
+
         // Clear the prompts
         let last_prompts_count = self.internal.rendered_prompt_lines;
         if last_prompts_count > 0 {
@@ -125,24 +126,6 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
             ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count))?;
             ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))?;
-        }
-
-        // Restore any "clean" prompt lines if there are also any dirty
-        let state = self.state.lock().unwrap();
-        let total_prompt_lines = state.prompts.len();
-        let clean_prompt_lines = state.prompts.get_clean_lines();
-
-        if clean_prompt_lines < total_prompt_lines {
-            for prompt in state.prompts.iter().take(clean_prompt_lines) {
-                if let Some(prompt) = prompt {
-                    self.output.write_all(&prompt.as_bytes())?;
-                    self.output.write_all("\r\n".as_bytes())?;
-                }
-            }
-
-            // // +1 to include the "current" line
-            // self.internal.rendered_prompt_lines = clean_prompt_lines as u16 + 1;
-            self.internal.rendered_prompt_lines = clean_prompt_lines as u16;
         }
 
         Ok(())
@@ -156,12 +139,11 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         )
     }
 
-    fn text(&mut self, text: Ansi) -> io::Result<()> {
-        self.output.write_all(&text.as_bytes())?;
+    fn text(&mut self, mut text: Ansi) -> io::Result<()> {
+        // TODO: compute *visible* columns
+        self.internal.printed_columns += text.strip_ansi().len() as u16;
 
-        // let has_full_line = text.is_empty() || text.ends_with("\n");
-
-        Ok(())
+        self.output.write_all(&text.as_bytes())
     }
 
     fn finish_line(&mut self) -> io::Result<()> {

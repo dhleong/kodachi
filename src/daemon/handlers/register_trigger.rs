@@ -1,5 +1,9 @@
 use crate::{
-    app::{matchers::MatcherSpec, processing::text::MatcherId, Id, LockableState},
+    app::{
+        matchers::MatcherSpec,
+        processing::text::{MatcherId, MatcherMode},
+        Id, LockableState,
+    },
     daemon::{channel::Channel, notifications::DaemonNotification, responses::DaemonResponse},
 };
 
@@ -36,6 +40,7 @@ pub async fn handle(
     processor_ref.lock().unwrap().register_matcher(
         MatcherId::Handler(handler_id),
         compiled,
+        MatcherMode::FullLine,
         move |context| {
             receiver.notify(DaemonNotification::TriggerMatched {
                 handler_id,

@@ -1,7 +1,7 @@
 use crate::{
     app::{
         matchers::{Matcher, MatcherSpec},
-        processing::text::MatcherId,
+        processing::text::{MatcherId, MatcherMode},
         Id, LockableState,
     },
     daemon::{channel::Channel, responses::DaemonResponse},
@@ -44,10 +44,11 @@ pub fn try_handle(
         index: prompt_index,
     };
 
-    processor_ref
-        .lock()
-        .unwrap()
-        .register_matcher(id, compiled, move |mut context| {
+    processor_ref.lock().unwrap().register_matcher(
+        id,
+        compiled,
+        MatcherMode::PartialLine,
+        move |mut context| {
             set_prompt_content::try_handle(
                 state.clone(),
                 connection_id,
@@ -57,7 +58,8 @@ pub fn try_handle(
                 true,
             )?;
             Ok(())
-        });
+        },
+    );
 
     return DaemonResponse::OkResult;
 }

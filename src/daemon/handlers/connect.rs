@@ -51,9 +51,18 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                         transport.write(b"\r\n").await?;
 
                         // Also print locally
-                        receiver.reset_colors()?;
-                        receiver.text(text.into())?;
-                        receiver.text("\r\n".into())?;
+                        // receiver.print_local_send(text)?;
+
+                        receiver.begin_chunk()?;
+
+                        connection
+                            .state
+                            .processor
+                            .lock()
+                            .unwrap()
+                            .process((text + "\r\n").into(), receiver)?;
+
+                        receiver.end_chunk()?;
                     }
                     Some(Outgoing::Disconnect) | None => {
                         connected = false;
