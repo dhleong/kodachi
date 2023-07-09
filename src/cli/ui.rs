@@ -78,6 +78,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
     fn clear_partial_line(&mut self) -> io::Result<()> {
         let columns = self.internal.printed_columns;
+        self.internal.printed_columns = 0;
         if columns == 0 {
             return Ok(());
         }
@@ -147,6 +148,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
     }
 
     fn finish_line(&mut self) -> io::Result<()> {
+        self.internal.printed_columns = 0;
         let state = self.state.lock().unwrap();
         if !state.prompts.is_empty() {
             let prompts_count = state.prompts.len() as u16;

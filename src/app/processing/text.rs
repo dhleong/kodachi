@@ -62,35 +62,6 @@ pub trait ProcessorOutputReceiver {
     fn text(&mut self, text: Ansi) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
 
-    fn print_local_send(&mut self, text: String) -> io::Result<()> {
-        // self.clear_partial_line()?;
-        // // self.finish_line()?;
-
-        // self.new_line()?;
-        // self.reset_colors()?;
-        // self.text(text.into())?;
-        // self.text("\r\n".into())?;
-        // self.finish_line()?;
-        // Ok(())
-
-        self.begin_chunk()?;
-
-        self.clear_partial_line()?;
-        self.new_line()?;
-        self.reset_colors()?;
-        self.text("\r\n".into())?;
-        self.finish_line()?;
-
-        self.clear_partial_line()?;
-        self.new_line()?;
-        self.text(text.into())?;
-        self.text("\r\n".into())?;
-        self.finish_line()?;
-
-        self.end_chunk()?;
-        Ok(())
-    }
-
     fn dump_state(&self) -> String {
         "".to_string()
     }
@@ -175,6 +146,8 @@ impl TextProcessor {
                 remaining
             }
             (_, MatchResult::Ignored(text)) => text,
+
+            // TODO We should probably just make an enum
             _ => panic!("Matched without a handler"),
         };
 
