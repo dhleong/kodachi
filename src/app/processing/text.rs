@@ -62,6 +62,7 @@ pub trait ProcessorOutputReceiver {
     fn text(&mut self, text: Ansi) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
 
+    #[cfg(dbg)]
     fn dump_state(&self) -> String {
         "".to_string()
     }

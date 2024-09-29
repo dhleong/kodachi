@@ -132,6 +132,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         Ok(())
     }
 
+    #[cfg(dbg)]
     fn dump_state(&self) -> String {
         format!(
             "rendered={}; clean={}",
