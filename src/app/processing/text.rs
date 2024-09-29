@@ -5,7 +5,7 @@ use bytes::Buf;
 use crate::{
     app::{
         clearable::Clearable,
-        matchers::{MatchResult, Matcher},
+        matchers::{MatchResult, MatchedResult, Matcher},
         Id,
     },
     daemon::notifications::{DaemonNotification, MatchContext},
@@ -74,6 +74,11 @@ pub enum MatcherMode {
     FullLine,
 }
 
+enum PerformMatchResult<'a> {
+    Matched(&'a mut RegisteredMatcher, MatchedResult),
+    Ignored(Ansi),
+}
+
 impl TextProcessor {
     pub fn process<R: ProcessorOutputReceiver>(
         &mut self,
@@ -137,19 +142,17 @@ impl TextProcessor {
         };
 
         let to_print = match self.perform_match(to_match, match_mode) {
-            (
-                Some(handler),
-                MatchResult::Matched {
+            PerformMatchResult::Matched(
+                handler,
+                MatchedResult {
                     context, remaining, ..
                 },
             ) => {
                 (handler.on_match)(context)?;
                 remaining
             }
-            (_, MatchResult::Ignored(text)) => text,
 
-            // TODO We should probably just make an enum
-            _ => panic!("Matched without a handler"),
+            PerformMatchResult::Ignored(text) => text,
         };
 
         receiver.text(to_print)?;
@@ -189,24 +192,20 @@ impl TextProcessor {
         Ok(())
     }
 
-    fn perform_match(
-        &mut self,
-        mut to_match: Ansi,
-        mode: MatcherMode,
-    ) -> (Option<&mut RegisteredMatcher>, MatchResult) {
+    fn perform_match(&mut self, mut to_match: Ansi, mode: MatcherMode) -> PerformMatchResult {
         for m in &mut self.matchers {
             if mode < m.mode {
                 continue;
             }
             to_match = match m.matcher.try_match(to_match) {
                 MatchResult::Ignored(ansi) => ansi,
-                matched => {
-                    return (Some(m), matched);
+                MatchResult::Matched(matched) => {
+                    return PerformMatchResult::Matched(m, matched);
                 }
             }
         }
 
-        return (None, MatchResult::Ignored(to_match));
+        return PerformMatchResult::Ignored(to_match);
     }
 }
 

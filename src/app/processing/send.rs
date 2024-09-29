@@ -3,7 +3,7 @@ use std::{future::Future, io, pin::Pin};
 use async_trait::async_trait;
 
 use crate::{
-    app::matchers::{MatchResult, Matcher},
+    app::matchers::{MatchResult, MatchedResult, Matcher},
     daemon::{
         notifications::{DaemonNotification, MatchContext},
         responses::DaemonResponse,
@@ -87,11 +87,11 @@ impl SendTextProcessor {
         for matcher in &self.matchers {
             match matcher.matcher.try_match(to_match) {
                 MatchResult::Ignored(ignored) => to_match = ignored,
-                MatchResult::Matched {
+                MatchResult::Matched(MatchedResult {
                     context,
                     mut remaining,
                     ..
-                } => {
+                }) => {
                     // NOTE: Since the matcher *shouldn't* consume, remaining *should*
                     // be the original input
                     if let Some(replaced) = self
