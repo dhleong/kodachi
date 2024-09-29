@@ -16,9 +16,9 @@ impl RandomnessSource for ThreadRngRandomnessSource {
     }
 }
 
-pub struct WeightedRandomSelector<T: RandomnessSource + Send = ThreadRngRandomnessSource> {
+pub struct WeightedRandomSelector<R: RandomnessSource + Send = ThreadRngRandomnessSource> {
     pub weights: (u8, u8),
-    pub random: T,
+    pub random: R,
 }
 
 impl<R: RandomnessSource + Send> DuplexSelector for WeightedRandomSelector<R> {
@@ -32,10 +32,10 @@ impl<R: RandomnessSource + Send> DuplexSelector for WeightedRandomSelector<R> {
 }
 
 pub struct WeightedRandomSelectorFactory<
-    T: 'static + RandomnessSource + Send = ThreadRngRandomnessSource,
+    R: 'static + RandomnessSource + Send = ThreadRngRandomnessSource,
 > {
     pub weights: (u8, u8),
-    pub random: T,
+    pub random: R,
 }
 
 impl WeightedRandomSelectorFactory {
@@ -49,6 +49,16 @@ impl WeightedRandomSelectorFactory {
         Self {
             weights: (first, second),
             random: ThreadRngRandomnessSource,
+        }
+    }
+
+    pub fn with_random<R: RandomnessSource + Send + 'static>(
+        self,
+        random: R,
+    ) -> WeightedRandomSelectorFactory<R> {
+        WeightedRandomSelectorFactory {
+            weights: self.weights,
+            random,
         }
     }
 }
@@ -65,28 +75,31 @@ impl<R: RandomnessSource + Send> DuplexSelectorFactory for WeightedRandomSelecto
 }
 
 #[cfg(test)]
+#[derive(Clone)]
+pub struct StaticRandomnessSource {
+    values: Vec<u8>,
+}
+#[cfg(test)]
+impl StaticRandomnessSource {
+    pub fn with_values(values: Vec<u8>) -> Self {
+        Self { values }
+    }
+}
+
+#[cfg(test)]
+impl RandomnessSource for StaticRandomnessSource {
+    fn next_percentage(&mut self) -> u8 {
+        if self.values.is_empty() {
+            0
+        } else {
+            self.values.remove(0)
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
-
-    #[derive(Clone)]
-    pub struct StaticRandomnessSource {
-        values: Vec<u8>,
-    }
-    impl StaticRandomnessSource {
-        pub fn with_values(values: Vec<u8>) -> Self {
-            Self { values }
-        }
-    }
-
-    impl RandomnessSource for StaticRandomnessSource {
-        fn next_percentage(&mut self) -> u8 {
-            if self.values.is_empty() {
-                0
-            } else {
-                self.values.remove(0)
-            }
-        }
-    }
 
     #[test]
     pub fn weighted_selection() {
