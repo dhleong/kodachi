@@ -11,7 +11,10 @@ pub mod protocol;
 pub mod requests;
 pub mod responses;
 
-use crate::app::{processing::ansi::Ansi, LockableState};
+use crate::app::{
+    processing::{ansi::Ansi, text::ProcessorOutputReceiverFactory},
+    LockableState,
+};
 
 use self::{
     channel::{Channel, ChannelSource},
@@ -30,7 +33,12 @@ where
     });
 }
 
-pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
+pub async fn daemon<
+    TUI: ProcessorOutputReceiverFactory + 'static,
+    TInput: BufRead,
+    TResponse: 'static + Write + Send,
+>(
+    ui: TUI,
     input: TInput,
     response: TResponse,
 ) -> io::Result<()> {
@@ -58,7 +66,7 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
                 payload,
             } => {
                 let channel = channels.create_with_request_id(request_id);
-                dispatch_request(state, channel, payload);
+                dispatch_request(ui.clone(), state, channel, payload);
             }
 
             Request::Response(response) => {
@@ -77,10 +85,15 @@ pub async fn daemon<TInput: BufRead, TResponse: 'static + Write + Send>(
     Ok(())
 }
 
-fn dispatch_request(state: LockableState, channel: Channel, payload: ClientRequest) {
+fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
+    ui: TUI,
+    state: LockableState,
+    channel: Channel,
+    payload: ClientRequest,
+) {
     match payload {
         ClientRequest::Connect(data) => {
-            launch(handlers::connect::handle(channel, state, data));
+            launch(handlers::connect::handle(ui, channel, state, data));
         }
         ClientRequest::Disconnect {
             connection_id: connection,

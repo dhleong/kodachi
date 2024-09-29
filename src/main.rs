@@ -3,6 +3,7 @@ use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 use clap::StructOpt;
+use cli::ui::StdoutAnsiTerminalWriteUIFactory;
 use cli::{Cli, Commands};
 
 mod app;
@@ -23,7 +24,8 @@ async fn run(cli: Cli) -> io::Result<()> {
         Commands::Stdio => {
             let input = StdinReader::stdin();
             let response = io::stderr();
-            daemon::daemon(input, response).await
+            let ui = StdoutAnsiTerminalWriteUIFactory;
+            daemon::daemon(ui, input, response).await
         }
 
         Commands::Unix { path } => {
@@ -33,7 +35,8 @@ async fn run(cli: Cli) -> io::Result<()> {
             };
             let input = BufReader::new(socket.try_clone().unwrap());
             let response = socket;
-            daemon::daemon(input, response).await
+            let ui = StdoutAnsiTerminalWriteUIFactory;
+            daemon::daemon(ui, input, response).await
         }
 
         Commands::Testbed => panic!(),

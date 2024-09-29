@@ -15,7 +15,7 @@ use crate::{
         clearable::Clearable,
         processing::{
             ansi::Ansi,
-            text::{ProcessorOutputReceiver, SystemMessage},
+            text::{ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage},
         },
         Id,
     },
@@ -185,5 +185,21 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
             notification,
         });
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct StdoutAnsiTerminalWriteUIFactory;
+
+impl ProcessorOutputReceiverFactory for StdoutAnsiTerminalWriteUIFactory {
+    type Implementation = AnsiTerminalWriteUI<io::Stdout>;
+
+    fn create(
+        &self,
+        state: Arc<Mutex<UiState>>,
+        connection_id: Id,
+        notifier: RespondedChannel,
+    ) -> Self::Implementation {
+        AnsiTerminalWriteUI::create(state, connection_id, notifier, io::stdout())
     }
 }
