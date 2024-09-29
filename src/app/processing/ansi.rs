@@ -193,9 +193,11 @@ impl Ansi {
         return stripped;
     }
 
-    pub fn trim_trailing_newlines(self) -> Ansi {
+    // Returns an Ansi instance, which shares its backing data with this Ansi instance, but whose
+    // accessible range does not have include any trailing newlines
+    pub fn trim_trailing_newlines(&self) -> Ansi {
         if !self.ends_with(&['\r', '\n'][..]) {
-            return self;
+            return self.clone();
         }
 
         if let Some(end) = self.bytes.len().checked_sub(1) {
@@ -210,7 +212,7 @@ impl Ansi {
                 }
             }
         }
-        return self;
+        return self.clone();
     }
 }
 

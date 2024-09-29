@@ -52,7 +52,7 @@ pub struct Matcher {
 
 impl Matcher {
     pub fn try_match(&self, mut subject: Ansi) -> MatchResult {
-        let stripped: AnsiStripped = subject.clone().trim_trailing_newlines().strip_ansi();
+        let stripped: AnsiStripped = subject.trim_trailing_newlines().strip_ansi();
         if let Some(found) = self.pattern.captures(&stripped) {
             let context = self.extract_match_context(&stripped, found);
 
