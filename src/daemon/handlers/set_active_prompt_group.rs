@@ -33,7 +33,7 @@ pub fn try_handle(mut state: LockableState, connection_id: Id, group_id: Id) -> 
                 .remove(group_id)
                 .unwrap_or_else(|| PromptsState::default());
 
-            // Swap the currently-active tstate into group, and vice versa
+            // Swap the currently-active state into group, and vice versa
             std::mem::swap(&mut ui_state.prompts, &mut group);
 
             // Stash group (now referencing the previously-active group) into the inactive list

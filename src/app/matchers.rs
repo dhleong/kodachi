@@ -32,16 +32,18 @@ pub enum MatcherSpec {
     },
 }
 
+pub struct MatchedResult {
+    pub remaining: Ansi,
+    pub context: MatchContext,
+
+    // If `true` then some (possibly all) of the input was consumed.
+    pub consumed: bool,
+}
+
 pub enum MatchResult {
     Ignored(Ansi),
 
-    Matched {
-        remaining: Ansi,
-        context: MatchContext,
-
-        // If `true` then some (possibly all) of the input was consumed.
-        consumed: bool,
-    },
+    Matched(MatchedResult),
 }
 
 #[derive(Debug)]
@@ -52,7 +54,7 @@ pub struct Matcher {
 
 impl Matcher {
     pub fn try_match(&self, mut subject: Ansi) -> MatchResult {
-        let stripped = subject.strip_ansi();
+        let stripped: AnsiStripped = subject.trim_trailing_newlines().strip_ansi();
         if let Some(found) = self.pattern.captures(&stripped) {
             let context = self.extract_match_context(&stripped, found);
 
@@ -69,11 +71,11 @@ impl Matcher {
                 remaining = Ansi::empty();
             }
 
-            return MatchResult::Matched {
+            return MatchResult::Matched(MatchedResult {
                 remaining,
                 context,
                 consumed: self.options.consume,
-            };
+            });
         }
 
         MatchResult::Ignored(subject)
@@ -126,7 +128,7 @@ impl TryInto<Matcher> for MatcherSpec {
             MatcherSpec::Regex { options, source } => (options, source),
         };
 
-        match RegexBuilder::new(&regex_source).multi_line(true).build() {
+        match RegexBuilder::new(&regex_source).build() {
             Ok(pattern) => Ok(Matcher { options, pattern }),
             Err(e) => Err(MatcherCompileError::SyntaxError(e.to_string())),
         }
@@ -146,9 +148,9 @@ mod tests {
         let input = "say 'anything'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched {
+        if let MatchResult::Matched(MatchedResult {
             remaining, context, ..
-        } = matcher.try_match(input.into())
+        }) = matcher.try_match(input.into())
         {
             assert_eq!(&remaining[..], "say 'anything'");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
@@ -167,9 +169,9 @@ mod tests {
         let input = "say '\x1b[32manything\x1b[m'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched {
+        if let MatchResult::Matched(MatchedResult {
             remaining, context, ..
-        } = matcher.try_match(input.into())
+        }) = matcher.try_match(input.into())
         {
             assert_eq!(&remaining[..], "say '\x1b[32manything\x1b[m'");
             assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
@@ -190,9 +192,9 @@ mod tests {
         let input = "say 'anything'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched {
+        if let MatchResult::Matched(MatchedResult {
             remaining, context, ..
-        } = matcher.try_match(input.into())
+        }) = matcher.try_match(input.into())
         {
             assert_eq!(&remaining[..], "say 'anything'");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
@@ -211,9 +213,9 @@ mod tests {
         let input = "say '\x1b[32manything\x1b[m'";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched {
+        if let MatchResult::Matched(MatchedResult {
             remaining, context, ..
-        } = matcher.try_match(input.into())
+        }) = matcher.try_match(input.into())
         {
             assert_eq!(&remaining[..], "say '\x1b[32manything\x1b[m'");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
@@ -239,11 +241,11 @@ mod tests {
         let mut matcher: Matcher = spec.try_into().unwrap();
         matcher.options.consume = true;
 
-        if let MatchResult::Matched {
+        if let MatchResult::Matched(MatchedResult {
             remaining,
             context,
             consumed,
-        } = matcher.try_match(input.into())
+        }) = matcher.try_match(input.into())
         {
             assert_eq!(consumed, true);
             assert_eq!(&remaining[..], "");
@@ -270,11 +272,11 @@ mod tests {
         let mut matcher: Matcher = spec.try_into().unwrap();
         matcher.options.consume = true;
 
-        if let MatchResult::Matched {
+        if let MatchResult::Matched(MatchedResult {
             remaining,
             context,
             consumed,
-        } = matcher.try_match(input.into())
+        }) = matcher.try_match(input.into())
         {
             assert_eq!(consumed, true);
             assert_eq!(&remaining[..], "just  you know!");
@@ -301,11 +303,11 @@ mod tests {
         let mut matcher: Matcher = spec.try_into().unwrap();
         matcher.options.consume = true;
 
-        if let MatchResult::Matched {
+        if let MatchResult::Matched(MatchedResult {
             remaining,
             context,
             consumed,
-        } = matcher.try_match(input.into())
+        }) = matcher.try_match(input.into())
         {
             assert_eq!(consumed, true);
             assert_eq!(&remaining[..], "");
@@ -324,7 +326,8 @@ mod tests {
         let input = "wrap alpastor";
 
         let matcher: Matcher = spec.try_into().unwrap();
-        if let MatchResult::Matched { context, .. } = matcher.try_match(input.into()) {
+        if let MatchResult::Matched(MatchedResult { context, .. }) = matcher.try_match(input.into())
+        {
             assert_eq!(&context.named[&"burrito".to_string()].plain, "alpastor");
         } else {
             panic!("Expected {:?} to match... but it didn't", matcher);

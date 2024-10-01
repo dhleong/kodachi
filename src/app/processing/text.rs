@@ -5,7 +5,7 @@ use bytes::Buf;
 use crate::{
     app::{
         clearable::Clearable,
-        matchers::{MatchResult, Matcher},
+        matchers::{MatchResult, MatchedResult, Matcher},
         Id,
     },
     daemon::notifications::{DaemonNotification, MatchContext},
@@ -18,7 +18,7 @@ const NEWLINE_BYTE: u8 = b'\n';
 type MatchHandler = dyn FnMut(MatchContext) -> io::Result<()> + Send;
 type LineHandler = dyn Fn(&mut Ansi) -> io::Result<()> + Send;
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum MatcherId {
     Handler(Id),
     Prompt { group: Id, index: usize },
@@ -28,6 +28,7 @@ struct RegisteredMatcher {
     #[allow(dead_code)]
     id: MatcherId,
     matcher: Matcher,
+    mode: MatcherMode,
     on_match: Box<MatchHandler>,
 }
 
@@ -40,7 +41,6 @@ pub struct TextProcessor {
     matchers: Vec<RegisteredMatcher>,
     processors: Vec<RegisteredLineProcessor>,
     pending_line: AnsiMut,
-    saving_position: bool,
 }
 
 pub trait ProcessorOutputReceiver {
@@ -51,13 +51,32 @@ pub trait ProcessorOutputReceiver {
         Ok(())
     }
 
-    fn save_position(&mut self) -> io::Result<()>;
-    fn restore_position(&mut self) -> io::Result<()>;
-    fn clear_from_cursor_down(&mut self) -> io::Result<()>;
     fn reset_colors(&mut self) -> io::Result<()>;
+
+    fn new_line(&mut self) -> io::Result<()>;
+    fn finish_line(&mut self) -> io::Result<()>;
+
+    /// If we haven't printed a complete line, clear whatever's pending
+    fn clear_partial_line(&mut self) -> io::Result<()>;
 
     fn text(&mut self, text: Ansi) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
+
+    #[cfg(dbg)]
+    fn dump_state(&self) -> String {
+        "".to_string()
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub enum MatcherMode {
+    PartialLine,
+    FullLine,
+}
+
+enum PerformMatchResult<'a> {
+    Matched(&'a mut RegisteredMatcher, MatchedResult),
+    Ignored(Ansi),
 }
 
 impl TextProcessor {
@@ -102,53 +121,42 @@ impl TextProcessor {
             self.pending_line = AnsiMut::from_bytes(trimmed_bytes);
         }
 
-        if !has_full_line {
-            if self.pending_line.has_incomplete_code() {
-                // If there's some incomplete ANSI code, this becomes a no-op; we'll
-                // wait for the next chunk to come in from the network to avoid breaking
-                // that up.
-                return Ok(());
-            }
-
-            // If we *don't* have a full line (and, if we don't already have a SavePosition
-            // set, IE from a previous partial line, SavePosition first) then emit the pending
-            if !self.saving_position {
-                self.saving_position = true;
-                receiver.save_position()?;
-            }
-            receiver.text(self.pending_line.take_bytes().into())?;
-        } else {
-            // If we *do* have a full line in pending_line, pop it off and feed it to matchers;
-            // if none "consume" the input, emit. If *any* consume, and we have a SavePosition set,
-            // emit RestorePosition + Clear first
-            let mut to_match = self.pending_line.take();
-
-            // Do some passive processing first
-            self.perform_processing(&mut to_match)?;
-
-            let (handler, result) = self.perform_match(to_match);
-            match result {
-                MatchResult::Ignored(to_emit) => receiver.text(to_emit)?,
-
-                MatchResult::Matched {
-                    remaining,
-                    context,
-                    consumed,
-                } => {
-                    if let Some(handler) = handler {
-                        (handler.on_match)(context)?;
-                    }
-
-                    if consumed && self.saving_position {
-                        self.saving_position = false;
-                        receiver.restore_position()?;
-                        receiver.clear_from_cursor_down()?;
-                    }
-
-                    receiver.text(remaining)?;
-                }
-            }
+        if self.pending_line.has_incomplete_code() {
+            // If there's some incomplete ANSI code, this becomes a no-op; we'll
+            // wait for the next chunk to come in from the network to avoid breaking
+            // that up.
+            return Ok(());
         }
+
+        receiver.clear_partial_line()?;
+        receiver.new_line()?;
+
+        let (match_mode, to_match) = if has_full_line {
+            let mut full_line = self.pending_line.take();
+
+            self.perform_processing(&mut full_line)?;
+
+            (MatcherMode::FullLine, full_line)
+        } else {
+            (MatcherMode::PartialLine, self.pending_line.clone().into())
+        };
+
+        let to_print = match self.perform_match(to_match, match_mode) {
+            PerformMatchResult::Matched(
+                handler,
+                MatchedResult {
+                    context, remaining, ..
+                },
+            ) => {
+                (handler.on_match)(context)?;
+                remaining
+            }
+
+            PerformMatchResult::Ignored(text) => text,
+        };
+
+        receiver.text(to_print)?;
+        receiver.finish_line()?;
 
         Ok(())
     }
@@ -157,11 +165,13 @@ impl TextProcessor {
         &mut self,
         id: MatcherId,
         matcher: Matcher,
+        mode: MatcherMode,
         on_match: R,
     ) {
         self.matchers.push(RegisteredMatcher {
             id,
             matcher,
+            mode,
             on_match: Box::new(on_match),
         })
     }
@@ -182,20 +192,20 @@ impl TextProcessor {
         Ok(())
     }
 
-    fn perform_match(
-        &mut self,
-        mut to_match: Ansi,
-    ) -> (Option<&mut RegisteredMatcher>, MatchResult) {
+    fn perform_match(&mut self, mut to_match: Ansi, mode: MatcherMode) -> PerformMatchResult {
         for m in &mut self.matchers {
+            if mode < m.mode {
+                continue;
+            }
             to_match = match m.matcher.try_match(to_match) {
                 MatchResult::Ignored(ansi) => ansi,
-                matched => {
-                    return (Some(m), matched);
+                MatchResult::Matched(matched) => {
+                    return PerformMatchResult::Matched(m, matched);
                 }
             }
         }
 
-        return (None, MatchResult::Ignored(to_match));
+        return PerformMatchResult::Ignored(to_match);
     }
 }
 
@@ -215,15 +225,15 @@ mod tests {
     }
 
     impl ProcessorOutputReceiver for TextReceiver {
-        fn save_position(&mut self) -> io::Result<()> {
+        fn clear_partial_line(&mut self) -> io::Result<()> {
             Ok(())
         }
 
-        fn restore_position(&mut self) -> io::Result<()> {
+        fn new_line(&mut self) -> io::Result<()> {
             Ok(())
         }
 
-        fn clear_from_cursor_down(&mut self) -> io::Result<()> {
+        fn finish_line(&mut self) -> io::Result<()> {
             Ok(())
         }
 

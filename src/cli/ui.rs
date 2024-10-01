@@ -1,9 +1,9 @@
 pub mod prompts;
 
 use crossterm::{
-    cursor::{MoveTo, MoveToNextLine, RestorePosition, SavePosition},
+    cursor::{MoveToColumn, MoveToPreviousLine},
     style::ResetColor,
-    terminal::{Clear, ClearType, ScrollDown, ScrollUp},
+    terminal::{Clear, ClearType},
 };
 use std::{
     io::{self, Write},
@@ -40,6 +40,7 @@ impl Clearable for UiState {
 #[derive(Default)]
 struct InternalState {
     rendered_prompt_lines: u16,
+    printed_columns: u16,
 }
 
 /// This UI expects to interact with an ANSI-powered terminal UI
@@ -75,40 +76,83 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         self.output.flush()
     }
 
-    fn save_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, SavePosition)
-    }
+    fn clear_partial_line(&mut self) -> io::Result<()> {
+        let columns = self.internal.printed_columns;
+        self.internal.printed_columns = 0;
+        if columns == 0 {
+            return Ok(());
+        }
 
-    fn restore_position(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, RestorePosition)
-    }
+        let (width, _) = ::crossterm::terminal::size()?;
+        let printed_lines = columns / width;
 
-    fn clear_from_cursor_down(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))
+        // Also clear any "clean" prompt lines when dirty, since we're preparing
+        // to print a line, which will result in prompts being fully restored
+        let state = self.state.lock().unwrap();
+        let total_prompt_lines = state.prompts.len();
+        let clean_prompt_lines = state.prompts.get_clean_lines();
+        let extra_lines_to_clean = if clean_prompt_lines < total_prompt_lines {
+            clean_prompt_lines as u16
+        } else {
+            0
+        };
+
+        let lines: u16 = printed_lines + extra_lines_to_clean;
+        if lines == 0 {
+            ::crossterm::queue!(
+                self.output,
+                MoveToColumn(1),
+                Clear(ClearType::FromCursorDown)
+            )
+        } else {
+            ::crossterm::queue!(
+                self.output,
+                MoveToPreviousLine(lines),
+                Clear(ClearType::FromCursorDown)
+            )
+        }
     }
 
     fn reset_colors(&mut self) -> io::Result<()> {
         ::crossterm::queue!(self.output, ResetColor)
     }
 
-    fn text(&mut self, text: Ansi) -> io::Result<()> {
+    fn new_line(&mut self) -> io::Result<()> {
+        self.internal.printed_columns = 0;
+
         // Clear the prompts
-        let state = self.state.lock().unwrap();
         let last_prompts_count = self.internal.rendered_prompt_lines;
         if last_prompts_count > 0 {
-            ::crossterm::queue!(self.output, ScrollDown(last_prompts_count))?;
+            self.internal.rendered_prompt_lines = 0;
+
+            ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count))?;
+            ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))?;
         }
 
-        self.output.write_all(&text.as_bytes())?;
+        Ok(())
+    }
 
+    #[cfg(dbg)]
+    fn dump_state(&self) -> String {
+        format!(
+            "rendered={}; clean={}",
+            self.internal.rendered_prompt_lines,
+            self.state.lock().unwrap().prompts.get_clean_lines()
+        )
+    }
+
+    fn text(&mut self, mut text: Ansi) -> io::Result<()> {
+        // TODO: compute *visible* columns
+        self.internal.printed_columns += text.strip_ansi().len() as u16;
+
+        self.output.write_all(&text.as_bytes())
+    }
+
+    fn finish_line(&mut self) -> io::Result<()> {
+        self.internal.printed_columns = 0;
+        let state = self.state.lock().unwrap();
         if !state.prompts.is_empty() {
-            let (_, h) = ::crossterm::terminal::size()?;
-            let (x, y) = ::crossterm::cursor::position()?;
-
             let prompts_count = state.prompts.len() as u16;
-            ::crossterm::queue!(self.output, ScrollUp(prompts_count))?;
-            ::crossterm::queue!(self.output, MoveTo(0, h - prompts_count))?;
-
             for prompt in state.prompts.iter() {
                 if let Some(prompt) = prompt {
                     self.output.write_all(&prompt.as_bytes())?;
@@ -117,14 +161,12 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
                     // self.output
                     //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
 
-                    ::crossterm::queue!(self.output, MoveToNextLine(1))?;
+                    self.output.write_all("\r\n".as_bytes())?;
                 }
             }
 
-            ::crossterm::queue!(self.output, MoveTo(x, y + prompts_count),)?;
             self.internal.rendered_prompt_lines = prompts_count;
         }
-
         Ok(())
     }
 

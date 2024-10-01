@@ -1,18 +1,21 @@
 use crate::{
-    app::{matchers::MatcherSpec, processing::text::MatcherId, Id, LockableState},
+    app::{
+        matchers::{Matcher, MatcherSpec},
+        processing::text::{MatcherId, MatcherMode},
+        Id, LockableState,
+    },
     daemon::{channel::Channel, responses::DaemonResponse},
 };
 
 use super::set_prompt_content;
 
-pub async fn handle(
-    channel: Channel,
+pub fn try_handle(
     mut state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
     group_id: Id,
     prompt_index: usize,
-) {
+) -> DaemonResponse {
     let processor_ref = if let Some(reference) = state
         .lock()
         .unwrap()
@@ -21,29 +24,31 @@ pub async fn handle(
     {
         reference.clone()
     } else {
-        channel.respond(DaemonResponse::OkResult);
-        return;
+        return DaemonResponse::OkResult;
     };
 
-    let compiled = match matcher.try_into() {
+    let mut compiled: Matcher = match matcher.try_into() {
         Ok(compiled) => compiled,
         Err(e) => {
-            channel.respond(DaemonResponse::ErrorResult {
+            return DaemonResponse::ErrorResult {
                 error: format!("{:?}", e).to_string(),
-            });
-            return;
+            };
         }
     };
+
+    // Prompts should always consume:
+    compiled.options.consume = true;
 
     let id = MatcherId::Prompt {
         group: group_id,
         index: prompt_index,
     };
 
-    processor_ref
-        .lock()
-        .unwrap()
-        .register_matcher(id, compiled, move |mut context| {
+    processor_ref.lock().unwrap().register_matcher(
+        id,
+        compiled,
+        MatcherMode::PartialLine,
+        move |mut context| {
             set_prompt_content::try_handle(
                 state.clone(),
                 connection_id,
@@ -53,7 +58,25 @@ pub async fn handle(
                 true,
             )?;
             Ok(())
-        });
+        },
+    );
 
-    channel.respond(DaemonResponse::OkResult);
+    return DaemonResponse::OkResult;
+}
+
+pub async fn handle(
+    channel: Channel,
+    state: LockableState,
+    connection_id: Id,
+    matcher: MatcherSpec,
+    group_id: Id,
+    prompt_index: usize,
+) {
+    channel.respond(try_handle(
+        state,
+        connection_id,
+        matcher,
+        group_id,
+        prompt_index,
+    ));
 }

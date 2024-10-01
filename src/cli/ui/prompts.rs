@@ -5,11 +5,13 @@ use crate::app::{clearable::Clearable, processing::ansi::Ansi, Id};
 #[derive(Default)]
 pub struct PromptsState {
     values: Vec<Option<Ansi>>,
+    set_values: usize,
 }
 
 impl Clearable for PromptsState {
     fn clear(&mut self) {
         self.values.clear();
+        self.set_values = 0;
     }
 }
 
@@ -35,7 +37,12 @@ impl PromptsState {
         while self.values.len() <= index {
             self.values.push(None);
         }
-        self.values[index] = Some(content);
+        self.values[index] = Some(content.trim_end_matches("\r\n").into());
+        self.set_values = index + 1;
+    }
+
+    pub fn get_clean_lines(&self) -> usize {
+        self.set_values
     }
 }
 

@@ -5,7 +5,7 @@ use std::{
 
 pub mod channel;
 mod commands;
-mod handlers;
+pub mod handlers;
 pub mod notifications;
 pub mod protocol;
 pub mod requests;
