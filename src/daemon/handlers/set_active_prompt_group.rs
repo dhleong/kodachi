@@ -2,12 +2,15 @@ use std::io;
 
 use crate::{
     app::{Id, LockableState},
-    cli::ui::prompts::PromptsState,
-    daemon::{channel::Channel, responses::DaemonResponse},
+    daemon::{
+        channel::{Channel, ConnectionChannel},
+        notifications::DaemonNotification,
+        responses::DaemonResponse,
+    },
 };
 
 pub async fn handle(channel: Channel, state: LockableState, connection_id: Id, group_id: Id) {
-    match try_handle(state, connection_id, group_id) {
+    match try_handle(None, state, connection_id, group_id) {
         Ok(_) => channel.respond(DaemonResponse::OkResult),
         Err(e) => channel.respond(DaemonResponse::ErrorResult {
             error: e.to_string(),
@@ -15,7 +18,12 @@ pub async fn handle(channel: Channel, state: LockableState, connection_id: Id, g
     };
 }
 
-pub fn try_handle(mut state: LockableState, connection_id: Id, group_id: Id) -> io::Result<()> {
+pub fn try_handle(
+    receiver: Option<&mut ConnectionChannel>,
+    mut state: LockableState,
+    connection_id: Id,
+    group_id: Id,
+) -> io::Result<()> {
     let conn_state =
         if let Some(reference) = state.lock().unwrap().connections.get_state(connection_id) {
             reference.clone()
@@ -31,7 +39,7 @@ pub fn try_handle(mut state: LockableState, connection_id: Id, group_id: Id) -> 
             let mut group = ui_state
                 .inactive_prompt_groups
                 .remove(group_id)
-                .unwrap_or_else(|| PromptsState::default());
+                .unwrap_or_default();
 
             // Swap the currently-active state into group, and vice versa
             std::mem::swap(&mut ui_state.prompts, &mut group);
@@ -43,6 +51,10 @@ pub fn try_handle(mut state: LockableState, connection_id: Id, group_id: Id) -> 
 
             // And finally, update the active ID
             ui_state.active_prompt_group = group_id;
+
+            if let Some(receiver) = receiver {
+                receiver.notify(DaemonNotification::ActivePromptGroupChanged { group_id });
+            }
         }
     }
 

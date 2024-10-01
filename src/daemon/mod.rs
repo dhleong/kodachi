@@ -11,7 +11,7 @@ pub mod protocol;
 pub mod requests;
 pub mod responses;
 
-use crate::app::LockableState;
+use crate::app::{processing::ansi::Ansi, LockableState};
 
 use self::{
     channel::{Channel, ChannelSource},
@@ -186,7 +186,7 @@ fn dispatch_request(state: LockableState, channel: Channel, payload: ClientReque
                 connection_id,
                 group_id,
                 prompt_index,
-                content,
+                Ansi::from(content),
                 set_group_active.unwrap_or(true),
             ));
         }

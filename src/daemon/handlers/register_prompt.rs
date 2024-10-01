@@ -1,7 +1,10 @@
 use crate::{
     app::{
         matchers::{Matcher, MatcherSpec},
-        processing::text::{MatcherId, MatcherMode},
+        processing::{
+            ansi::Ansi,
+            text::{MatcherId, MatcherMode},
+        },
         Id, LockableState,
     },
     daemon::{channel::Channel, responses::DaemonResponse},
@@ -10,6 +13,7 @@ use crate::{
 use super::set_prompt_content;
 
 pub fn try_handle(
+    channel: Option<&Channel>,
     mut state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
@@ -44,17 +48,19 @@ pub fn try_handle(
         index: prompt_index,
     };
 
+    let mut receiver = channel.map(|channel| channel.for_connection(connection_id));
     processor_ref.lock().unwrap().register_matcher(
         id,
         compiled,
         MatcherMode::PartialLine,
         move |mut context| {
             set_prompt_content::try_handle(
+                receiver.as_mut(),
                 state.clone(),
                 connection_id,
                 group_id,
                 prompt_index,
-                context.take_full_match().ansi,
+                Ansi::from(context.take_full_match().ansi),
                 true,
             )?;
             Ok(())
@@ -72,11 +78,13 @@ pub async fn handle(
     group_id: Id,
     prompt_index: usize,
 ) {
-    channel.respond(try_handle(
+    let response = try_handle(
+        Some(&channel),
         state,
         connection_id,
         matcher,
         group_id,
         prompt_index,
-    ));
+    );
+    channel.respond(response);
 }

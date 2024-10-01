@@ -2,8 +2,11 @@ use std::io;
 
 use crate::{
     app::{processing::ansi::Ansi, Id, LockableState},
-    cli::ui::prompts::PromptsState,
-    daemon::{channel::Channel, responses::DaemonResponse},
+    daemon::{
+        channel::{Channel, ConnectionChannel},
+        notifications::{DaemonNotification, MatchedText},
+        responses::DaemonResponse,
+    },
 };
 
 use super::set_active_prompt_group;
@@ -14,10 +17,11 @@ pub async fn handle(
     connection_id: Id,
     group_id: Id,
     prompt_index: usize,
-    content: String,
+    content: Ansi,
     set_group_active: bool,
 ) {
     match try_handle(
+        None,
         state,
         connection_id,
         group_id,
@@ -33,11 +37,12 @@ pub async fn handle(
 }
 
 pub fn try_handle(
+    mut receiver: Option<&mut ConnectionChannel>,
     mut state: LockableState,
     connection_id: Id,
     group_id: Id,
     prompt_index: usize,
-    content: String,
+    mut content: Ansi,
     set_group_active: bool,
 ) -> io::Result<()> {
     let conn_state =
@@ -48,20 +53,29 @@ pub fn try_handle(
         };
 
     if let Ok(mut ui_state) = conn_state.ui_state.lock() {
-        let new_content = Ansi::from(content);
         if ui_state.active_prompt_group == group_id {
-            ui_state.prompts.set_index(prompt_index, new_content);
-        } else if let Some(group) = ui_state.inactive_prompt_groups.get_mut(group_id) {
-            group.set_index(prompt_index, new_content);
+            ui_state.prompts.set_index(prompt_index, content.clone());
         } else {
-            let mut group = PromptsState::default();
-            group.set_index(prompt_index, new_content);
-            ui_state.inactive_prompt_groups.insert(group_id, group);
+            let group = ui_state.inactive_prompt_groups.entry(group_id).or_default();
+            group.set_index(prompt_index, content.clone())
+        }
+
+        let plain = content.strip_ansi().to_string();
+        if let Some(ref mut receiver) = receiver {
+            receiver.notify(DaemonNotification::PromptUpdated {
+                group_id,
+                index: prompt_index,
+                content: MatchedText {
+                    plain,
+                    ansi: content.to_string(),
+                    raw: content,
+                },
+            });
         }
     }
 
     if set_group_active {
-        set_active_prompt_group::try_handle(state, connection_id, group_id)
+        set_active_prompt_group::try_handle(receiver, state, connection_id, group_id)
     } else {
         Ok(())
     }

@@ -13,7 +13,10 @@ use std::{
 use crate::{
     app::{
         clearable::Clearable,
-        processing::{ansi::Ansi, text::ProcessorOutputReceiver},
+        processing::{
+            ansi::Ansi,
+            text::{ProcessorOutputReceiver, SystemMessage},
+        },
         Id,
     },
     daemon::{
@@ -113,8 +116,11 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         }
     }
 
-    fn reset_colors(&mut self) -> io::Result<()> {
-        ::crossterm::queue!(self.output, ResetColor)
+    fn system(&mut self, message: SystemMessage) -> io::Result<()> {
+        ::crossterm::queue!(self.output, ResetColor)?;
+        self.text(match message {
+            SystemMessage::ConnectionStatus(text) | SystemMessage::LocalSend(text) => text.into(),
+        })
     }
 
     fn new_line(&mut self) -> io::Result<()> {

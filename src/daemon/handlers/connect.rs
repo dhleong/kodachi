@@ -3,7 +3,10 @@ use std::io;
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
-        processing::{ansi::Ansi, text::ProcessorOutputReceiver},
+        processing::{
+            ansi::Ansi,
+            text::{ProcessorOutputReceiver, SystemMessage},
+        },
         processors::register_processors,
         LockableState,
     },
@@ -51,17 +54,8 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                         transport.write(b"\r\n").await?;
 
                         // Also print locally
-                        // receiver.print_local_send(text)?;
-
                         receiver.begin_chunk()?;
-
-                        connection
-                            .state
-                            .processor
-                            .lock()
-                            .unwrap()
-                            .process((text + "\r\n").into(), receiver)?;
-
+                        receiver.system(SystemMessage::LocalSend((text + "\r\n").into()))?;
                         receiver.end_chunk()?;
                     }
                     Some(Outgoing::Disconnect) | None => {
@@ -93,8 +87,10 @@ pub async fn handle(
         Ok(transport) => transport,
         Err(err) => {
             receiver.begin_chunk()?;
-            receiver.reset_colors()?;
-            receiver.text(format!("Failed to connect: {}\n", err).into())?;
+            receiver.system(SystemMessage::ConnectionStatus(format!(
+                "Failed to connect: {}\n",
+                err
+            )))?;
             receiver.end_chunk()?;
             receiver.notification(DaemonNotification::Disconnected)?;
             return Ok(());
@@ -117,8 +113,7 @@ pub async fn handle(
                     format!("Disconnected: {}", error)
                 };
                 receiver.begin_chunk()?;
-                receiver.reset_colors()?;
-                receiver.text(format!("\n{}\n", message).into())?;
+                receiver.system(SystemMessage::ConnectionStatus(format!("\n{}\n", message)))?;
                 receiver.end_chunk()?;
             }
             _ => {
