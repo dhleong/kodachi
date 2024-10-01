@@ -118,9 +118,12 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
     fn system(&mut self, message: SystemMessage) -> io::Result<()> {
         ::crossterm::queue!(self.output, ResetColor)?;
+        self.clear_partial_line()?;
+        self.new_line()?;
         self.text(match message {
             SystemMessage::ConnectionStatus(text) | SystemMessage::LocalSend(text) => text.into(),
-        })
+        })?;
+        self.finish_line()
     }
 
     fn new_line(&mut self) -> io::Result<()> {
