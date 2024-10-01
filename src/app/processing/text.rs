@@ -43,6 +43,11 @@ pub struct TextProcessor {
     pending_line: AnsiMut,
 }
 
+pub enum SystemMessage {
+    ConnectionStatus(String),
+    LocalSend(String),
+}
+
 pub trait ProcessorOutputReceiver {
     fn begin_chunk(&mut self) -> io::Result<()> {
         Ok(())
@@ -51,8 +56,6 @@ pub trait ProcessorOutputReceiver {
         Ok(())
     }
 
-    fn reset_colors(&mut self) -> io::Result<()>;
-
     fn new_line(&mut self) -> io::Result<()>;
     fn finish_line(&mut self) -> io::Result<()>;
 
@@ -60,6 +63,7 @@ pub trait ProcessorOutputReceiver {
     fn clear_partial_line(&mut self) -> io::Result<()>;
 
     fn text(&mut self, text: Ansi) -> io::Result<()>;
+    fn system(&mut self, text: SystemMessage) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
 
     #[cfg(dbg)]
@@ -237,7 +241,7 @@ mod tests {
             Ok(())
         }
 
-        fn reset_colors(&mut self) -> io::Result<()> {
+        fn system(&mut self, _message: SystemMessage) -> io::Result<()> {
             Ok(())
         }
 

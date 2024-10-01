@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 use crate::app::{clearable::Clearable, processing::ansi::Ansi, Id};
 
@@ -58,8 +58,8 @@ impl Clearable for PromptGroups {
 }
 
 impl PromptGroups {
-    pub fn get_mut(&mut self, group_id: Id) -> Option<&mut PromptsState> {
-        self.groups.get_mut(&group_id)
+    pub fn entry(&mut self, group_id: Id) -> Entry<Id, PromptsState> {
+        self.groups.entry(group_id)
     }
 
     pub fn insert(&mut self, group_id: Id, group: PromptsState) {

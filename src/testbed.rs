@@ -1,5 +1,5 @@
 use crate::app::matchers::MatcherSpec;
-use crate::app::processing::text::ProcessorOutputReceiver;
+use crate::app::processing::text::{ProcessorOutputReceiver, SystemMessage};
 use crate::app::{Id, LockableState};
 use crate::cli::ui::AnsiTerminalWriteUI;
 use crate::daemon::handlers::register_prompt;
@@ -35,12 +35,34 @@ impl<R: ProcessorOutputReceiver> TestBed<R> {
         self.ui.end_chunk()
     }
 
+    fn send(&mut self, to_send: &str) -> io::Result<()> {
+        self.ui
+            .system(SystemMessage::LocalSend(to_send.to_string()))
+    }
+
     pub fn register_prompt(&mut self, group_id: Id, prompt_index: usize, prompt: &str) {
         let matcher = MatcherSpec::Regex {
             options: Default::default(),
             source: prompt.to_string(),
         };
-        register_prompt::try_handle(self.state.clone(), self.id, matcher, group_id, prompt_index);
+
+        // Basically, ignore sent messages:
+        let (response_sender, _) = tokio::sync::broadcast::channel(999);
+        let channels = ChannelSource::new(
+            Box::new(stderr()),
+            RequestIdGenerator::default(),
+            response_sender,
+        );
+        let channel = channels.create_with_request_id(self.id);
+
+        register_prompt::try_handle(
+            &channel,
+            self.state.clone(),
+            self.id,
+            matcher,
+            group_id,
+            prompt_index,
+        );
     }
 }
 
@@ -87,7 +109,7 @@ pub fn run() -> io::Result<()> {
     testbed.receive("Prompt fde")?;
 
     // Send some text:
-    testbed.receive("\r\n(look)\r\n")?;
+    testbed.send("(look)")?;
 
     testbed.receive("look1\r\n")?;
     testbed.receive("look2\r\n")?;

@@ -49,5 +49,13 @@ pub enum DaemonNotification {
         handler_id: Id,
         context: MatchContext,
     },
+    PromptUpdated {
+        group_id: Id,
+        index: usize,
+        content: MatchedText,
+    },
+    ActivePromptGroupChanged {
+        group_id: Id,
+    },
     Event(EventData),
 }
