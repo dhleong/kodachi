@@ -1,11 +1,11 @@
-use std::io;
+use std::{io, sync::Mutex};
 
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
         processing::{
             ansi::Ansi,
-            text::{ProcessorOutputReceiver, SystemMessage},
+            text::{ProcessorOutputReceiver, SystemMessage, TextProcessor},
         },
         processors::register_processors,
         LockableState,
@@ -28,16 +28,10 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
         tokio::select! {
             incoming = transport.read() => match incoming? {
                 TransportEvent::Data(data) => {
-                    receiver.begin_chunk()?;
-
-                    connection
+                    let processor = &connection
                         .state
-                        .processor
-                        .lock()
-                        .unwrap()
-                        .process(Ansi::from_bytes(data), receiver)?;
-
-                    receiver.end_chunk()?;
+                        .processor;
+                    handle_received_text(receiver, processor, Ansi::from_bytes(data))?;
                 },
 
                 TransportEvent::Event(data) => {
@@ -54,9 +48,10 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                         transport.write(b"\r\n").await?;
 
                         // Also print locally
-                        receiver.begin_chunk()?;
-                        receiver.system(SystemMessage::LocalSend((text + "\r\n").into()))?;
-                        receiver.end_chunk()?;
+                        let processor = &connection
+                            .state
+                            .processor;
+                        handle_sent_text(receiver, processor, text)?;
                     }
                     Some(Outgoing::Disconnect) | None => {
                         connected = false;
@@ -124,6 +119,39 @@ pub async fn handle(
 
     receiver.notification(DaemonNotification::Disconnected)?;
     state.lock().unwrap().connections.drop(connection_id);
+
+    Ok(())
+}
+
+pub fn handle_received_text<R: ProcessorOutputReceiver>(
+    receiver: &mut R,
+    processor: &Mutex<TextProcessor>,
+    text: Ansi,
+) -> io::Result<()> {
+    receiver.begin_chunk()?;
+
+    processor.lock().unwrap().process(text, receiver)?;
+
+    receiver.end_chunk()
+}
+
+pub fn handle_sent_text<R: ProcessorOutputReceiver>(
+    receiver: &mut R,
+    processor: &Mutex<TextProcessor>,
+    text: String,
+) -> io::Result<()> {
+    receiver.begin_chunk()?;
+
+    // TODO: Would be nicer to send a SystemMessage, since
+    // this might cause Triggers to run unexpectedly
+    // receiver.system(SystemMessage::LocalSend((text + "\r\n").into()))?;
+
+    processor
+        .lock()
+        .unwrap()
+        .process(format!("\r\n{text}\r\n").into(), receiver)?;
+
+    receiver.end_chunk()?;
 
     Ok(())
 }

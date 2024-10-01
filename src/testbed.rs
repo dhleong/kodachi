@@ -1,7 +1,8 @@
 use crate::app::matchers::MatcherSpec;
-use crate::app::processing::text::{ProcessorOutputReceiver, SystemMessage};
+use crate::app::processing::text::ProcessorOutputReceiver;
 use crate::app::{Id, LockableState};
 use crate::cli::ui::AnsiTerminalWriteUI;
+use crate::daemon::handlers::connect::{handle_received_text, handle_sent_text};
 use crate::daemon::handlers::register_prompt;
 use std::io::{self, stdout};
 use std::io::{stderr, Write};
@@ -18,26 +19,25 @@ struct TestBed<R: ProcessorOutputReceiver> {
 
 impl<R: ProcessorOutputReceiver> TestBed<R> {
     fn receive(&mut self, to_receive: &str) -> io::Result<()> {
-        self.ui.begin_chunk()?;
-
-        let processor = self
+        let processor = &self
             .state
             .lock()
             .unwrap()
             .connections
-            .get_processor(self.id);
-        processor
-            .unwrap()
-            .lock()
-            .unwrap()
-            .process(to_receive.into(), &mut self.ui)?;
-
-        self.ui.end_chunk()
+            .get_processor(self.id)
+            .unwrap();
+        handle_received_text(&mut self.ui, processor, to_receive.into())
     }
 
     fn send(&mut self, to_send: &str) -> io::Result<()> {
-        self.ui
-            .system(SystemMessage::LocalSend(to_send.to_string()))
+        let processor = &self
+            .state
+            .lock()
+            .unwrap()
+            .connections
+            .get_processor(self.id)
+            .unwrap();
+        handle_sent_text(&mut self.ui, processor, to_send.to_string())
     }
 
     pub fn register_prompt(&mut self, group_id: Id, prompt_index: usize, prompt: &str) {
