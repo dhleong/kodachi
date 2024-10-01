@@ -46,17 +46,8 @@ impl<R: ProcessorOutputReceiver> TestBed<R> {
             source: prompt.to_string(),
         };
 
-        // Basically, ignore sent messages:
-        let (response_sender, _) = tokio::sync::broadcast::channel(999);
-        let channels = ChannelSource::new(
-            Box::new(stderr()),
-            RequestIdGenerator::default(),
-            response_sender,
-        );
-        let channel = channels.create_with_request_id(self.id);
-
         register_prompt::try_handle(
-            &channel,
+            None,
             self.state.clone(),
             self.id,
             matcher,

@@ -13,7 +13,7 @@ use crate::{
 use super::set_prompt_content;
 
 pub fn try_handle(
-    channel: &Channel,
+    channel: Option<&Channel>,
     mut state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
@@ -48,14 +48,14 @@ pub fn try_handle(
         index: prompt_index,
     };
 
-    let mut receiver = channel.for_connection(connection_id);
+    let mut receiver = channel.map(|channel| channel.for_connection(connection_id));
     processor_ref.lock().unwrap().register_matcher(
         id,
         compiled,
         MatcherMode::PartialLine,
         move |mut context| {
             set_prompt_content::try_handle(
-                Some(&mut receiver),
+                receiver.as_mut(),
                 state.clone(),
                 connection_id,
                 group_id,
@@ -79,7 +79,7 @@ pub async fn handle(
     prompt_index: usize,
 ) {
     let response = try_handle(
-        &channel,
+        Some(&channel),
         state,
         connection_id,
         matcher,
