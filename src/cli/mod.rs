@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 pub mod stdio;
 pub mod ui;
@@ -8,6 +8,16 @@ pub mod ui;
 pub struct Cli {
     #[clap(subcommand)]
     pub command: Commands,
+
+    #[arg(long, value_enum, global = true, default_value = "stdout")]
+    pub ui: UiType,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug)]
+pub enum UiType {
+    Stdout,
+
+    External,
 }
 
 #[derive(Subcommand, PartialEq)]
