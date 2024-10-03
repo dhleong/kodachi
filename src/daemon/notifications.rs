@@ -1,3 +1,5 @@
+pub mod external_ui;
+
 use std::{collections::HashMap, ops::Range};
 
 use serde::Serialize;
@@ -6,6 +8,8 @@ use crate::{
     app::{processing::ansi::Ansi, Id},
     transport::EventData,
 };
+
+use self::external_ui::ExternalUINotification;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct MatchedText {
@@ -56,6 +60,9 @@ pub enum DaemonNotification {
     },
     ActivePromptGroupChanged {
         group_id: Id,
+    },
+    ExternalUI {
+        data: ExternalUINotification,
     },
     Event(EventData),
 }

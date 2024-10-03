@@ -122,7 +122,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         self.clear_partial_line()?;
         self.new_line()?;
         self.text(match message {
-            SystemMessage::ConnectionStatus(text) | SystemMessage::LocalSend(text) => text.into(),
+            SystemMessage::ConnectionStatus(text) => text.into(),
         })?;
         self.finish_line()
     }

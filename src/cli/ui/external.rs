@@ -1,29 +1,37 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    io,
+    sync::{Arc, Mutex},
+};
 
 use crate::{
     app::{
-        processing::text::{ProcessorOutputReceiver, ProcessorOutputReceiverFactory},
+        processing::{
+            ansi::Ansi,
+            text::{ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage},
+        },
         Id,
     },
-    daemon::channel::RespondedChannel,
+    daemon::{
+        channel::RespondedChannel,
+        notifications::{external_ui::ExternalUINotification, DaemonNotification},
+        protocol::Notification,
+    },
 };
 
 use super::UiState;
 
 pub struct ExternalUI {
-    state: Arc<Mutex<UiState>>,
     connection_id: Id,
     notifier: RespondedChannel,
 }
 
 impl ExternalUI {
     pub fn create(
-        state: Arc<Mutex<UiState>>,
+        _state: Arc<Mutex<UiState>>,
         connection_id: Id,
         notifier: RespondedChannel,
     ) -> Self {
         Self {
-            state,
             connection_id,
             notifier,
         }
@@ -32,35 +40,43 @@ impl ExternalUI {
 
 impl ProcessorOutputReceiver for ExternalUI {
     fn new_line(&mut self) -> std::io::Result<()> {
-        todo!()
+        self.send_external_ui(ExternalUINotification::NewLine)
     }
 
     fn finish_line(&mut self) -> std::io::Result<()> {
-        todo!()
+        self.send_external_ui(ExternalUINotification::FinishLine)
     }
 
     fn clear_partial_line(&mut self) -> std::io::Result<()> {
-        todo!()
+        self.send_external_ui(ExternalUINotification::ClearPartialLine)
     }
 
-    fn text(&mut self, text: crate::app::processing::ansi::Ansi) -> std::io::Result<()> {
-        todo!()
+    fn text(&mut self, text: Ansi) -> std::io::Result<()> {
+        self.send_external_ui(ExternalUINotification::Text {
+            ansi: text.to_string(),
+        })
     }
 
-    fn system(&mut self, text: crate::app::processing::text::SystemMessage) -> std::io::Result<()> {
-        todo!()
+    fn system(&mut self, text: SystemMessage) -> std::io::Result<()> {
+        match text {
+            SystemMessage::ConnectionStatus(status) => {
+                self.send_external_ui(ExternalUINotification::ConnectionStatus { text: status })
+            }
+        }
     }
 
-    fn notification(
-        &mut self,
-        notification: crate::daemon::notifications::DaemonNotification,
-    ) -> std::io::Result<()> {
-        self.notifier
-            .notify(crate::daemon::protocol::Notification::ForConnection {
-                connection_id: self.connection_id,
-                notification,
-            });
+    fn notification(&mut self, notification: DaemonNotification) -> std::io::Result<()> {
+        self.notifier.notify(Notification::ForConnection {
+            connection_id: self.connection_id,
+            notification,
+        });
         Ok(())
+    }
+}
+
+impl ExternalUI {
+    fn send_external_ui(&mut self, data: ExternalUINotification) -> io::Result<()> {
+        self.notification(DaemonNotification::ExternalUI { data })
     }
 }
 
