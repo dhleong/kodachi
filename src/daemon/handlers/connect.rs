@@ -5,12 +5,14 @@ use crate::{
         connections::{ConnectionReceiver, Outgoing},
         processing::{
             ansi::Ansi,
-            text::{ProcessorOutputReceiver, SystemMessage, TextProcessor},
+            text::{
+                ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage,
+                TextProcessor,
+            },
         },
         processors::register_processors,
         LockableState,
     },
-    cli::ui::AnsiTerminalWriteUI,
     daemon::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
@@ -64,7 +66,8 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     Ok(())
 }
 
-pub async fn handle(
+pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
+    ui: TUI,
     channel: Channel,
     mut state: LockableState,
     data: commands::Connect,
@@ -75,8 +78,7 @@ pub async fn handle(
 
     let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
     let receiver_state = connection.state.ui_state.clone();
-    let stdout = io::stdout();
-    let mut receiver = AnsiTerminalWriteUI::create(receiver_state, connection.id, notifier, stdout);
+    let mut receiver = ui.create(receiver_state, connection_id, notifier);
 
     let transport = match BoxedTransport::connect_uri(uri, 4096).await {
         Ok(transport) => transport,

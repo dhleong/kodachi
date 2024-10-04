@@ -1,4 +1,7 @@
-use std::io;
+use std::{
+    io,
+    sync::{Arc, Mutex},
+};
 
 use bytes::Buf;
 
@@ -8,7 +11,11 @@ use crate::{
         matchers::{MatchResult, MatchedResult, Matcher},
         Id,
     },
-    daemon::notifications::{DaemonNotification, MatchContext},
+    cli::ui::UiState,
+    daemon::{
+        channel::RespondedChannel,
+        notifications::{DaemonNotification, MatchContext},
+    },
 };
 
 use super::ansi::{Ansi, AnsiMut};
@@ -45,7 +52,6 @@ pub struct TextProcessor {
 
 pub enum SystemMessage {
     ConnectionStatus(String),
-    LocalSend(String),
 }
 
 pub trait ProcessorOutputReceiver {
@@ -81,6 +87,17 @@ pub enum MatcherMode {
 enum PerformMatchResult<'a> {
     Matched(&'a mut RegisteredMatcher, MatchedResult),
     Ignored(Ansi),
+}
+
+pub trait ProcessorOutputReceiverFactory: Clone + Send {
+    type Implementation: ProcessorOutputReceiver + Send;
+
+    fn create(
+        &self,
+        state: Arc<Mutex<UiState>>,
+        connection_id: Id,
+        notifier: RespondedChannel,
+    ) -> Self::Implementation;
 }
 
 impl TextProcessor {

@@ -75,14 +75,52 @@ impl RequestIdGenerator {
 mod tests {
     use super::*;
 
-    #[test]
-    fn serialization_test() {
-        let s = serde_json::to_string(&Notification::ForConnection {
-            connection_id: 42,
-            notification: DaemonNotification::Connected,
-        })
-        .unwrap();
-        assert_eq!(s, r#"{"connection_id":42,"type":"Connected"}"#);
+    #[cfg(test)]
+    mod serialization_tests {
+        use crate::daemon::notifications::external_ui::ExternalUINotification;
+
+        use super::*;
+
+        #[test]
+        fn connected_test() {
+            let s = serde_json::to_string(&Notification::ForConnection {
+                connection_id: 42,
+                notification: DaemonNotification::Connected,
+            })
+            .unwrap();
+            assert_eq!(s, r#"{"connection_id":42,"type":"Connected"}"#);
+        }
+
+        #[test]
+        fn external_ui_test() {
+            let s = serde_json::to_string(&Notification::ForConnection {
+                connection_id: 42,
+                notification: DaemonNotification::ExternalUI {
+                    data: ExternalUINotification::Text {
+                        ansi: "Welcome!".to_string(),
+                    },
+                },
+            })
+            .unwrap();
+            assert_eq!(
+                s,
+                r#"{"connection_id":42,"type":"ExternalUI","data":{"type":"Text","ansi":"Welcome!"}}"#
+            );
+
+            let s = serde_json::to_string(&Notification::ForConnection {
+                connection_id: 42,
+                notification: DaemonNotification::ExternalUI {
+                    data: ExternalUINotification::ConnectionStatus {
+                        text: "Connected!".to_string(),
+                    },
+                },
+            })
+            .unwrap();
+            assert_eq!(
+                s,
+                r#"{"connection_id":42,"type":"ExternalUI","data":{"type":"ConnectionStatus","text":"Connected!"}}"#
+            );
+        }
     }
 
     #[cfg(test)]

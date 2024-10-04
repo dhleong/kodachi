@@ -1,8 +1,10 @@
-use std::io::{self, stdout, BufReader};
+use std::io::{self, stdout, BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
-use clap::StructOpt;
+use clap::Parser;
+use cli::ui::external::ExternalUIFactory;
+use cli::ui::StdoutAnsiTerminalWriteUIFactory;
 use cli::{Cli, Commands};
 
 mod app;
@@ -18,12 +20,26 @@ use cli::stdio::StdinReader;
 use crossterm::style::{Print, ResetColor};
 use logging::KodachiLogger;
 
+async fn run_with<TInput: BufRead, TResponse: 'static + Write + Send>(
+    cli: Cli,
+    input: TInput,
+    response: TResponse,
+) -> io::Result<()> {
+    match cli.ui {
+        cli::UiType::External => daemon::daemon(ExternalUIFactory, input, response).await,
+
+        cli::UiType::Stdout => {
+            daemon::daemon(StdoutAnsiTerminalWriteUIFactory, input, response).await
+        }
+    }
+}
+
 async fn run(cli: Cli) -> io::Result<()> {
     match &cli.command {
         Commands::Stdio => {
             let input = StdinReader::stdin();
             let response = io::stderr();
-            daemon::daemon(input, response).await
+            run_with(cli, input, response).await
         }
 
         Commands::Unix { path } => {
@@ -33,7 +49,7 @@ async fn run(cli: Cli) -> io::Result<()> {
             };
             let input = BufReader::new(socket.try_clone().unwrap());
             let response = socket;
-            daemon::daemon(input, response).await
+            run_with(cli, input, response).await
         }
 
         Commands::Testbed => panic!(),

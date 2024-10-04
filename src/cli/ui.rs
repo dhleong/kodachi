@@ -1,3 +1,4 @@
+pub mod external;
 pub mod prompts;
 
 use crossterm::{
@@ -15,7 +16,7 @@ use crate::{
         clearable::Clearable,
         processing::{
             ansi::Ansi,
-            text::{ProcessorOutputReceiver, SystemMessage},
+            text::{ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage},
         },
         Id,
     },
@@ -121,7 +122,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         self.clear_partial_line()?;
         self.new_line()?;
         self.text(match message {
-            SystemMessage::ConnectionStatus(text) | SystemMessage::LocalSend(text) => text.into(),
+            SystemMessage::ConnectionStatus(text) => text.into(),
         })?;
         self.finish_line()
     }
@@ -185,5 +186,21 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
             notification,
         });
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct StdoutAnsiTerminalWriteUIFactory;
+
+impl ProcessorOutputReceiverFactory for StdoutAnsiTerminalWriteUIFactory {
+    type Implementation = AnsiTerminalWriteUI<io::Stdout>;
+
+    fn create(
+        &self,
+        state: Arc<Mutex<UiState>>,
+        connection_id: Id,
+        notifier: RespondedChannel,
+    ) -> Self::Implementation {
+        AnsiTerminalWriteUI::create(state, connection_id, notifier, io::stdout())
     }
 }
