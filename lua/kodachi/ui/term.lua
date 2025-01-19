@@ -19,6 +19,7 @@ function M.spawn_unix(opts)
 
   local env = {
     DEBUG = vim.g.KODACHI_DEBUG or '',
+    RUST_BACKTRACE = vim.g.KODACHI_DEBUG and '1' or nil,
   }
 
   local cmd = vim.tbl_flatten {
@@ -30,6 +31,7 @@ function M.spawn_unix(opts)
       '-n', 'kodachi',
       '-s', session_name,
       '-e', 'DEBUG=' .. env.DEBUG,
+      '-e', 'RUST_BACKTRACE=' .. env.RUST_BACKTRACE,
     } or {},
     M.debug and { 'cargo', 'run', '--' } or kodachi_exe,
     'unix', opts.socket_name,
