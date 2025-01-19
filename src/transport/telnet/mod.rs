@@ -82,7 +82,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
 
                 match option {
                     // Start compressing
-                    TelnetOption::MCCP2 => self.stream.set_decompressing(true),
+                    TelnetOption::MCCP2 => {
+                        // Anything remaining in our buffer is compressed and needs to be processed
+                        // by the stream:
+                        self.stream.start_decompressing(Some(&mut self.buffer));
+                    }
 
                     // Otherwise, delgate to the options manager
                     _ => {

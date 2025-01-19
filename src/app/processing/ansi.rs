@@ -13,7 +13,9 @@ impl Deref for AnsiMut {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        std::str::from_utf8(&self.0).unwrap()
+        std::str::from_utf8(&self.0)
+            .map_err(|err| format!("Error parsing {:?} into utf8: {:?}", self.0, err))
+            .unwrap()
     }
 }
 
