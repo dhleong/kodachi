@@ -54,4 +54,11 @@ function M.with_connection(uri, on_connection)
   end
 end
 
+---@param opts {debug: boolean|string|nil}
+function M.setup(opts)
+  if opts.debug ~= nil then
+    vim.g.KODACHI_DEBUG = opts.debug
+  end
+end
+
 return M

@@ -19,7 +19,7 @@ function M.spawn_unix(opts)
 
   local env = {
     DEBUG = vim.g.KODACHI_DEBUG or '',
-    RUST_BACKTRACE = vim.g.KODACHI_DEBUG and '1' or nil,
+    RUST_BACKTRACE = vim.g.KODACHI_DEBUG and '1' or '',
   }
 
   local cmd = vim.tbl_flatten {
