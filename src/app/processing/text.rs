@@ -71,11 +71,6 @@ pub trait ProcessorOutputReceiver {
     fn text(&mut self, text: Ansi) -> io::Result<()>;
     fn system(&mut self, text: SystemMessage) -> io::Result<()>;
     fn notification(&mut self, notification: DaemonNotification) -> io::Result<()>;
-
-    #[cfg(dbg)]
-    fn dump_state(&self) -> String {
-        "".to_string()
-    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -135,7 +130,7 @@ impl TextProcessor {
         receiver: &mut R,
     ) -> io::Result<()> {
         // Handle trailing carriage returns from previous lines:
-        if self.pending_line.chars().next() == Some('\r') {
+        if self.pending_line.starts_with('\r') {
             // This is particularly important for matchers of whole lines, such as prompts
             let mut old_bytes = self.pending_line.take_bytes();
             let trimmed_bytes = old_bytes.split_off(1);
@@ -226,7 +221,7 @@ impl TextProcessor {
             }
         }
 
-        return PerformMatchResult::Ignored(to_match);
+        PerformMatchResult::Ignored(to_match)
     }
 }
 

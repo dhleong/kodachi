@@ -4,7 +4,7 @@ use std::hash::Hash;
 
 const DEFAULT_MAX_DEPTH: usize = 5;
 
-const DEFAULT_STOP_WORDS: [&'static str; 3] = ["say", "emote", "pose"];
+const DEFAULT_STOP_WORDS: [&str; 3] = ["say", "emote", "pose"];
 
 pub struct MarkovTrie<T> {
     root: MarkovTransitions<T>,
@@ -76,7 +76,7 @@ impl<T: Default + Hash + Eq + Clone> MarkovTransitions<T> {
             return;
         }
 
-        let mut transition = if let Some(existing) = self.transitions.get_mut(&next_value) {
+        let transition = if let Some(existing) = self.transitions.get_mut(next_value) {
             existing
         } else {
             self.transitions

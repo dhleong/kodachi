@@ -12,6 +12,7 @@ pub mod transforms;
 pub struct CompletionParams {
     pub word_to_complete: String,
     pub line_to_cursor: String,
+    #[allow(unused)] // useful for debug
     pub line: String,
 }
 

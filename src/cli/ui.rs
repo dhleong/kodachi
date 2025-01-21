@@ -142,15 +142,6 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         Ok(())
     }
 
-    #[cfg(dbg)]
-    fn dump_state(&self) -> String {
-        format!(
-            "rendered={}; clean={}",
-            self.internal.rendered_prompt_lines,
-            self.state.lock().unwrap().prompts.get_clean_lines()
-        )
-    }
-
     fn text(&mut self, mut text: Ansi) -> io::Result<()> {
         // TODO: compute *visible* columns
         self.internal.printed_columns += text.strip_ansi().len() as u16;

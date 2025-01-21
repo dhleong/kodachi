@@ -68,7 +68,6 @@ pub fn try_handle(
                 content: MatchedText {
                     plain,
                     ansi: content.to_string(),
-                    raw: content,
                 },
             });
         }

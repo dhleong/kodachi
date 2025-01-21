@@ -1,13 +1,8 @@
 use std::{future::Future, io, pin::Pin};
 
-use async_trait::async_trait;
-
 use crate::{
     app::matchers::{MatchResult, MatchedResult, Matcher},
-    daemon::{
-        notifications::{DaemonNotification, MatchContext},
-        responses::DaemonResponse,
-    },
+    daemon::notifications::MatchContext,
 };
 
 use super::ansi::Ansi;
@@ -27,11 +22,6 @@ type MatchHandler = dyn Fn(MatchContext) -> Pin<Box<dyn Future<Output = io::Resu
 struct RegisteredMatcher {
     matcher: Matcher,
     on_match: Box<MatchHandler>,
-}
-
-#[async_trait]
-pub trait SendTextProcessorOutputReceiver {
-    async fn request(&mut self, request: DaemonNotification) -> io::Result<DaemonResponse>;
 }
 
 #[derive(Default)]

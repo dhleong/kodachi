@@ -13,8 +13,6 @@ use self::external_ui::ExternalUINotification;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct MatchedText {
-    #[serde(skip_serializing)]
-    pub raw: Ansi,
     pub plain: String,
     pub ansi: String,
 }
@@ -24,7 +22,6 @@ impl MatchedText {
         return MatchedText {
             ansi: (&ansi).to_string(),
             plain: ansi.strip_ansi().to_string(),
-            raw: ansi,
         };
     }
 }

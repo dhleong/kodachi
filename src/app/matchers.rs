@@ -37,6 +37,7 @@ pub struct MatchedResult {
     pub context: MatchContext,
 
     // If `true` then some (possibly all) of the input was consumed.
+    #[allow(unused)]
     pub consumed: bool,
 }
 
@@ -90,28 +91,27 @@ impl Matcher {
             indexed.insert(i, MatchedText::from(original.trim_trailing_newlines()));
         }
 
-        for name in self.pattern.capture_names() {
-            if let Some(n) = name {
-                if let Some(captured) = captures.name(n) {
-                    let original = stripped.get_original(captured.range());
-                    named.insert(
-                        n.to_string(),
-                        MatchedText::from(original.trim_trailing_newlines()),
-                    );
-                }
+        for name in self.pattern.capture_names().flatten() {
+            if let Some(captured) = captures.name(name) {
+                let original = stripped.get_original(captured.range());
+                named.insert(
+                    name.to_string(),
+                    MatchedText::from(original.trim_trailing_newlines()),
+                );
             }
         }
 
-        return MatchContext {
+        MatchContext {
             named,
             indexed,
             full_match_range: captures.get(0).unwrap().range(),
-        };
+        }
     }
 }
 
 #[derive(Debug)]
 pub enum MatcherCompileError {
+    #[allow(unused)]
     SyntaxError(String),
     OutOfOrderIndexes,
 }
@@ -247,7 +247,7 @@ mod tests {
             consumed,
         }) = matcher.try_match(input.into())
         {
-            assert_eq!(consumed, true);
+            assert!(consumed);
             assert_eq!(&remaining[..], "");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
@@ -278,7 +278,7 @@ mod tests {
             consumed,
         }) = matcher.try_match(input.into())
         {
-            assert_eq!(consumed, true);
+            assert!(consumed);
             assert_eq!(&remaining[..], "just  you know!");
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.indexed[&0].ansi, "say '\x1b[32manything\x1b[m'");
@@ -309,7 +309,7 @@ mod tests {
             consumed,
         }) = matcher.try_match(input.into())
         {
-            assert_eq!(consumed, true);
+            assert!(consumed);
             assert_eq!(&remaining[..], "");
             assert_eq!(&context.indexed[&0].plain, "For the honor of Grayskull!");
         } else {
