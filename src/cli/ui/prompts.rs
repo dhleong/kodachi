@@ -5,13 +5,11 @@ use crate::app::{clearable::Clearable, processing::ansi::Ansi, Id};
 #[derive(Default)]
 pub struct PromptsState {
     values: Vec<Option<Ansi>>,
-    set_values: usize,
 }
 
 impl Clearable for PromptsState {
     fn clear(&mut self) {
         self.values.clear();
-        self.set_values = 0;
     }
 }
 
@@ -28,9 +26,9 @@ impl PromptsState {
         self.values.len()
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn get(&self, index: usize) -> Option<&Ansi> {
-        self.values.get(index).map_or(None, |v| v.as_ref())
+        self.values.get(index).and_then(|v| v.as_ref())
     }
 
     pub fn set_index(&mut self, index: usize, content: Ansi) {
@@ -38,11 +36,6 @@ impl PromptsState {
             self.values.push(None);
         }
         self.values[index] = Some(content.trim_end_matches("\r\n").into());
-        self.set_values = index + 1;
-    }
-
-    pub fn get_clean_lines(&self) -> usize {
-        self.set_values
     }
 }
 
