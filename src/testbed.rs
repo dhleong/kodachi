@@ -4,6 +4,7 @@ use crate::app::{Id, LockableState};
 use crate::cli::ui::AnsiTerminalWriteUI;
 use crate::daemon::handlers::connect::{handle_received_text, handle_sent_text};
 use crate::daemon::handlers::register_prompt;
+use std::env;
 use std::io::{self, stdout};
 use std::io::{stderr, Write};
 
@@ -69,41 +70,48 @@ pub fn run() -> io::Result<()> {
 
     let mut state = LockableState::default();
     let connection = state.lock().unwrap().connections.create();
-    let mut ui = AnsiTerminalWriteUI::create(connection.state.ui_state.clone(), 0, notifier, out);
+    let ui = AnsiTerminalWriteUI::create(connection.state.ui_state.clone(), 0, notifier, out);
 
     {
         let mut state = connection.state.ui_state.lock().unwrap();
         state.prompts.set_index(0, "Prompt ABC".into());
     }
 
-    // ui.begin_chunk()?;
-    // ui.clear_partial_line()?;
-    // ui.text("Test".into())?;
-    // ui.finish_line()?;
-    // ui.end_chunk()?;
+    match env::var("KODACHI_TESTBED").as_deref() {
+        Ok("direct") => run_direct(ui),
+        _ => {
+            let testbed = TestBed {
+                state,
+                id: connection.id,
+                ui,
+            };
+            run_test_bed(testbed)
+        }
+    }
+}
 
-    // ui.begin_chunk()?;
-    // ui.clear_partial_line()?;
-    // ui.text("Test two\r\n".into())?;
-    // ui.new_line()?;
-    // ui.finish_line()?;
-    // ui.end_chunk()?;
+fn run_direct<T: Write>(mut ui: AnsiTerminalWriteUI<T>) -> io::Result<()> {
+    ui.begin_chunk()?;
+    ui.clear_partial_line()?;
+    ui.text("Test".into())?;
+    ui.finish_line()?;
+    ui.end_chunk()?;
 
-    // ui.begin_chunk()?;
-    // ui.clear_partial_line()?;
-    // ui.text("Test three\r\n".into())?;
-    // ui.new_line()?;
-    // ui.finish_line()?;
-    // ui.end_chunk()?;
+    ui.begin_chunk()?;
+    ui.clear_partial_line()?;
+    ui.text("Test two\r\n".into())?;
+    ui.new_line()?;
+    ui.finish_line()?;
+    ui.end_chunk()?;
 
-    // Ok(())
+    ui.begin_chunk()?;
+    ui.clear_partial_line()?;
+    ui.text("Test three\r\n".into())?;
+    ui.new_line()?;
+    ui.finish_line()?;
+    ui.end_chunk()?;
 
-    let testbed = TestBed {
-        state,
-        id: connection.id,
-        ui,
-    };
-    run_test_bed(testbed)
+    Ok(())
 }
 
 fn run_test_bed<V: ProcessorOutputReceiver>(mut testbed: TestBed<V>) -> io::Result<()> {
