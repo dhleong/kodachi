@@ -45,6 +45,7 @@ impl Clearable for UiState {
 struct InternalState {
     rendered_prompt_lines: u16,
     printed_columns: u16,
+    last_text: Ansi,
 }
 
 /// This UI expects to interact with an ANSI-powered terminal UI
@@ -110,7 +111,7 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
     fn system(&mut self, message: SystemMessage) -> io::Result<()> {
         self.clear_prompts_plus_lines(0)?;
         ::crossterm::queue!(self.output, ResetColor)?;
-        self.text("\n".into())?;
+        self.new_line()?;
         self.text(match message {
             SystemMessage::ConnectionStatus(text) => text.into(),
         })?;
@@ -120,8 +121,15 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
 
     fn new_line(&mut self) -> io::Result<()> {
         // NOTE: This is basically a nop, since we will have
-        // printed the "\r\n" via `text`, and cleared prompts
+        // printed the line-ender via `text`, and cleared prompts
         // in `clear_partial_line` before that.
+
+        // NOTE: EG starmourn.com:23 just sends a newline, which
+        // doesn't seem to consistently "return the carriage" properly,
+        // so we ensure that happens here.
+        if !self.internal.last_text.ends_with("\r\n") {
+            self.output.write_all("\r\n".as_bytes())?;
+        }
         Ok(())
     }
 
@@ -129,7 +137,9 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         // TODO: compute *visible* columns
         self.internal.printed_columns += text.strip_ansi().len() as u16;
 
-        self.output.write_all(&text.as_bytes())
+        let result = self.output.write_all(&text.as_bytes());
+        self.internal.last_text = text;
+        result
     }
 
     fn finish_line(&mut self) -> io::Result<()> {

@@ -46,7 +46,7 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
             outgoing = connection.outbox.recv() => {
                 match outgoing {
                     Some(Outgoing::Text(text)) => {
-                        transport.write(&text.as_bytes()).await?;
+                        transport.write(text.as_bytes()).await?;
                         transport.write(b"\r\n").await?;
 
                         // Also print locally
@@ -110,7 +110,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
                     format!("Disconnected: {}", error)
                 };
                 receiver.begin_chunk()?;
-                receiver.system(SystemMessage::ConnectionStatus(format!("\n{}\n", message)))?;
+                receiver.system(SystemMessage::ConnectionStatus(message))?;
                 receiver.end_chunk()?;
             }
             _ => {

@@ -80,6 +80,12 @@ pub struct Ansi {
     stripped: Option<AnsiStripped>,
 }
 
+impl Default for Ansi {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl Debug for Ansi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.bytes.fmt(f)
