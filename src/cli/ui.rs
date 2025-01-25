@@ -73,6 +73,23 @@ impl<W: Write> AnsiTerminalWriteUI<W> {
             internal: InternalState::default(),
         }
     }
+
+    fn clear_prompts_plus_lines(&mut self, extra_lines: u16) -> io::Result<()> {
+        let prompt_lines = self.internal.rendered_prompt_lines;
+        self.internal.rendered_prompt_lines = 0;
+
+        let lines: u16 = extra_lines + prompt_lines;
+        if lines == 0 {
+            // nop? Already on a cleared line
+            Ok(())
+        } else {
+            ::crossterm::queue!(
+                self.output,
+                MoveToPreviousLine(lines),
+                Clear(ClearType::FromCursorDown)
+            )
+        }
+    }
 }
 
 impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
@@ -87,44 +104,24 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         let (width, _) = ::crossterm::terminal::size()?;
         let printed_lines = if columns == 0 { 0 } else { columns / width + 1 };
 
-        let extra_lines_to_clean = self.internal.rendered_prompt_lines;
-        self.internal.rendered_prompt_lines = 0;
-
-        let lines: u16 = printed_lines + extra_lines_to_clean;
-        if lines == 0 {
-            // nop? Already on a cleared line
-            Ok(())
-        } else {
-            ::crossterm::queue!(
-                self.output,
-                MoveToPreviousLine(lines),
-                Clear(ClearType::FromCursorDown)
-            )
-        }
+        self.clear_prompts_plus_lines(printed_lines)
     }
 
     fn system(&mut self, message: SystemMessage) -> io::Result<()> {
+        self.clear_prompts_plus_lines(0)?;
         ::crossterm::queue!(self.output, ResetColor)?;
-        self.clear_partial_line()?;
-        self.new_line()?;
+        self.text("\n".into())?;
         self.text(match message {
             SystemMessage::ConnectionStatus(text) => text.into(),
         })?;
+        self.new_line()?;
         self.finish_line()
     }
 
     fn new_line(&mut self) -> io::Result<()> {
-        self.internal.printed_columns = 0;
-
-        // Clear the prompts
-        let last_prompts_count = self.internal.rendered_prompt_lines;
-        if last_prompts_count > 0 {
-            self.internal.rendered_prompt_lines = 0;
-
-            ::crossterm::queue!(self.output, MoveToPreviousLine(last_prompts_count))?;
-            ::crossterm::queue!(self.output, Clear(ClearType::FromCursorDown))?;
-        }
-
+        // NOTE: This is basically a nop, since we will have
+        // printed the "\r\n" via `text`, and cleared prompts
+        // in `clear_partial_line` before that.
         Ok(())
     }
 
