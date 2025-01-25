@@ -69,19 +69,51 @@ pub fn run() -> io::Result<()> {
 
     let mut state = LockableState::default();
     let connection = state.lock().unwrap().connections.create();
-    let ui = AnsiTerminalWriteUI::create(connection.state.ui_state.clone(), 0, notifier, out);
-    let mut testbed = TestBed {
+    let mut ui = AnsiTerminalWriteUI::create(connection.state.ui_state.clone(), 0, notifier, out);
+
+    {
+        let mut state = connection.state.ui_state.lock().unwrap();
+        state.prompts.set_index(0, "Prompt ABC".into());
+    }
+
+    // ui.begin_chunk()?;
+    // ui.clear_partial_line()?;
+    // ui.text("Test".into())?;
+    // ui.finish_line()?;
+    // ui.end_chunk()?;
+
+    // ui.begin_chunk()?;
+    // ui.clear_partial_line()?;
+    // ui.text("Test two\r\n".into())?;
+    // ui.new_line()?;
+    // ui.finish_line()?;
+    // ui.end_chunk()?;
+
+    // ui.begin_chunk()?;
+    // ui.clear_partial_line()?;
+    // ui.text("Test three\r\n".into())?;
+    // ui.new_line()?;
+    // ui.finish_line()?;
+    // ui.end_chunk()?;
+
+    // Ok(())
+
+    let testbed = TestBed {
         state,
         id: connection.id,
         ui,
     };
+    run_test_bed(testbed)
+}
 
+fn run_test_bed<V: ProcessorOutputReceiver>(mut testbed: TestBed<V>) -> io::Result<()> {
     testbed.register_prompt(0, 0, "^Prompt ([a-c]+).*$");
     testbed.register_prompt(0, 1, "^Prompt ([d-f]+).*$");
 
     testbed.receive("Output line 1\r\nPrompt abc\r\nPrompt def")?;
     testbed.receive("\r\n")?;
     testbed.receive("Lorem ipsum dolor sit amit bacon")?;
+
     testbed.receive("~Lorem ipsum dolor sit amit bacon Lorem ipsum dolor sit amit bacon\r\n")?;
 
     testbed.receive("Prompt cba")?;

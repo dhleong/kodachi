@@ -79,7 +79,7 @@ impl SendTextProcessor {
                 MatchResult::Ignored(ignored) => to_match = ignored,
                 MatchResult::Matched(MatchedResult {
                     context,
-                    mut remaining,
+                    remaining: Some(mut remaining),
                     ..
                 }) => {
                     // NOTE: Since the matcher *shouldn't* consume, remaining *should*
@@ -94,6 +94,11 @@ impl SendTextProcessor {
                         return Ok(ProcessResult::Stop);
                     }
                 }
+
+                // If the matcher *did* consume for some reason... nothing else to do
+                MatchResult::Matched(MatchedResult {
+                    remaining: None, ..
+                }) => return Ok(ProcessResult::Stop),
             }
         }
 
