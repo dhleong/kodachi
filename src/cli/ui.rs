@@ -154,16 +154,14 @@ impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
         let state = self.state.lock().unwrap();
         if !state.prompts.is_empty() {
             let prompts_count = state.prompts.len() as u16;
-            for prompt in state.prompts.iter() {
-                if let Some(prompt) = prompt {
-                    self.output.write_all(&prompt.as_bytes())?;
+            for prompt in state.prompts.iter().flatten() {
+                self.output.write_all(&prompt.as_bytes())?;
 
-                    // NOTE: This can be convenient for testing redraws:
-                    // self.output
-                    //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
+                // NOTE: This can be convenient for testing redraws:
+                // self.output
+                //     .write_all(&format!("{:?}", SystemTime::now()).as_bytes())?;
 
-                    self.output.write_all("\r\n".as_bytes())?;
-                }
+                self.output.write_all("\r\n".as_bytes())?;
             }
 
             self.internal.rendered_prompt_lines = prompts_count;
