@@ -145,7 +145,6 @@ impl TextProcessor {
         }
 
         receiver.clear_partial_line()?;
-        // receiver.new_line()?;
 
         let (match_mode, to_match) = if has_full_line {
             let mut full_line = self.pending_line.take();
@@ -180,10 +179,6 @@ impl TextProcessor {
         }
 
         receiver.finish_line()?;
-
-        // if has_full_line {
-        //     receiver.new_line()?;
-        // }
 
         Ok(())
     }
