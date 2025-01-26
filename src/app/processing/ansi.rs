@@ -204,7 +204,7 @@ impl Ansi {
     // Returns an Ansi instance, which shares its backing data with this Ansi instance, but whose
     // accessible range does not have include any trailing newlines
     pub fn trim_trailing_newlines(&self) -> Ansi {
-        if !self.ends_with(&['\r', '\n'][..]) {
+        if !self.ends_with(['\r', '\n']) {
             return self.clone();
         }
 
@@ -344,6 +344,12 @@ mod tests {
     #[test]
     fn trim_trailing_newlines() {
         let ansi = Ansi::from("grayskull\r\n");
+        assert_eq!(&ansi.trim_trailing_newlines()[..], "grayskull");
+
+        let ansi = Ansi::from("grayskull\n");
+        assert_eq!(&ansi.trim_trailing_newlines()[..], "grayskull");
+
+        let ansi = Ansi::from("grayskull\r\r\n");
         assert_eq!(&ansi.trim_trailing_newlines()[..], "grayskull");
     }
 

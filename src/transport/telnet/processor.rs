@@ -47,15 +47,15 @@ impl TelnetEvent {
 impl Writable for TelnetEvent {
     fn write<S: io::Write>(self, stream: &mut S) -> io::Result<()> {
         match self {
-            TelnetEvent::Data(mut bytes) => stream.write_all(&mut bytes),
+            TelnetEvent::Data(bytes) => stream.write_all(&bytes),
             TelnetEvent::Command(command) => stream.write_all(&[IAC, command.byte()]),
             TelnetEvent::Negotiate(negotiation, option) => {
                 stream.write_all(&[IAC, negotiation.byte(), option.byte()])
             }
 
-            TelnetEvent::Subnegotiate(option, mut bytes) => {
+            TelnetEvent::Subnegotiate(option, bytes) => {
                 stream.write_all(&[IAC, SB, option.byte()])?;
-                stream.write_all(&mut bytes)?;
+                stream.write_all(&bytes)?;
                 stream.write_all(&[IAC, SE])
             }
         }
@@ -221,6 +221,7 @@ mod tests {
         );
 
         assert_eq!(processor.process_one(&mut buffer)?, None);
+        assert_eq!(buffer.remaining(), 0);
         Ok(())
     }
 
