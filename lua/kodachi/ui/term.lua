@@ -18,6 +18,7 @@ function M.spawn_unix(opts)
   local session_name = vim.fn.rand()
 
   local env = {
+    KODACHI_DUMP = vim.g.KODACHI_DUMP or '',
     DEBUG = vim.g.KODACHI_DEBUG or '',
     RUST_BACKTRACE = vim.g.KODACHI_DEBUG and '1' or '',
   }
@@ -31,6 +32,7 @@ function M.spawn_unix(opts)
       '-n', 'kodachi',
       '-s', session_name,
       '-e', 'DEBUG=' .. env.DEBUG,
+      '-e', 'KODACHI_DUMP=' .. env.KODACHI_DUMP,
       '-e', 'RUST_BACKTRACE=' .. env.RUST_BACKTRACE,
     } or {},
     M.debug and { 'cargo', 'run', '--' } or kodachi_exe,
