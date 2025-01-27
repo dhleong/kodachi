@@ -1,146 +1,213 @@
 use std::{
     io::{self},
+    mem,
     task::Poll,
 };
 
-use bytes::BytesMut;
-use flate2::{Decompress, FlushDecompress, Status};
+use async_compression::tokio::bufread::ZlibDecoder;
+use bytes::{Bytes, BytesMut};
 use log::trace;
 use pin_project::pin_project;
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::{AsyncBufRead, AsyncRead, AsyncWrite, BufReader, ReadBuf};
 
 #[pin_project]
-pub struct CompressableStream<S> {
+struct PrefixedStream<S: AsyncBufRead> {
+    prefix: Bytes,
     #[pin]
     stream: S,
-    decompress_buffer: BytesMut,
-    decompressor: Option<Decompress>,
 }
 
-impl<S> CompressableStream<S> {
+impl<S: AsyncBufRead> AsyncBufRead for PrefixedStream<S> {
+    fn poll_fill_buf(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<io::Result<&[u8]>> {
+        let this = self.project();
+        if !this.prefix.is_empty() {
+            Poll::Ready(Ok(&this.prefix[..]))
+        } else {
+            this.stream.poll_fill_buf(cx)
+        }
+    }
+
+    fn consume(self: std::pin::Pin<&mut Self>, amt: usize) {
+        let this = self.project();
+        if !this.prefix.is_empty() {
+            let _ = this.prefix.split_to(amt.clamp(0, this.prefix.len()));
+        } else {
+            this.stream.consume(amt)
+        }
+    }
+}
+
+impl<S: AsyncRead + AsyncBufRead> AsyncRead for PrefixedStream<S> {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        match self.as_mut().poll_fill_buf(cx) {
+            Poll::Ready(Ok(bytes)) => {
+                let to_take = bytes.len().min(buf.remaining());
+                buf.put_slice(&bytes[..to_take]);
+                self.consume(to_take);
+                Poll::Ready(Ok(()))
+            }
+            Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
+            Poll::Pending => Poll::Pending,
+        }
+        // if !this.prefix.is_empty() {
+        //     trace!(target: "mccp", "Providing prefix {:?}!", this.prefix);
+        //     let mut unfilled = buf.initialize_unfilled();
+        //     let fillable = this
+        //         .prefix
+        //         .split_to(unfilled.len().clamp(0, this.prefix.len()));
+        //     trace!(target: "mccp", "Filling {fillable:?}!");
+        //     unfilled.write_all(&fillable)?;
+        //     Poll::Ready(Ok(()))
+        // } else {
+        //     this.stream.poll_read(cx, buf)
+        // }
+    }
+}
+
+impl<S: AsyncBufRead + AsyncWrite> AsyncWrite for PrefixedStream<S> {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        self.project().stream.poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        self.project().stream.poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        self.project().stream.poll_shutdown(cx)
+    }
+}
+
+#[pin_project(project = StateProject)]
+enum State<S: AsyncRead> {
+    Uncompressed(#[pin] S),
+    Compressed(#[pin] ZlibDecoder<PrefixedStream<BufReader<S>>>),
+    Empty,
+}
+
+impl<S: AsyncRead> AsyncRead for State<S> {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        match self.project() {
+            StateProject::Uncompressed(s) => s.poll_read(cx, buf),
+            StateProject::Compressed(s) => s.poll_read(cx, buf),
+            StateProject::Empty => panic!("State should never be Empty"),
+        }
+    }
+}
+
+impl<S: AsyncRead + AsyncWrite> AsyncWrite for State<S> {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        match self.project() {
+            StateProject::Uncompressed(s) => s.poll_write(cx, buf),
+            StateProject::Compressed(s) => s.poll_write(cx, buf),
+            StateProject::Empty => panic!("State should never be Empty"),
+        }
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        match self.project() {
+            StateProject::Uncompressed(s) => s.poll_flush(cx),
+            StateProject::Compressed(s) => s.poll_flush(cx),
+            StateProject::Empty => panic!("State should never be Empty"),
+        }
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        match self.project() {
+            StateProject::Uncompressed(s) => s.poll_shutdown(cx),
+            StateProject::Compressed(s) => s.poll_shutdown(cx),
+            StateProject::Empty => panic!("State should never be Empty"),
+        }
+    }
+}
+
+#[pin_project]
+pub struct CompressableStream<S: AsyncRead> {
+    #[pin]
+    stream: State<S>,
+}
+
+impl<S: AsyncRead> CompressableStream<S> {
     pub fn new(stream: S) -> Self {
         CompressableStream {
-            stream,
-            decompress_buffer: BytesMut::new(),
-            decompressor: None,
+            stream: State::Uncompressed(stream),
         }
     }
 
     pub fn start_decompressing(&mut self, pending: Option<&mut BytesMut>) {
-        if self.decompressor.is_some() {
-            panic!("start_decompressing() while already started");
-        }
-
-        if let Some(pending) = pending {
-            self.decompress_buffer = pending.split();
-            trace!(target: "mccp", "Enqueue pending {} bytes: {:?}", self.decompress_buffer.len(), self.decompress_buffer);
-        }
-
+        let stream = mem::replace(&mut self.stream, State::Empty);
+        self.stream = match stream {
+            State::Uncompressed(stream) => {
+                let prefix = pending
+                    .map(|pending| pending.split().freeze())
+                    .unwrap_or_default();
+                trace!(target: "mccp", "Enabling with prefix {prefix:?}!");
+                State::Compressed(ZlibDecoder::new(PrefixedStream {
+                    stream: BufReader::new(stream),
+                    prefix,
+                }))
+            }
+            _ => panic!("start_decompressing() while already started"),
+        };
         trace!(target: "mccp", "Enabled!");
-        self.decompressor = Some(Decompress::new(true));
     }
 
     pub fn stop_decompressing(&mut self) {
-        if self.decompressor.is_none() {
-            panic!("stop_decompressing() while not started");
-        }
+        todo!();
+        // if self.decompressor.is_none() {
+        //     panic!("stop_decompressing() while not started");
+        // }
 
-        // FIXME: There might be some pending data in the decompress_buffer...
-        trace!(target: "mccp", "Disabled with active decompressor...");
-        self.decompressor = None;
+        // // FIXME: There might be some pending data in the decompress_buffer...
+        // trace!(target: "mccp", "Disabled with active decompressor...");
+        // self.decompressor = None;
     }
 }
 
 impl<S: AsyncRead + Unpin> AsyncRead for CompressableStream<S> {
     fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        let this = self.as_mut().project();
-        if let Some(decoder) = this.decompressor {
-            let input = if this.decompress_buffer.is_empty() {
-                // NOTE: We need to:
-                // a. Ensure we have enough buffer available, and
-                // b. make sure the buffer has a len() to match
-                // its available capacity. That len() decides
-                // the ReadBuf's 'initialized' amount.
-                if this.decompress_buffer.capacity() < buf.capacity() {
-                    this.decompress_buffer.resize(buf.capacity(), 0);
-                } else {
-                    // Our buffer already has sufficient capcity.
-                    // We *could* just call resize() here *but*
-                    // that does some unnecessary copying.
-                    unsafe {
-                        this.decompress_buffer
-                            .set_len(this.decompress_buffer.capacity());
-                    }
-                }
-
-                let mut input = ReadBuf::new(this.decompress_buffer);
-                match this.stream.poll_read(cx, &mut input) {
-                    Poll::Ready(Ok(())) => {
-                        if input.filled().is_empty() {
-                            return Poll::Ready(Ok(()));
-                        }
-
-                        // Continue below!
-                        input
-                    }
-                    result => {
-                        // Nothing was read into the empty buffer. Ensure it stays empty
-                        // (preserving capacity) for the next read
-                        this.decompress_buffer.clear();
-                        return result;
-                    }
-                }
-            } else {
-                // We had some pending data to decompress in the buffer! Let's use it:
-                let filled = this.decompress_buffer.len();
-                let mut buffer = ReadBuf::new(this.decompress_buffer);
-                buffer.set_filled(filled);
-                buffer
-            };
-
-            let read_bytes = input.filled().len();
-            let consumed_before = decoder.total_in();
-            let output_before = decoder.total_out();
-
-            let output = buf.initialize_unfilled();
-            let result = decoder.decompress(input.filled(), output, FlushDecompress::None);
-
-            let consumed_bytes = (decoder.total_in() - consumed_before) as usize;
-            let output_bytes = decoder.total_out() - output_before;
-            buf.set_filled(output_bytes.try_into().unwrap());
-
-            if read_bytes == consumed_bytes {
-                // If we consumed everything we read, we can
-                // simply clear the buffer
-                this.decompress_buffer.clear();
-            } else {
-                // Otherwise, there's some pending data in the
-                // buffer that we should enqueue
-                let _ = this.decompress_buffer.split_to(consumed_bytes);
-            }
-
-            match result {
-                Ok(Status::BufError) => {
-                    Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "BufError")))
-                }
-                Ok(Status::StreamEnd) => {
-                    self.get_mut().stop_decompressing();
-                    Poll::Ready(Ok(()))
-                }
-                Ok(_) => Poll::Ready(Ok(())),
-                Err(e) => Poll::Ready(Err(io::Error::new(io::ErrorKind::InvalidInput, e))),
-            }
-        } else {
-            this.stream.poll_read(cx, buf)
-        }
+        // FIXME: if we're in Compress mode and get nothing back,
+        // we should unpack back into Uncompressed
+        self.project().stream.poll_read(cx, buf)
     }
 }
 
-impl<S: AsyncWrite> AsyncWrite for CompressableStream<S> {
+impl<S: AsyncWrite + AsyncRead> AsyncWrite for CompressableStream<S> {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -215,6 +282,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn prefixed_stream_test() -> io::Result<()> {
+        let mut stream = TestReadStream::new();
+        stream.enqueue(" of Grayskull!");
+        let mut prefixed = PrefixedStream {
+            prefix: Bytes::from("For the honor"),
+            stream: BufReader::new(stream),
+        };
+
+        let mut buffer = String::default();
+        prefixed.read_to_string(&mut buffer).await?;
+        assert_eq!(buffer, "For the honor of Grayskull!");
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn small_decompress_test() -> io::Result<()> {
         test_decompress_round_trip("For the honor of Grayskull!").await
     }
@@ -245,24 +327,30 @@ mod tests {
         assert_ne!(status, Status::BufError, "Compress error status");
         compressed.truncate(compressor.total_out() as usize);
 
+        let mut prefix = compressed.split_to(32);
+
         let mut stream = TestReadStream::new();
         stream.enqueue(compressed);
 
         let mut wrapper = CompressableStream::new(stream);
-        wrapper.start_decompressing(None);
+        wrapper.start_decompressing(Some(&mut prefix));
 
         let mut dst = BytesMut::with_capacity(input.len() * 2);
+        let mut buffer = BytesMut::with_capacity(256);
         let mut read = 0;
         loop {
-            let this_read = wrapper.read_buf(&mut dst).await?;
+            let this_read = wrapper.read_buf(&mut buffer).await?;
             if this_read == 0 {
                 break;
             }
+            dst.put(buffer);
+            buffer = BytesMut::with_capacity(256);
             read += this_read;
         }
 
         assert_eq!(dst, input);
         assert_eq!(read, input.len());
+        assert_eq!(prefix.len(), 0);
 
         Ok(())
     }
