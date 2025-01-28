@@ -17,6 +17,12 @@ struct PrefixedStream<S: AsyncBufRead> {
     stream: S,
 }
 
+impl<S: AsyncBufRead> PrefixedStream<S> {
+    fn into_inner(self) -> S {
+        self.stream
+    }
+}
+
 impl<S: AsyncBufRead> AsyncBufRead for PrefixedStream<S> {
     fn poll_fill_buf(
         self: std::pin::Pin<&mut Self>,
@@ -102,6 +108,12 @@ enum State<S: AsyncRead> {
     Empty,
 }
 
+impl<S: AsyncRead> State<S> {
+    fn is_compressed(&self) -> bool {
+        matches!(self, State::Compressed(_))
+    }
+}
+
 impl<S: AsyncRead> AsyncRead for State<S> {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -184,26 +196,42 @@ impl<S: AsyncRead> CompressableStream<S> {
     }
 
     pub fn stop_decompressing(&mut self) {
-        todo!();
-        // if self.decompressor.is_none() {
-        //     panic!("stop_decompressing() while not started");
-        // }
-
-        // // FIXME: There might be some pending data in the decompress_buffer...
-        // trace!(target: "mccp", "Disabled with active decompressor...");
-        // self.decompressor = None;
+        let stream = mem::replace(&mut self.stream, State::Empty);
+        self.stream = match stream {
+            State::Compressed(stream) => {
+                let prefixed = stream.into_inner();
+                let buf_reader = prefixed.into_inner();
+                // NOTE: Is this safe? The BufReader *might* have
+                // some still buffered...
+                State::Uncompressed(buf_reader.into_inner())
+            }
+            _ => panic!("stop_decompressing() while NOT started"),
+        };
+        trace!(target: "mccp", "Disabled!");
     }
 }
 
 impl<S: AsyncRead + Unpin> AsyncRead for CompressableStream<S> {
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        // FIXME: if we're in Compress mode and get nothing back,
-        // we should unpack back into Uncompressed
-        self.project().stream.poll_read(cx, buf)
+        let len_before = buf.filled().len();
+        // If we're in Compress mode and get nothing back, we should unpack back into Uncompressed
+        let mut this = self.as_mut().project();
+        match this.stream.as_mut().poll_read(cx, buf) {
+            Poll::Ready(Ok(())) => {
+                let is_eof = buf.filled().len() == len_before;
+                if is_eof && this.stream.is_compressed() {
+                    self.stop_decompressing();
+                    self.project().stream.as_mut().poll_read(cx, buf)
+                } else {
+                    Poll::Ready(Ok(()))
+                }
+            }
+            result => result,
+        }
     }
 }
 
@@ -233,6 +261,9 @@ impl<S: AsyncWrite + AsyncRead> AsyncWrite for CompressableStream<S> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
+    use async_compression::tokio::bufread::ZlibEncoder;
     use bytes::{Buf, BufMut, Bytes, BytesMut};
     use flate2::{Compress, Compression, Status};
     use tokio::io::AsyncReadExt;
@@ -308,6 +339,24 @@ mod tests {
             input.push_str("For the honor of Grayskull!\n");
         }
         test_decompress_round_trip(&input).await
+    }
+
+    #[tokio::test]
+    async fn stop_decompressing() -> io::Result<()> {
+        let to_compress = Bytes::from("For the Honor");
+
+        let stream = ZlibEncoder::new(Cursor::new(to_compress))
+            .chain(Cursor::new(Bytes::from(" of Grayskull!")));
+
+        let mut compressable = CompressableStream::new(stream);
+        compressable.start_decompressing(None);
+
+        let mut result = String::default();
+        compressable.read_to_string(&mut result).await?;
+
+        assert_eq!(result, "For the Honor of Grayskull!");
+
+        Ok(())
     }
 
     async fn test_decompress_round_trip(input: &str) -> io::Result<()> {
