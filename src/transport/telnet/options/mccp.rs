@@ -62,18 +62,6 @@ impl<S: AsyncRead + AsyncBufRead> AsyncRead for PrefixedStream<S> {
             Poll::Ready(Err(err)) => Poll::Ready(Err(err)),
             Poll::Pending => Poll::Pending,
         }
-        // if !this.prefix.is_empty() {
-        //     trace!(target: "mccp", "Providing prefix {:?}!", this.prefix);
-        //     let mut unfilled = buf.initialize_unfilled();
-        //     let fillable = this
-        //         .prefix
-        //         .split_to(unfilled.len().clamp(0, this.prefix.len()));
-        //     trace!(target: "mccp", "Filling {fillable:?}!");
-        //     unfilled.write_all(&fillable)?;
-        //     Poll::Ready(Ok(()))
-        // } else {
-        //     this.stream.poll_read(cx, buf)
-        // }
     }
 }
 
