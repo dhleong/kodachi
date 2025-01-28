@@ -222,8 +222,17 @@ impl<S: AsyncRead + Unpin> AsyncRead for CompressableStream<S> {
                 }
             }
             Poll::Ready(Err(err)) if err.kind() == io::ErrorKind::Other => {
-                trace!(target: "mccp", "Maybe ignore compression error?");
-                Poll::Ready(Ok(()))
+                match err.downcast::<flate2::DecompressError>() {
+                    Ok(_) => {
+                        // NOTE: It *seems like* not all servers send a graceful end of stream when
+                        // compressing, and flate2 doesn't like that. Here, we attempt to handle
+                        // that gracefully
+                        trace!(target: "mccp", "Ignoring compression error?");
+                        self.stop_decompressing();
+                        self.project().stream.as_mut().poll_read(cx, buf)
+                    }
+                    Err(original) => Poll::Ready(Err(original)),
+                }
             }
             result => result,
         }
