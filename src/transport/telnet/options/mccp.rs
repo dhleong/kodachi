@@ -6,7 +6,6 @@ use std::{
 
 use async_compression::tokio::bufread::ZlibDecoder;
 use bytes::{Bytes, BytesMut};
-use flate2::DecompressError;
 use log::trace;
 use pin_project::pin_project;
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncWrite, BufReader, ReadBuf};
