@@ -6,6 +6,7 @@ use std::{
 
 use async_compression::tokio::bufread::ZlibDecoder;
 use bytes::{Bytes, BytesMut};
+use flate2::DecompressError;
 use log::trace;
 use pin_project::pin_project;
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncWrite, BufReader, ReadBuf};
@@ -173,10 +174,13 @@ impl<S: AsyncRead> CompressableStream<S> {
                     .map(|pending| pending.split().freeze())
                     .unwrap_or_default();
                 trace!(target: "mccp", "Enabling with prefix {prefix:?}!");
-                State::Compressed(ZlibDecoder::new(PrefixedStream {
+
+                let mut inflater = ZlibDecoder::new(PrefixedStream {
                     stream: BufReader::new(stream),
                     prefix,
-                }))
+                });
+                inflater.multiple_members(false);
+                State::Compressed(inflater)
             }
             _ => panic!("start_decompressing() while already started"),
         };
@@ -217,6 +221,10 @@ impl<S: AsyncRead + Unpin> AsyncRead for CompressableStream<S> {
                 } else {
                     Poll::Ready(Ok(()))
                 }
+            }
+            Poll::Ready(Err(err)) if err.kind() == io::ErrorKind::Other => {
+                trace!(target: "mccp", "Maybe ignore compression error?");
+                Poll::Ready(Ok(()))
             }
             result => result,
         }
