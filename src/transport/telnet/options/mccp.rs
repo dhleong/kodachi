@@ -264,45 +264,15 @@ mod tests {
     use std::io::Cursor;
 
     use async_compression::tokio::bufread::ZlibEncoder;
-    use bytes::{Buf, BufMut, Bytes, BytesMut};
+    use bytes::{BufMut, Bytes, BytesMut};
     use flate2::{Compress, Compression, Status};
     use tokio::io::AsyncReadExt;
 
     use super::*;
 
-    struct TestReadStream {
-        to_read: BytesMut,
-    }
-
-    impl TestReadStream {
-        pub fn new() -> Self {
-            Self {
-                to_read: BytesMut::default(),
-            }
-        }
-
-        pub fn enqueue<T: Into<Bytes>>(&mut self, bytes: T) {
-            self.to_read.extend_from_slice(&bytes.into());
-        }
-    }
-
-    impl AsyncRead for TestReadStream {
-        fn poll_read(
-            mut self: std::pin::Pin<&mut Self>,
-            _cx: &mut std::task::Context<'_>,
-            buf: &mut ReadBuf<'_>,
-        ) -> Poll<io::Result<()>> {
-            let to_read_count = buf.remaining().min(self.to_read.remaining());
-            let to_read = self.to_read.copy_to_bytes(to_read_count);
-            buf.put_slice(&to_read);
-            Poll::Ready(Ok(()))
-        }
-    }
-
     #[tokio::test]
     async fn read_test() -> io::Result<()> {
-        let mut stream = TestReadStream::new();
-        stream.enqueue("test");
+        let mut stream = Cursor::new(Bytes::from("test"));
 
         let mut dst = String::new();
         stream.read_to_string(&mut dst).await?;
@@ -314,8 +284,7 @@ mod tests {
 
     #[tokio::test]
     async fn prefixed_stream_test() -> io::Result<()> {
-        let mut stream = TestReadStream::new();
-        stream.enqueue(" of Grayskull!");
+        let stream = Cursor::new(Bytes::from(" of Grayskull!"));
         let mut prefixed = PrefixedStream {
             prefix: Bytes::from("For the honor"),
             stream: BufReader::new(stream),
@@ -378,8 +347,7 @@ mod tests {
 
         let mut prefix = compressed.split_to(32);
 
-        let mut stream = TestReadStream::new();
-        stream.enqueue(compressed);
+        let stream = Cursor::new(compressed);
 
         let mut wrapper = CompressableStream::new(stream);
         wrapper.start_decompressing(Some(&mut prefix));
