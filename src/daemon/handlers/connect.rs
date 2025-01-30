@@ -158,19 +158,13 @@ pub fn handle_received_text<R: ProcessorOutputReceiver>(
 
 pub fn handle_sent_text<R: ProcessorOutputReceiver>(
     receiver: &mut R,
-    _processor: &Mutex<TextProcessor>,
+    processor: &Mutex<TextProcessor>,
     text: String,
 ) -> io::Result<()> {
     receiver.begin_chunk()?;
 
-    // TODO: Would be nicer to send a SystemMessage, since
-    // this might cause Triggers to run unexpectedly
     receiver.system(SystemMessage::LocalSend(text))?;
-
-    // processor
-    //     .lock()
-    //     .unwrap()
-    //     .process(format!("{text}\r\n").into(), receiver)?;
+    processor.lock().unwrap().consume_pending_line()?;
 
     receiver.end_chunk()?;
 

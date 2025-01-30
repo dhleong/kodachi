@@ -157,19 +157,7 @@ impl TextProcessor {
             (MatcherMode::PartialLine, self.pending_line.clone().into())
         };
 
-        let to_print = match self.perform_match(to_match, match_mode) {
-            PerformMatchResult::Matched(
-                handler,
-                MatchedResult {
-                    context, remaining, ..
-                },
-            ) => {
-                (handler.on_match)(context)?;
-                remaining
-            }
-
-            PerformMatchResult::Ignored(text) => Some(text),
-        };
+        let to_print = self.perform_and_handle_match(to_match, match_mode)?;
 
         if let Some(to_print) = to_print {
             receiver.text(to_print)?;
@@ -229,6 +217,38 @@ impl TextProcessor {
         }
 
         PerformMatchResult::Ignored(to_match)
+    }
+
+    fn perform_and_handle_match(
+        &mut self,
+        to_match: Ansi,
+        mode: MatcherMode,
+    ) -> io::Result<Option<Ansi>> {
+        match self.perform_match(to_match, mode) {
+            PerformMatchResult::Matched(
+                handler,
+                MatchedResult {
+                    context, remaining, ..
+                },
+            ) => {
+                (handler.on_match)(context)?;
+                Ok(remaining)
+            }
+
+            PerformMatchResult::Ignored(text) => Ok(Some(text)),
+        }
+    }
+
+    /// To be called when sending text. More or less simulates
+    /// receiving a newline, processing whatever pending line we
+    /// had as if it were a full line
+    pub fn consume_pending_line(&mut self) -> io::Result<()> {
+        let mut full_line = self.pending_line.take();
+
+        self.perform_processing(&mut full_line)?;
+        self.perform_and_handle_match(full_line, MatcherMode::FullLine)?;
+
+        Ok(())
     }
 }
 
