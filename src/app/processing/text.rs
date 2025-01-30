@@ -52,6 +52,7 @@ pub struct TextProcessor {
 
 pub enum SystemMessage {
     ConnectionStatus(String),
+    LocalSend(String),
 }
 
 pub trait ProcessorOutputReceiver {

@@ -62,6 +62,10 @@ impl ProcessorOutputReceiver for ExternalUI {
             SystemMessage::ConnectionStatus(status) => {
                 self.send_external_ui(ExternalUINotification::ConnectionStatus { text: status })
             }
+
+            SystemMessage::LocalSend(sent) => {
+                self.send_external_ui(ExternalUINotification::LocalSend { text: sent })
+            }
         }
     }
 

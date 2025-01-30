@@ -8,4 +8,5 @@ pub enum ExternalUINotification {
     ClearPartialLine,
     Text { ansi: String },
     ConnectionStatus { text: String },
+    LocalSend { text: String },
 }
