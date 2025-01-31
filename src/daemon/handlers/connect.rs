@@ -163,8 +163,8 @@ pub fn handle_sent_text<R: ProcessorOutputReceiver>(
 ) -> io::Result<()> {
     receiver.begin_chunk()?;
 
-    receiver.system(SystemMessage::LocalSend(text))?;
     processor.lock().unwrap().consume_pending_line()?;
+    receiver.system(SystemMessage::LocalSend(text))?;
 
     receiver.end_chunk()?;
 
