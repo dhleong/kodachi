@@ -48,10 +48,9 @@ impl Completions {
     }
 
     pub fn suggest(&self, params: CompletionParams) -> impl Iterator<Item = String> + '_ {
-        let transformer = WordTransform::matching_word(params.word_to_complete.clone());
+        let transformer = WordTransform::matching_word(params.word_to_complete());
         self.source
             .suggest(params)
-            .into_iter()
             .map(move |s| transformer.transform(s))
     }
 }

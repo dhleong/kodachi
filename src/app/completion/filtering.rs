@@ -3,7 +3,8 @@ use super::{CompletionParams, CompletionSource};
 pub struct FilteringCompletionSource<S>(pub S);
 
 impl<S: CompletionSource> CompletionSource for FilteringCompletionSource<S> {
-    type Iter<'a> = Filtered<S::Iter<'a>>
+    type Iter<'a>
+        = Filtered<S::Iter<'a>>
     where
         Self: 'a;
 
@@ -23,7 +24,7 @@ impl<'a, I: Iterator<Item = &'a String>> Iterator for Filtered<I> {
 }
 
 fn candidate_matches_params(params: &CompletionParams, candidate: &str) -> bool {
-    let mut chars_to_include = params.word_to_complete.chars();
+    let mut chars_to_include = params.word_to_complete().chars();
     let mut candidate_chars = candidate.chars();
     'outer: loop {
         if let Some(next_char) = chars_to_include.next() {

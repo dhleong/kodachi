@@ -64,11 +64,7 @@ mod tests {
     #[test]
     fn first_word_test() {
         let factory = WordIndexSelectorFactory::with_weights_by_index(vec![(100, 0), (0, 100)]);
-        let mut empty = factory.create(CompletionParams {
-            word_to_complete: "fir".to_string(),
-            line_to_cursor: "fir".to_string(),
-            line: "fir ".to_string(),
-        });
+        let mut empty = factory.create(CompletionParams::from_line_to_cursor("fir"));
 
         // For the first word, we should always select the first result
         assert_eq!(empty.select(), SelectionResult::First);
@@ -80,11 +76,7 @@ mod tests {
         // we should *never* accept it, even if we roll a 0.
         let factory = WordIndexSelectorFactory::with_weights_by_index(vec![(100, 0), (0, 100)])
             .with_random(StaticRandomnessSource::with_values(vec![1]));
-        let mut empty = factory.create(CompletionParams {
-            word_to_complete: "".to_string(),
-            line_to_cursor: "first ".to_string(),
-            line: "first ".to_string(),
-        });
+        let mut empty = factory.create(CompletionParams::from_line_to_cursor("first "));
         assert_eq!(empty.select(), SelectionResult::Second);
     }
 }

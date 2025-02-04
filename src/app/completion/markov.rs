@@ -71,11 +71,7 @@ mod tests {
     #[test]
     fn sequence_completion_test() {
         let source = source();
-        let params = CompletionParams {
-            word_to_complete: "m".to_string(),
-            line_to_cursor: "take m".to_string(),
-            line: "take m".to_string(),
-        };
+        let params = CompletionParams::from_line_to_cursor("take m");
         assert_eq!(suggest_vec(&source, params.clone()), vec!["my", "me"]);
 
         // Do it one more time to prove it wasn't a fluke
