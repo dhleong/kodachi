@@ -71,38 +71,33 @@ impl Connections {
     }
 
     pub fn get_outbox(&mut self, id: Id) -> Option<mpsc::Sender<Outgoing>> {
-        if let Some(conn) = self.connections.get(&id) {
-            Some(conn.outbox.clone())
-        } else {
-            None
-        }
+        self.connections.get(&id).map(|conn| conn.outbox.clone())
     }
 
     pub fn get_state(&mut self, id: Id) -> Option<ConnectionState> {
-        if let Some(conn) = self.connections.get(&id) {
-            Some(conn.state.clone())
-        } else {
-            None
-        }
+        self.connections.get(&id).map(|conn| conn.state.clone())
     }
 
     pub fn get_send_processor(
         &mut self,
         id: Id,
     ) -> Option<Arc<tokio::sync::Mutex<SendTextProcessor>>> {
-        if let Some(conn) = self.connections.get(&id) {
-            Some(conn.state.send_processor.clone())
-        } else {
-            None
-        }
+        self.connections
+            .get(&id)
+            .map(|conn| conn.state.send_processor.clone())
     }
 
     pub fn get_processor(&mut self, id: Id) -> Option<Arc<Mutex<TextProcessor>>> {
-        if let Some(conn) = self.connections.get(&id) {
-            Some(conn.state.processor.clone())
-        } else {
-            None
-        }
+        self.connections
+            .get(&id)
+            .map(|conn| conn.state.processor.clone())
+    }
+
+    pub fn clone_outboxes(&mut self) -> Vec<mpsc::Sender<Outgoing>> {
+        self.connections
+            .values()
+            .map(|conn| conn.outbox.clone())
+            .collect()
     }
 
     fn allocate_id(&mut self) -> Id {

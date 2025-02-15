@@ -78,6 +78,19 @@ pub async fn daemon<
                 tokio::spawn(handlers::clear::handle(state, connection_id));
             }
 
+            Request::Notification(ClientNotification::WindowSize {
+                connection_id,
+                width,
+                height,
+            }) => {
+                tokio::spawn(handlers::window_size::handle(
+                    state,
+                    connection_id,
+                    width,
+                    height,
+                ));
+            }
+
             Request::Notification(ClientNotification::Quit) => break,
         };
     }
