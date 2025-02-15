@@ -93,13 +93,6 @@ impl Connections {
             .map(|conn| conn.state.processor.clone())
     }
 
-    pub fn clone_outboxes(&mut self) -> Vec<mpsc::Sender<Outgoing>> {
-        self.connections
-            .values()
-            .map(|conn| conn.outbox.clone())
-            .collect()
-    }
-
     fn allocate_id(&mut self) -> Id {
         let id = self.next_id;
         self.next_id += 1;
