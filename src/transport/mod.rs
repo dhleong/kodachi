@@ -31,10 +31,15 @@ pub enum TransportEvent {
     Nop,
 }
 
+pub enum TransportNotification {
+    WindowSize { width: u16, height: u16 },
+}
+
 #[async_trait]
 pub trait Transport {
     async fn read(&mut self) -> io::Result<TransportEvent>;
     async fn write(&mut self, data: &[u8]) -> io::Result<usize>;
+    async fn notify(&mut self, notification: TransportNotification) -> io::Result<()>;
 }
 
 pub struct BoxedTransport(Box<dyn Transport + Send>);
@@ -63,5 +68,9 @@ impl Transport for BoxedTransport {
 
     async fn write(&mut self, data: &[u8]) -> io::Result<usize> {
         (*self.0).write(data).await
+    }
+
+    async fn notify(&mut self, notification: TransportNotification) -> io::Result<()> {
+        (*self.0).notify(notification).await
     }
 }

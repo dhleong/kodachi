@@ -15,7 +15,7 @@ use self::{
     protocol::TelnetOption,
 };
 
-use super::{Transport, TransportEvent};
+use super::{Transport, TransportEvent, TransportNotification};
 
 mod options;
 mod processor;
@@ -148,5 +148,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> Transport for TelnetTransport<S> 
     async fn write(&mut self, data: &[u8]) -> io::Result<usize> {
         self.stream.write_all(data).await?;
         Ok(data.len())
+    }
+
+    async fn notify(&mut self, notification: TransportNotification) -> io::Result<()> {
+        self.options.notify(notification, &mut self.stream).await
     }
 }

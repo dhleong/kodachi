@@ -7,10 +7,11 @@ use tokio::{
     sync::broadcast::{self, Receiver},
 };
 
-use crate::transport::EventData;
+use crate::transport::{EventData, TransportNotification};
 
 use self::{
     msdp::MsdpOptionHandler,
+    naws::NawsOptionHandler,
     negotiator::{OptionsNegotiator, OptionsNegotiatorBuilder},
     ttype::TermTypeOptionHandler,
 };
@@ -19,6 +20,7 @@ use super::protocol::{NegotiationType, TelnetOption};
 
 pub mod mccp;
 pub mod msdp;
+pub mod naws;
 pub mod negotiator;
 pub mod ttype;
 
@@ -33,6 +35,14 @@ pub trait TelnetOptionHandler: Send {
     async fn negotiate(
         &mut self,
         _negotiation: NegotiationType,
+        _stream: DynWriteStream<'_>,
+    ) -> io::Result<()> {
+        Ok(())
+    }
+
+    async fn notify(
+        &mut self,
+        _notification: &TransportNotification,
         _stream: DynWriteStream<'_>,
     ) -> io::Result<()> {
         Ok(())
@@ -58,8 +68,11 @@ impl Default for TelnetOptionsManager {
         let msdp = MsdpOptionHandler::new(events_sender);
 
         // All handlers:
-        let all_handlers: Vec<Box<dyn TelnetOptionHandler>> =
-            vec![Box::new(TermTypeOptionHandler::default()), Box::new(msdp)];
+        let all_handlers: Vec<Box<dyn TelnetOptionHandler>> = vec![
+            Box::new(NawsOptionHandler::default()),
+            Box::new(TermTypeOptionHandler::default()),
+            Box::new(msdp),
+        ];
 
         // Register with the builder
         for handler in all_handlers {
@@ -84,6 +97,17 @@ impl TelnetOptionsManager {
             Ok(event) => Some(event),
             _ => None,
         }
+    }
+
+    pub async fn notify<S: AsyncWrite + Unpin + Send>(
+        &mut self,
+        notification: TransportNotification,
+        stream: &mut S,
+    ) -> io::Result<()> {
+        for handler in self.handlers.values_mut() {
+            handler.notify(&notification, Box::new(stream)).await?;
+        }
+        Ok(())
     }
 
     pub async fn negotiate<S: AsyncWrite + Unpin + Send>(

@@ -22,7 +22,7 @@ use crate::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
     net::Uri,
-    transport::{BoxedTransport, Transport, TransportEvent},
+    transport::{BoxedTransport, Transport, TransportEvent, TransportNotification},
 };
 
 pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
@@ -73,6 +73,9 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                             .state
                             .processor;
                         handle_sent_text(receiver, processor, text)?;
+                    }
+                    Some(Outgoing::WindowSize { width, height }) => {
+                        transport.notify(TransportNotification::WindowSize {width, height}).await?;
                     }
                     Some(Outgoing::Disconnect) | None => {
                         connected = false;

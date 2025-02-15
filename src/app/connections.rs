@@ -16,6 +16,7 @@ use super::{
 
 pub enum Outgoing {
     Text(String),
+    WindowSize { width: u16, height: u16 },
     Disconnect,
 }
 
