@@ -1,6 +1,8 @@
-use std::{collections::HashMap, io};
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+};
 
-use log::trace;
 use tokio::io::AsyncWrite;
 
 use crate::transport::telnet::{
@@ -17,14 +19,27 @@ enum OptionState {
 
 pub struct OptionsNegotiator {
     options: HashMap<TelnetOption, OptionState>,
+    will: HashSet<TelnetOption>,
 }
 
 impl OptionsNegotiator {
     pub fn is_accepted(&self, option: TelnetOption) -> bool {
-        match self.options.get(&option) {
-            Some(OptionState::Will | OptionState::Do) => true,
-            _ => false,
+        matches!(
+            self.options.get(&option),
+            Some(OptionState::Will | OptionState::Do)
+        )
+    }
+
+    pub async fn on_connected<S: AsyncWrite + Unpin + Send>(
+        &mut self,
+        stream: &mut S,
+    ) -> io::Result<()> {
+        for option in &self.will {
+            TelnetEvent::Negotiate(NegotiationType::Will, *option)
+                .write_all(stream)
+                .await?;
         }
+        Ok(())
     }
 
     pub async fn negotiate<S: AsyncWrite + Unpin + Send>(
@@ -43,9 +58,9 @@ impl OptionsNegotiator {
                     };
                     self.options.insert(option, state);
 
-                    let response = TelnetEvent::Negotiate(response_type, option);
-                    trace!(target: "telnet", ">> {:?}", response);
-                    response.write_all(stream).await?;
+                    TelnetEvent::Negotiate(response_type, option)
+                        .write_all(stream)
+                        .await?;
 
                     return Ok(());
                 }
@@ -80,9 +95,9 @@ impl OptionsNegotiator {
         };
 
         if let Some(response_type) = response_type {
-            let response = TelnetEvent::Negotiate(response_type, option);
-            trace!(target: "telnet", ">> {:?}", response);
-            response.write_all(stream).await?;
+            TelnetEvent::Negotiate(response_type, option)
+                .write_all(stream)
+                .await?;
         }
 
         Ok(())
@@ -92,12 +107,14 @@ impl OptionsNegotiator {
 #[derive(Default)]
 pub struct OptionsNegotiatorBuilder {
     options: HashMap<TelnetOption, OptionState>,
+    will: HashSet<TelnetOption>,
 }
 
 impl OptionsNegotiatorBuilder {
     pub fn build(self) -> OptionsNegotiator {
         OptionsNegotiator {
             options: self.options,
+            will: self.will,
         }
     }
 
@@ -110,6 +127,12 @@ impl OptionsNegotiatorBuilder {
     pub fn accept_will(mut self, option: TelnetOption) -> Self {
         self.options
             .insert(option, OptionState::Accept(NegotiationType::Will));
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn send_will(mut self, option: TelnetOption) -> Self {
+        self.will.insert(option);
         self
     }
 }

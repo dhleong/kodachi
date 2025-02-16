@@ -105,5 +105,12 @@ pub enum ClientRequest {
 pub enum ClientNotification {
     Quit,
 
-    Clear { connection_id: Id },
+    WindowSize {
+        connection_id: Id,
+        width: u16,
+        height: u16,
+    },
+    Clear {
+        connection_id: Id,
+    },
 }

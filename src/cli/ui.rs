@@ -16,7 +16,10 @@ use crate::{
         clearable::Clearable,
         processing::{
             ansi::Ansi,
-            text::{ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage},
+            text::{
+                ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage,
+                WindowSizeSource,
+            },
         },
         Id,
     },
@@ -93,6 +96,10 @@ impl<W: Write> AnsiTerminalWriteUI<W> {
 }
 
 impl<W: Write> ProcessorOutputReceiver for AnsiTerminalWriteUI<W> {
+    fn window_size_source(&self) -> Option<WindowSizeSource> {
+        Some(WindowSizeSource::Crossterm)
+    }
+
     fn end_chunk(&mut self) -> io::Result<()> {
         self.output.flush()
     }

@@ -26,7 +26,7 @@ it can be reused with whatever editors support embedding a terminal window.
 - [x] Aliases
 - [x] Intelligent auto-completion
 - [x] Input history management
-- [x] Common MUD protocols: [MTTS][mtts], [MCCP2][mccp2], [MSDP][msdp]
+- [x] Common MUD protocols: [MTTS][mtts], [MCCP2][mccp2], [MSDP][msdp], [NAWS][naws]
 - [x] Secure connections over TLS
 
 
@@ -108,4 +108,5 @@ require 'null-ls'.setup {
 [mtts]: https://mudhalla.net/tintin/protocols/mtts/
 [mccp2]: https://tintin.mudhalla.net/protocols/mccp/
 [msdp]: https://tintin.mudhalla.net/protocols/msdp/
+[naws]: https://datatracker.ietf.org/doc/html/rfc1073
 [help-kodachi]: doc/kodachi.md

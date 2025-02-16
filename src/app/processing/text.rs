@@ -55,7 +55,14 @@ pub enum SystemMessage {
     LocalSend(String),
 }
 
+pub enum WindowSizeSource {
+    Crossterm,
+    External,
+}
+
 pub trait ProcessorOutputReceiver {
+    fn window_size_source(&self) -> Option<WindowSizeSource>;
+
     fn begin_chunk(&mut self) -> io::Result<()> {
         Ok(())
     }
@@ -268,6 +275,10 @@ mod tests {
     }
 
     impl ProcessorOutputReceiver for TextReceiver {
+        fn window_size_source(&self) -> Option<WindowSizeSource> {
+            None
+        }
+
         fn clear_partial_line(&mut self) -> io::Result<()> {
             Ok(())
         }

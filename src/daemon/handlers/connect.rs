@@ -1,9 +1,16 @@
 use std::{
     env,
     fs::File,
+    future,
     io::{self, Write},
     sync::Mutex,
 };
+
+use crossterm::{
+    event::{Event, EventStream},
+    terminal,
+};
+use futures::{FutureExt as _, StreamExt as _};
 
 use crate::{
     app::{
@@ -12,7 +19,7 @@ use crate::{
             ansi::Ansi,
             text::{
                 ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage,
-                TextProcessor,
+                TextProcessor, WindowSizeSource,
             },
         },
         processors::register_processors,
@@ -22,7 +29,7 @@ use crate::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
     },
     net::Uri,
-    transport::{BoxedTransport, Transport, TransportEvent},
+    transport::{BoxedTransport, Transport, TransportEvent, TransportNotification},
 };
 
 pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
@@ -41,7 +48,35 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     };
 
     let mut connected = true;
+
+    // NOTE: It's a bit hacky to do it this way... but it's also
+    // much simpler than introducing some kind of boxed type
+    // that wraps stream.next().fuse()
+    let mut window_size_stream = match receiver.window_size_source() {
+        Some(WindowSizeSource::Crossterm) => {
+            // Set initial size
+            let (width, height) = terminal::size()?;
+            transport
+                .notify(TransportNotification::WindowSize { width, height })
+                .await?;
+            Some(EventStream::new())
+        }
+        Some(WindowSizeSource::External) => None,
+        None => {
+            // Also, tell the Naws handler we don't support it:
+            transport
+                .notify(TransportNotification::WindowSizeUnavailable)
+                .await?;
+            None
+        }
+    };
+
     while connected {
+        let window_size_event = window_size_stream
+            .as_mut()
+            .map(|stream| stream.next().boxed().fuse())
+            .unwrap_or_else(|| future::pending().boxed().fuse());
+
         tokio::select! {
             incoming = transport.read() => match incoming? {
                 TransportEvent::Data(data) => {
@@ -74,11 +109,19 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                             .processor;
                         handle_sent_text(receiver, processor, text)?;
                     }
+                    Some(Outgoing::WindowSize { width, height }) => {
+                        transport.notify(TransportNotification::WindowSize {width, height}).await?;
+                    }
                     Some(Outgoing::Disconnect) | None => {
                         connected = false;
                     }
                 };
             },
+
+            maybe_event = window_size_event => if let Some(Ok(Event::Resize(width, height))) = maybe_event {
+                transport.notify(TransportNotification::WindowSize {width, height}).await?;
+            },
+
         };
     }
 

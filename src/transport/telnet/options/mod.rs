@@ -7,10 +7,11 @@ use tokio::{
     sync::broadcast::{self, Receiver},
 };
 
-use crate::transport::EventData;
+use crate::transport::{EventData, TransportNotification};
 
 use self::{
     msdp::MsdpOptionHandler,
+    naws::NawsOptionHandler,
     negotiator::{OptionsNegotiator, OptionsNegotiatorBuilder},
     ttype::TermTypeOptionHandler,
 };
@@ -19,6 +20,7 @@ use super::protocol::{NegotiationType, TelnetOption};
 
 pub mod mccp;
 pub mod msdp;
+pub mod naws;
 pub mod negotiator;
 pub mod ttype;
 
@@ -27,12 +29,26 @@ pub type DynWriteStream<'a> = Box<&'a mut (dyn AsyncWrite + Unpin + Send)>;
 
 #[async_trait]
 pub trait TelnetOptionHandler: Send {
+    /// Return true if you will manually answer negotiation
+    /// requests within negotiate()
+    fn will_answer_negotiation(&self) -> bool {
+        false
+    }
+
     fn option(&self) -> TelnetOption;
     fn register(&self, negotiator: OptionsNegotiatorBuilder) -> OptionsNegotiatorBuilder;
 
     async fn negotiate(
         &mut self,
         _negotiation: NegotiationType,
+        _stream: DynWriteStream<'_>,
+    ) -> io::Result<()> {
+        Ok(())
+    }
+
+    async fn notify(
+        &mut self,
+        _notification: &TransportNotification,
         _stream: DynWriteStream<'_>,
     ) -> io::Result<()> {
         Ok(())
@@ -58,8 +74,11 @@ impl Default for TelnetOptionsManager {
         let msdp = MsdpOptionHandler::new(events_sender);
 
         // All handlers:
-        let all_handlers: Vec<Box<dyn TelnetOptionHandler>> =
-            vec![Box::new(TermTypeOptionHandler::default()), Box::new(msdp)];
+        let all_handlers: Vec<Box<dyn TelnetOptionHandler>> = vec![
+            Box::new(NawsOptionHandler::default()),
+            Box::new(TermTypeOptionHandler::default()),
+            Box::new(msdp),
+        ];
 
         // Register with the builder
         for handler in all_handlers {
@@ -79,11 +98,29 @@ impl Default for TelnetOptionsManager {
 }
 
 impl TelnetOptionsManager {
+    pub async fn on_connected<S: AsyncWrite + Unpin + Send>(
+        &mut self,
+        stream: &mut S,
+    ) -> io::Result<()> {
+        self.negotiator.on_connected(stream).await
+    }
+
     pub async fn recv_event(&mut self) -> Option<EventData> {
         match self.events.recv().await {
             Ok(event) => Some(event),
             _ => None,
         }
+    }
+
+    pub async fn notify<S: AsyncWrite + Unpin + Send>(
+        &mut self,
+        notification: TransportNotification,
+        stream: &mut S,
+    ) -> io::Result<()> {
+        for handler in self.handlers.values_mut() {
+            handler.notify(&notification, Box::new(stream)).await?;
+        }
+        Ok(())
     }
 
     pub async fn negotiate<S: AsyncWrite + Unpin + Send>(
@@ -92,14 +129,20 @@ impl TelnetOptionsManager {
         option: TelnetOption,
         stream: &mut S,
     ) -> io::Result<()> {
-        self.negotiator
-            .negotiate(negotiation, option, stream)
-            .await?;
         if let Some(handler) = self.handlers.get_mut(&option) {
+            if !handler.will_answer_negotiation() {
+                self.negotiator
+                    .negotiate(negotiation, option, stream)
+                    .await?;
+            }
+
             let wrapped: Box<&mut (dyn AsyncWrite + Unpin + Send)> = Box::new(stream);
+
             handler.negotiate(negotiation, wrapped).await?;
+            Ok(())
+        } else {
+            self.negotiator.negotiate(negotiation, option, stream).await
         }
-        Ok(())
     }
 
     pub async fn subnegotiate<S: AsyncWrite + Unpin + Send>(
