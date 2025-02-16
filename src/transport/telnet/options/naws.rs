@@ -73,14 +73,10 @@ impl TelnetOptionHandler for NawsOptionHandler {
     }
 
     fn register(&self, negotiator: OptionsNegotiatorBuilder) -> OptionsNegotiatorBuilder {
+        // NOTE: We don't use the default negotiator because it is
+        // constructed before we know whether or not we should be
+        // enabled.
         negotiator
-        // if !self.will_never_get_size {
-        //     // negotiator
-        //     //     .accept_do(TelnetOption::Naws);
-        //     //     // .send_will(TelnetOption::Naws)
-        // } else {
-        //     negotiator
-        // }
     }
 
     async fn notify(
