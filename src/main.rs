@@ -25,10 +25,21 @@ async fn run_with<TInput: BufRead, TResponse: 'static + Write + Send>(
     input: TInput,
     response: TResponse,
 ) -> io::Result<()> {
-    match cli.ui {
-        cli::UiType::External => daemon::daemon(ExternalUIFactory, input, response).await,
+    match cli.ui() {
+        cli::UiConfig::External {
+            window_size_provided,
+        } => {
+            daemon::daemon(
+                ExternalUIFactory {
+                    will_send_window_size: window_size_provided,
+                },
+                input,
+                response,
+            )
+            .await
+        }
 
-        cli::UiType::Stdout => {
+        cli::UiConfig::Stdout => {
             daemon::daemon(StdoutAnsiTerminalWriteUIFactory, input, response).await
         }
     }
@@ -36,13 +47,13 @@ async fn run_with<TInput: BufRead, TResponse: 'static + Write + Send>(
 
 async fn run(cli: Cli) -> io::Result<()> {
     match &cli.command {
-        Commands::Stdio => {
+        Commands::Stdio { .. } => {
             let input = StdinReader::stdin();
             let response = io::stderr();
             run_with(cli, input, response).await
         }
 
-        Commands::Unix { path } => {
+        Commands::Unix { path, .. } => {
             let socket = match UnixStream::connect(path) {
                 Ok(socket) => socket,
                 Err(e) => panic!("Invalid unix socket: {}", e),
@@ -75,5 +86,5 @@ fn main() -> io::Result<()> {
     // Leave some room to print the error clearly
     ::crossterm::execute!(stdout(), ResetColor, Print("\n\n"))?;
 
-    return result;
+    result
 }

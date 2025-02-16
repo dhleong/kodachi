@@ -26,6 +26,7 @@ use super::UiState;
 pub struct ExternalUI {
     connection_id: Id,
     notifier: RespondedChannel,
+    will_send_window_size: bool,
 }
 
 impl ExternalUI {
@@ -33,18 +34,23 @@ impl ExternalUI {
         _state: Arc<Mutex<UiState>>,
         connection_id: Id,
         notifier: RespondedChannel,
+        config: ExternalUIFactory,
     ) -> Self {
         Self {
             connection_id,
             notifier,
+            will_send_window_size: config.will_send_window_size,
         }
     }
 }
 
 impl ProcessorOutputReceiver for ExternalUI {
     fn window_size_source(&self) -> Option<WindowSizeSource> {
-        // NOTE: It'd be nice if clients can say "no actually I won't send window size at all"
-        Some(WindowSizeSource::External)
+        if self.will_send_window_size {
+            Some(WindowSizeSource::External)
+        } else {
+            None
+        }
     }
 
     fn new_line(&mut self) -> std::io::Result<()> {
@@ -93,7 +99,9 @@ impl ExternalUI {
 }
 
 #[derive(Clone, Copy)]
-pub struct ExternalUIFactory;
+pub struct ExternalUIFactory {
+    pub will_send_window_size: bool,
+}
 
 impl ProcessorOutputReceiverFactory for ExternalUIFactory {
     type Implementation = ExternalUI;
@@ -104,6 +112,6 @@ impl ProcessorOutputReceiverFactory for ExternalUIFactory {
         connection_id: Id,
         notifier: RespondedChannel,
     ) -> Self::Implementation {
-        ExternalUI::create(state, connection_id, notifier)
+        ExternalUI::create(state, connection_id, notifier, *self)
     }
 }
