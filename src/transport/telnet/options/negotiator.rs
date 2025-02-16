@@ -36,9 +36,9 @@ impl OptionsNegotiator {
         stream: &mut S,
     ) -> io::Result<()> {
         for option in &self.will {
-            let will = TelnetEvent::Negotiate(NegotiationType::Will, option.clone());
-            trace!(target: "telnet", ">> {:?}", will);
-            will.write_all(stream).await?;
+            TelnetEvent::Negotiate(NegotiationType::Will, *option)
+                .write_all(stream)
+                .await?;
         }
         Ok(())
     }
@@ -59,9 +59,9 @@ impl OptionsNegotiator {
                     };
                     self.options.insert(option, state);
 
-                    let response = TelnetEvent::Negotiate(response_type, option);
-                    trace!(target: "telnet", ">> {:?}", response);
-                    response.write_all(stream).await?;
+                    TelnetEvent::Negotiate(response_type, option)
+                        .write_all(stream)
+                        .await?;
 
                     return Ok(());
                 }
@@ -96,9 +96,9 @@ impl OptionsNegotiator {
         };
 
         if let Some(response_type) = response_type {
-            let response = TelnetEvent::Negotiate(response_type, option);
-            trace!(target: "telnet", ">> {:?}", response);
-            response.write_all(stream).await?;
+            TelnetEvent::Negotiate(response_type, option)
+                .write_all(stream)
+                .await?;
         }
 
         Ok(())

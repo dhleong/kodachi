@@ -32,6 +32,7 @@ pub enum TransportEvent {
 }
 
 pub enum TransportNotification {
+    WindowSizeUnavailable,
     WindowSize { width: u16, height: u16 },
 }
 

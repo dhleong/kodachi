@@ -29,6 +29,12 @@ pub type DynWriteStream<'a> = Box<&'a mut (dyn AsyncWrite + Unpin + Send)>;
 
 #[async_trait]
 pub trait TelnetOptionHandler: Send {
+    /// Return true if you will manually answer negotiation
+    /// requests within negotiate()
+    fn will_answer_negotiation(&self) -> bool {
+        false
+    }
+
     fn option(&self) -> TelnetOption;
     fn register(&self, negotiator: OptionsNegotiatorBuilder) -> OptionsNegotiatorBuilder;
 
@@ -123,14 +129,20 @@ impl TelnetOptionsManager {
         option: TelnetOption,
         stream: &mut S,
     ) -> io::Result<()> {
-        self.negotiator
-            .negotiate(negotiation, option, stream)
-            .await?;
         if let Some(handler) = self.handlers.get_mut(&option) {
+            if !handler.will_answer_negotiation() {
+                self.negotiator
+                    .negotiate(negotiation, option, stream)
+                    .await?;
+            }
+
             let wrapped: Box<&mut (dyn AsyncWrite + Unpin + Send)> = Box::new(stream);
+
             handler.negotiate(negotiation, wrapped).await?;
+            Ok(())
+        } else {
+            self.negotiator.negotiate(negotiation, option, stream).await
         }
-        Ok(())
     }
 
     pub async fn subnegotiate<S: AsyncWrite + Unpin + Send>(

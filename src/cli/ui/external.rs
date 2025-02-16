@@ -43,6 +43,7 @@ impl ExternalUI {
 
 impl ProcessorOutputReceiver for ExternalUI {
     fn window_size_source(&self) -> Option<WindowSizeSource> {
+        // NOTE: It'd be nice if clients can say "no actually I won't send window size at all"
         Some(WindowSizeSource::External)
     }
 

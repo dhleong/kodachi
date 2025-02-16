@@ -18,6 +18,7 @@ use super::{negotiator::OptionsNegotiatorBuilder, DynWriteStream, TelnetOptionHa
 pub struct NawsOptionHandler {
     width: u16,
     height: u16,
+    will_never_get_size: bool,
     enabled: bool,
     has_sent: bool,
 }
@@ -54,22 +55,32 @@ impl NawsOptionHandler {
         response.put_u16(width);
         response.put_u16(height);
 
-        let message = TelnetEvent::Subnegotiate(self.option(), response.freeze());
-        log::trace!(target: "telnet", ">> {message:?} (NAWS {width} x {height})");
-        message.write_all(stream).await
+        log::trace!(target: "telnet", ">> (NAWS {width} x {height})");
+        TelnetEvent::Subnegotiate(self.option(), response.freeze())
+            .write_all(stream)
+            .await
     }
 }
 
 #[async_trait]
 impl TelnetOptionHandler for NawsOptionHandler {
+    fn will_answer_negotiation(&self) -> bool {
+        true
+    }
+
     fn option(&self) -> TelnetOption {
         TelnetOption::Naws
     }
 
     fn register(&self, negotiator: OptionsNegotiatorBuilder) -> OptionsNegotiatorBuilder {
         negotiator
-            .accept_do(TelnetOption::Naws)
-            .send_will(TelnetOption::Naws)
+        // if !self.will_never_get_size {
+        //     // negotiator
+        //     //     .accept_do(TelnetOption::Naws);
+        //     //     // .send_will(TelnetOption::Naws)
+        // } else {
+        //     negotiator
+        // }
     }
 
     async fn notify(
@@ -77,13 +88,17 @@ impl TelnetOptionHandler for NawsOptionHandler {
         notification: &TransportNotification,
         mut stream: DynWriteStream<'_>,
     ) -> io::Result<()> {
-        #[allow(irrefutable_let_patterns)]
-        let TransportNotification::WindowSize { width, height } = notification
-        else {
-            return Ok(());
-        };
+        match notification {
+            TransportNotification::WindowSizeUnavailable => {
+                self.will_never_get_size = true;
+            }
 
-        self.set_size(*width, *height, &mut stream).await
+            TransportNotification::WindowSize { width, height } => {
+                self.set_size(*width, *height, &mut stream).await?;
+            }
+        }
+
+        Ok(())
     }
 
     async fn negotiate(
@@ -93,9 +108,22 @@ impl TelnetOptionHandler for NawsOptionHandler {
     ) -> std::io::Result<()> {
         match negotiation {
             NegotiationType::Do => {
-                self.enabled = true;
-                self.has_sent = false; // Just in case
-                self.try_send(&mut stream).await
+                if self.will_never_get_size {
+                    TelnetEvent::Negotiate(NegotiationType::Wont, self.option())
+                        .write_all(&mut stream)
+                        .await
+                } else {
+                    if !self.enabled {
+                        TelnetEvent::Negotiate(NegotiationType::Will, self.option())
+                            .write_all(&mut stream)
+                            .await?;
+                    }
+
+                    self.enabled = true;
+                    self.has_sent = false; // Just in case
+
+                    self.try_send(&mut stream).await
+                }
             }
 
             NegotiationType::Dont => {

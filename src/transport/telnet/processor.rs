@@ -19,6 +19,7 @@ pub enum TelnetEvent {
 
 impl TelnetEvent {
     pub async fn write_all<S: AsyncWrite + Unpin + Send>(self, stream: &mut S) -> io::Result<()> {
+        log::trace!(target: "telnet", ">> {:?}", self);
         match self {
             TelnetEvent::Data(mut bytes) => stream.write_all_buf(&mut bytes).await,
             TelnetEvent::Command(command) => {

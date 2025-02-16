@@ -1,12 +1,16 @@
 use std::{
     env,
     fs::File,
+    future,
     io::{self, Write},
     sync::Mutex,
 };
 
-use crossterm::event::{Event, EventStream};
-use futures::{future::OptionFuture, FutureExt as _, StreamExt as _};
+use crossterm::{
+    event::{Event, EventStream},
+    terminal,
+};
+use futures::{FutureExt as _, StreamExt as _};
 
 use crate::{
     app::{
@@ -49,25 +53,31 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     // much simpler than introducing some kind of boxed type
     // that wraps stream.next().fuse()
     let mut window_size_stream = match receiver.window_size_source() {
-        Some(WindowSizeSource::Crossterm) => Some(EventStream::new()),
+        Some(WindowSizeSource::Crossterm) => {
+            // Set initial size
+            let (width, height) = terminal::size()?;
+            transport
+                .notify(TransportNotification::WindowSize { width, height })
+                .await?;
+            Some(EventStream::new())
+        }
         Some(WindowSizeSource::External) => None,
         None => {
-            // TODO: Also, tell the Naws handler to NOP
+            // Also, tell the Naws handler we don't support it:
+            transport
+                .notify(TransportNotification::WindowSizeUnavailable)
+                .await?;
             None
         }
     };
 
     while connected {
-        let event: OptionFuture<_> = window_size_stream
+        let window_size_event = window_size_stream
             .as_mut()
-            .map(|stream| stream.next().fuse())
-            .into();
+            .map(|stream| stream.next().boxed().fuse())
+            .unwrap_or_else(|| future::pending().boxed().fuse());
 
         tokio::select! {
-            maybe_event = event => if let Some(Some(Ok(Event::Resize(width, height)))) = maybe_event {
-                transport.notify(TransportNotification::WindowSize {width, height}).await?;
-            },
-
             incoming = transport.read() => match incoming? {
                 TransportEvent::Data(data) => {
                     if let Some(f) = &mut dump {
@@ -107,6 +117,11 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                     }
                 };
             },
+
+            maybe_event = window_size_event => if let Some(Ok(Event::Resize(width, height))) = maybe_event {
+                transport.notify(TransportNotification::WindowSize {width, height}).await?;
+            },
+
         };
     }
 

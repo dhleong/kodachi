@@ -81,9 +81,9 @@ impl TermTypeOptionHandler {
         response.put_u8(IS);
         self.build_name(&mut response);
 
-        let message = TelnetEvent::Subnegotiate(self.option(), response.freeze());
-        log::trace!(target: "telnet", ">> {:?}", message);
-        message.write_all(&mut stream).await
+        TelnetEvent::Subnegotiate(self.option(), response.freeze())
+            .write_all(&mut stream)
+            .await
     }
 
     fn build_name(&self, buf: &mut BytesMut) {
