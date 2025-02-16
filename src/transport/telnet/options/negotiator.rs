@@ -3,7 +3,6 @@ use std::{
     io,
 };
 
-use log::trace;
 use tokio::io::AsyncWrite;
 
 use crate::transport::telnet::{
@@ -25,10 +24,10 @@ pub struct OptionsNegotiator {
 
 impl OptionsNegotiator {
     pub fn is_accepted(&self, option: TelnetOption) -> bool {
-        match self.options.get(&option) {
-            Some(OptionState::Will | OptionState::Do) => true,
-            _ => false,
-        }
+        matches!(
+            self.options.get(&option),
+            Some(OptionState::Will | OptionState::Do)
+        )
     }
 
     pub async fn on_connected<S: AsyncWrite + Unpin + Send>(
@@ -131,6 +130,7 @@ impl OptionsNegotiatorBuilder {
         self
     }
 
+    #[allow(dead_code)]
     pub fn send_will(mut self, option: TelnetOption) -> Self {
         self.will.insert(option);
         self
