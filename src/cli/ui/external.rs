@@ -7,7 +7,10 @@ use crate::{
     app::{
         processing::{
             ansi::Ansi,
-            text::{ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage},
+            text::{
+                ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage,
+                WindowSizeSource,
+            },
         },
         Id,
     },
@@ -39,6 +42,10 @@ impl ExternalUI {
 }
 
 impl ProcessorOutputReceiver for ExternalUI {
+    fn window_size_source(&self) -> Option<WindowSizeSource> {
+        Some(WindowSizeSource::External)
+    }
+
     fn new_line(&mut self) -> std::io::Result<()> {
         self.send_external_ui(ExternalUINotification::NewLine)
     }

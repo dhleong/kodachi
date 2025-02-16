@@ -5,6 +5,9 @@ use std::{
     sync::Mutex,
 };
 
+use crossterm::event::{Event, EventStream};
+use futures::{future::OptionFuture, FutureExt as _, StreamExt as _};
+
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
@@ -12,7 +15,7 @@ use crate::{
             ansi::Ansi,
             text::{
                 ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage,
-                TextProcessor,
+                TextProcessor, WindowSizeSource,
             },
         },
         processors::register_processors,
@@ -41,8 +44,30 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     };
 
     let mut connected = true;
+
+    // NOTE: It's a bit hacky to do it this way... but it's also
+    // much simpler than introducing some kind of boxed type
+    // that wraps stream.next().fuse()
+    let mut window_size_stream = match receiver.window_size_source() {
+        Some(WindowSizeSource::Crossterm) => Some(EventStream::new()),
+        Some(WindowSizeSource::External) => None,
+        None => {
+            // TODO: Also, tell the Naws handler to NOP
+            None
+        }
+    };
+
     while connected {
+        let event: OptionFuture<_> = window_size_stream
+            .as_mut()
+            .map(|stream| stream.next().fuse())
+            .into();
+
         tokio::select! {
+            maybe_event = event => if let Some(Some(Ok(Event::Resize(width, height)))) = maybe_event {
+                transport.notify(TransportNotification::WindowSize {width, height}).await?;
+            },
+
             incoming = transport.read() => match incoming? {
                 TransportEvent::Data(data) => {
                     if let Some(f) = &mut dump {
