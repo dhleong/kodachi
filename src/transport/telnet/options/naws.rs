@@ -19,6 +19,7 @@ pub struct NawsOptionHandler {
     width: u16,
     height: u16,
     enabled: bool,
+    has_sent: bool,
 }
 
 impl NawsOptionHandler {
@@ -28,23 +29,33 @@ impl NawsOptionHandler {
         height: u16,
         stream: &mut S,
     ) -> io::Result<()> {
-        if self.width == width && self.height == height {
+        if self.width == width && self.height == height && self.has_sent {
             // Nop!
             return Ok(());
         }
 
         self.width = width;
         self.height = height;
-        self.try_send(stream).await
+
+        if self.enabled {
+            self.try_send(stream).await
+        } else {
+            Ok(())
+        }
     }
 
-    async fn try_send<S: AsyncWrite + Unpin + Send>(&self, stream: &mut S) -> io::Result<()> {
+    async fn try_send<S: AsyncWrite + Unpin + Send>(&mut self, stream: &mut S) -> io::Result<()> {
+        self.has_sent = true;
+
+        let width = self.width;
+        let height = self.height;
+
         let mut response = BytesMut::default();
-        response.put_u16(self.width);
-        response.put_u16(self.height);
+        response.put_u16(width);
+        response.put_u16(height);
 
         let message = TelnetEvent::Subnegotiate(self.option(), response.freeze());
-        log::trace!(target: "telnet", ">> {:?}", message);
+        log::trace!(target: "telnet", ">> {message:?} (NAWS {width} x {height})");
         message.write_all(stream).await
     }
 }
@@ -81,6 +92,7 @@ impl TelnetOptionHandler for NawsOptionHandler {
         match negotiation {
             NegotiationType::Do => {
                 self.enabled = true;
+                self.has_sent = false; // Just in case
                 self.try_send(&mut stream).await
             }
 
