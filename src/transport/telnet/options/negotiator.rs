@@ -1,4 +1,7 @@
-use std::{collections::HashMap, io};
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+};
 
 use log::trace;
 use tokio::io::AsyncWrite;
@@ -17,6 +20,7 @@ enum OptionState {
 
 pub struct OptionsNegotiator {
     options: HashMap<TelnetOption, OptionState>,
+    will: HashSet<TelnetOption>,
 }
 
 impl OptionsNegotiator {
@@ -25,6 +29,18 @@ impl OptionsNegotiator {
             Some(OptionState::Will | OptionState::Do) => true,
             _ => false,
         }
+    }
+
+    pub async fn on_connected<S: AsyncWrite + Unpin + Send>(
+        &mut self,
+        stream: &mut S,
+    ) -> io::Result<()> {
+        for option in &self.will {
+            let will = TelnetEvent::Negotiate(NegotiationType::Will, option.clone());
+            trace!(target: "telnet", ">> {:?}", will);
+            will.write_all(stream).await?;
+        }
+        Ok(())
     }
 
     pub async fn negotiate<S: AsyncWrite + Unpin + Send>(
@@ -92,12 +108,14 @@ impl OptionsNegotiator {
 #[derive(Default)]
 pub struct OptionsNegotiatorBuilder {
     options: HashMap<TelnetOption, OptionState>,
+    will: HashSet<TelnetOption>,
 }
 
 impl OptionsNegotiatorBuilder {
     pub fn build(self) -> OptionsNegotiator {
         OptionsNegotiator {
             options: self.options,
+            will: self.will,
         }
     }
 
@@ -110,6 +128,11 @@ impl OptionsNegotiatorBuilder {
     pub fn accept_will(mut self, option: TelnetOption) -> Self {
         self.options
             .insert(option, OptionState::Accept(NegotiationType::Will));
+        self
+    }
+
+    pub fn send_will(mut self, option: TelnetOption) -> Self {
+        self.will.insert(option);
         self
     }
 }

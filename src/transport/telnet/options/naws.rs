@@ -67,7 +67,9 @@ impl TelnetOptionHandler for NawsOptionHandler {
     }
 
     fn register(&self, negotiator: OptionsNegotiatorBuilder) -> OptionsNegotiatorBuilder {
-        negotiator.accept_do(TelnetOption::Naws)
+        negotiator
+            .accept_do(TelnetOption::Naws)
+            .send_will(TelnetOption::Naws)
     }
 
     async fn notify(

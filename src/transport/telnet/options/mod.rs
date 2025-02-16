@@ -92,6 +92,13 @@ impl Default for TelnetOptionsManager {
 }
 
 impl TelnetOptionsManager {
+    pub async fn on_connected<S: AsyncWrite + Unpin + Send>(
+        &mut self,
+        stream: &mut S,
+    ) -> io::Result<()> {
+        self.negotiator.on_connected(stream).await
+    }
+
     pub async fn recv_event(&mut self) -> Option<EventData> {
         match self.events.recv().await {
             Ok(event) => Some(event),

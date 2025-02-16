@@ -55,14 +55,16 @@ impl TelnetTransport<TlsStream<TcpStream>> {
 }
 
 impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
-    async fn connect_with_stream(stream: S, buffer_size: usize) -> io::Result<Self> {
+    async fn connect_with_stream(mut stream: S, buffer_size: usize) -> io::Result<Self> {
         let buffer = BytesMut::with_capacity(buffer_size);
+        let mut options = TelnetOptionsManager::default();
+        options.on_connected(&mut stream).await?;
 
         Ok(Self {
             buffer,
             stream: CompressableStream::new(stream),
             telnet: TelnetProcessor::default(),
-            options: TelnetOptionsManager::default(),
+            options,
         })
     }
 
