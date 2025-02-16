@@ -26,7 +26,8 @@ pub enum UiConfig {
     Stdout,
 
     External {
-        #[arg(long, requires("ui"))]
+        /// If set, kodachi will assume you will send the WindowSize client notification
+        #[arg(long)]
         window_size_provided: bool,
     },
 }
