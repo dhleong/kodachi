@@ -1,5 +1,6 @@
 pub mod clear;
 pub mod complete_composer;
+pub mod configure_connection;
 pub mod connect;
 pub mod disconnect;
 pub mod get_history;

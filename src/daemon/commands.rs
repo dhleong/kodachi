@@ -10,6 +10,9 @@ use super::protocol::cursors::HistoryCursor;
 #[derive(Debug, Deserialize)]
 pub struct Connect {
     pub uri: String,
+
+    #[serde(flatten)]
+    pub config: Option<ConnectionConfig>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -17,6 +20,11 @@ pub struct Connect {
 pub enum AliasReplacement {
     Handler { handler_id: Id },
     Simple { replacement_pattern: FormatterSpec },
+}
+
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+pub struct ConnectionConfig {
+    pub auto_prompts: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -29,6 +37,13 @@ pub enum ClientRequest {
     Send {
         connection_id: Id,
         text: String,
+    },
+
+    ConfigureConnection {
+        connection_id: Id,
+
+        #[serde(flatten)]
+        config: ConnectionConfig,
     },
 
     GetHistory {

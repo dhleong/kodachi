@@ -32,6 +32,8 @@ use crate::{
     transport::{BoxedTransport, Transport, TransportEvent, TransportNotification},
 };
 
+use super::configure_connection::apply_config;
+
 pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     mut transport: T,
     mut connection: ConnectionReceiver,
@@ -146,6 +148,10 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     let mut connection = state.lock().unwrap().connections.create();
     let uri = Uri::from_string(&data.uri)?;
     let connection_id = connection.id;
+
+    if let Some(config) = data.config {
+        apply_config(&mut connection.state, &config);
+    }
 
     let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
     let receiver_state = connection.state.ui_state.clone();
