@@ -3,6 +3,7 @@ use std::io;
 use async_trait::async_trait;
 use bytes::BytesMut;
 use log::trace;
+use protocol::TelnetCommand;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
@@ -99,6 +100,10 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
                 }
 
                 Ok(Some(TransportEvent::Nop))
+            }
+            Some(TelnetEvent::Command(TelnetCommand::EOR)) => {
+                // The server has told us there's a prompt here
+                Ok(Some(TransportEvent::EndOfPrompt))
             }
             Some(_) => {
                 // TODO: Log unexpected event?

@@ -35,6 +35,7 @@ pub struct UiState {
     pub prompts: PromptsState,
     pub active_prompt_group: Id,
     pub inactive_prompt_groups: PromptGroups,
+    pub is_auto_prompt_enabled: bool,
 }
 
 impl Clearable for UiState {

@@ -29,6 +29,12 @@ pub struct ConnectionState {
     pub ui_state: Arc<Mutex<UiState>>,
 }
 
+impl ConnectionState {
+    pub fn is_auto_prompt_enabled(&self) -> bool {
+        self.ui_state.lock().unwrap().is_auto_prompt_enabled
+    }
+}
+
 #[derive(Clone)]
 pub struct Connection {
     pub outbox: mpsc::Sender<Outgoing>,
