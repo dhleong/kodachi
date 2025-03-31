@@ -3,14 +3,14 @@ use std::io;
 use crate::{
     app::{Id, LockableState},
     daemon::{
-        channel::{Channel, ConnectionChannel},
+        channel::{Channel, ConnectionChannel, ConnectionNotifier},
         notifications::DaemonNotification,
         responses::DaemonResponse,
     },
 };
 
 pub async fn handle(channel: Channel, state: LockableState, connection_id: Id, group_id: Id) {
-    match try_handle(None, state, connection_id, group_id) {
+    match try_handle::<ConnectionChannel>(None, state, connection_id, group_id) {
         Ok(_) => channel.respond(DaemonResponse::OkResult),
         Err(e) => channel.respond(DaemonResponse::ErrorResult {
             error: e.to_string(),
@@ -18,8 +18,8 @@ pub async fn handle(channel: Channel, state: LockableState, connection_id: Id, g
     };
 }
 
-pub fn try_handle(
-    receiver: Option<&mut ConnectionChannel>,
+pub fn try_handle<N: ConnectionNotifier>(
+    receiver: Option<&mut N>,
     mut state: LockableState,
     connection_id: Id,
     group_id: Id,

@@ -28,6 +28,7 @@ pub struct EventData {
 pub enum TransportEvent {
     Data(Bytes),
     Event(EventData),
+    EndOfPrompt,
     Nop,
 }
 

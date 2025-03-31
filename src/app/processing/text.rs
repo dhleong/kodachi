@@ -47,6 +47,7 @@ struct RegisteredLineProcessor {
 pub struct TextProcessor {
     matchers: Vec<RegisteredMatcher>,
     processors: Vec<RegisteredLineProcessor>,
+    auto_prompt_processor: Option<RegisteredLineProcessor>,
     pending_line: AnsiMut,
 }
 
@@ -132,11 +133,21 @@ impl TextProcessor {
         Ok(())
     }
 
-    fn process_pending_line<R: ProcessorOutputReceiver>(
+    pub fn on_end_of_prompt<R: ProcessorOutputReceiver>(
         &mut self,
-        has_full_line: bool,
         receiver: &mut R,
     ) -> io::Result<()> {
+        self.clean_trailing_cr();
+        if let Some(processor) = self.auto_prompt_processor.as_ref() {
+            let mut prompt = self.pending_line.take();
+            (processor.process)(&mut prompt)?;
+            receiver.clear_partial_line()?;
+            receiver.finish_line()?;
+        }
+        Ok(())
+    }
+
+    fn clean_trailing_cr(&mut self) {
         // Handle trailing carriage returns from previous lines:
         if self.pending_line.starts_with('\r') {
             // This is particularly important for matchers of whole lines, such as prompts
@@ -144,6 +155,14 @@ impl TextProcessor {
             let trimmed_bytes = old_bytes.split_off(1);
             self.pending_line = AnsiMut::from_bytes(trimmed_bytes);
         }
+    }
+
+    fn process_pending_line<R: ProcessorOutputReceiver>(
+        &mut self,
+        has_full_line: bool,
+        receiver: &mut R,
+    ) -> io::Result<()> {
+        self.clean_trailing_cr();
 
         if self.pending_line.has_incomplete_code() {
             // If there's some incomplete ANSI code, this becomes a no-op; we'll
@@ -199,6 +218,15 @@ impl TextProcessor {
         processor: P,
     ) {
         self.processors.push(RegisteredLineProcessor {
+            process: Box::new(processor),
+        })
+    }
+
+    pub fn register_auto_prompt_processor<P: 'static + Fn(&mut Ansi) -> io::Result<()> + Send>(
+        &mut self,
+        processor: P,
+    ) {
+        self.auto_prompt_processor = Some(RegisteredLineProcessor {
             process: Box::new(processor),
         })
     }

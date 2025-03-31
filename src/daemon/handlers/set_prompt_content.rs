@@ -3,7 +3,7 @@ use std::io;
 use crate::{
     app::{processing::ansi::Ansi, Id, LockableState},
     daemon::{
-        channel::{Channel, ConnectionChannel},
+        channel::{Channel, ConnectionChannel, ConnectionNotifier},
         notifications::{DaemonNotification, MatchedText},
         responses::DaemonResponse,
     },
@@ -20,7 +20,7 @@ pub async fn handle(
     content: Ansi,
     set_group_active: bool,
 ) {
-    match try_handle(
+    match try_handle::<ConnectionChannel>(
         None,
         state,
         connection_id,
@@ -36,8 +36,8 @@ pub async fn handle(
     };
 }
 
-pub fn try_handle(
-    mut receiver: Option<&mut ConnectionChannel>,
+pub fn try_handle<N: ConnectionNotifier>(
+    mut receiver: Option<&mut N>,
     mut state: LockableState,
     connection_id: Id,
     group_id: Id,

@@ -70,7 +70,7 @@ function KodachiState:cleanup()
 
   if cleared_any and self.socket and self.connection_id then
     self.socket:notify {
-      type = "Clear",
+      type = 'Clear',
       connection_id = self.connection_id,
     }
   end
@@ -92,6 +92,18 @@ function KodachiState:command(name, handler, opts)
 
   -- TODO also create in the composer
   vim.api.nvim_buf_create_user_command(self.bufnr, name, callback, full_opts)
+end
+
+--- @alias KodachiConnectionConfig {auto_prompts: boolean|nil}
+
+--- Update the connection configuration
+--- @param config KodachiConnectionConfig
+function KodachiState:config(config)
+  return with_socket(self, function(socket)
+    socket:request(vim.tbl_extend('force', config, {
+      type = 'ConfigureConnection',
+    }))
+  end)
 end
 
 ---Create a keymapping in normal mode for the buffer associated with this state. These mappings
@@ -151,9 +163,9 @@ end
 function KodachiState:alias(matcher, handler)
   matcher = matchers.inflate(matcher)
   return with_socket(self, function(socket)
-    if type(handler) == "string" then
+    if type(handler) == 'string' then
       socket:request {
-        type = "RegisterAlias",
+        type = 'RegisterAlias',
         connection_id = self.connection_id,
         matcher = matcher,
         replacement_pattern = handler,
@@ -162,7 +174,7 @@ function KodachiState:alias(matcher, handler)
       local aliases = self:_alias_handlers(socket)
       local id = aliases:insert(handler)
       socket:request {
-        type = "RegisterAlias",
+        type = 'RegisterAlias',
         connection_id = self.connection_id,
         matcher = matcher,
         handler_id = id,
@@ -197,7 +209,7 @@ function KodachiState:trigger(matcher, handler)
     local triggers = self:_trigger_handlers(socket)
     local id = triggers:insert(handler)
     socket:request {
-      type = "RegisterTrigger",
+      type = 'RegisterTrigger',
       connection_id = self.connection_id,
       matcher = matcher,
       handler_id = id,
@@ -211,7 +223,7 @@ function KodachiState:send(text)
   return with_socket(self, function(socket)
     socket:request(
       {
-        type = "Send",
+        type = 'Send',
         connection_id = self.connection_id,
         text = text,
       },
@@ -283,7 +295,7 @@ function KodachiState:_trigger_handlers(socket)
 end
 
 function KodachiState:_state_method_call(method_call)
-  return "require'kodachi.states'[" .. self.bufnr .. "]:" .. method_call
+  return "require'kodachi.states'[" .. self.bufnr .. ']:' .. method_call
 end
 
 function KodachiState:_state_method_cmd(method_call)

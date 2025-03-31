@@ -4,7 +4,11 @@ use crate::{
         processing::text::{MatcherId, MatcherMode},
         Id, LockableState,
     },
-    daemon::{channel::Channel, notifications::DaemonNotification, responses::DaemonResponse},
+    daemon::{
+        channel::{Channel, ConnectionNotifier},
+        notifications::DaemonNotification,
+        responses::DaemonResponse,
+    },
 };
 
 pub async fn handle(
