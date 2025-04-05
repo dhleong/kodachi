@@ -108,11 +108,25 @@ fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
         ClientRequest::Connect(data) => {
             launch(handlers::connect::handle(ui, channel, state, data));
         }
+
+        ClientRequest::ConfigureConnection {
+            connection_id,
+            config,
+        } => {
+            launch(handlers::configure_connection::handle(
+                channel,
+                state,
+                connection_id,
+                config,
+            ));
+        }
+
         ClientRequest::Disconnect {
             connection_id: connection,
         } => {
             tokio::spawn(handlers::disconnect::handle(channel, state, connection));
         }
+
         ClientRequest::Send {
             connection_id: connection,
             text,

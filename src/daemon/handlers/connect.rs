@@ -32,6 +32,8 @@ use crate::{
     transport::{BoxedTransport, Transport, TransportEvent, TransportNotification},
 };
 
+use super::configure_connection::apply_config;
+
 pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     mut transport: T,
     mut connection: ConnectionReceiver,
@@ -94,6 +96,15 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                     receiver.notification(DaemonNotification::Event(data))?;
                 },
 
+                TransportEvent::EndOfPrompt => {
+                    if connection.state.is_auto_prompt_enabled() {
+                        let processor = &connection
+                            .state
+                            .processor;
+                        handle_end_of_prompt(receiver, processor)?;
+                    }
+                },
+
                 TransportEvent::Nop => {},
             },
 
@@ -138,9 +149,14 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     let uri = Uri::from_string(&data.uri)?;
     let connection_id = connection.id;
 
+    if let Some(config) = data.config {
+        apply_config(&mut connection.state, &config);
+    }
+
     let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
     let receiver_state = connection.state.ui_state.clone();
-    let mut receiver = ui.create(receiver_state, connection_id, notifier);
+    let mut receiver = ui.create(receiver_state.clone(), connection_id, notifier.clone());
+    let processor_receiver = notifier.for_connection(connection_id);
 
     let transport = match BoxedTransport::connect_uri(uri, 4096).await {
         Ok(transport) => transport,
@@ -156,7 +172,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
         }
     };
 
-    register_processors(state.clone(), &mut connection);
+    register_processors(state.clone(), &mut connection, processor_receiver);
 
     receiver.notification(DaemonNotification::Connected)?;
 
@@ -212,4 +228,15 @@ pub fn handle_sent_text<R: ProcessorOutputReceiver>(
     receiver.end_chunk()?;
 
     Ok(())
+}
+
+pub fn handle_end_of_prompt<R: ProcessorOutputReceiver>(
+    receiver: &mut R,
+    processor: &Mutex<TextProcessor>,
+) -> io::Result<()> {
+    receiver.begin_chunk()?;
+
+    processor.lock().unwrap().on_end_of_prompt(receiver)?;
+
+    receiver.end_chunk()
 }

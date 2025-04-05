@@ -71,6 +71,7 @@ macro_rules! declare_type {
 }
 
 declare_type!(TelnetCommand {
+    EOR => 239,
     GoAhead => 249,
 });
 
@@ -78,6 +79,7 @@ declare_type!(TelnetOption {
     Echo => 1,
     SuppressGoAhead => 3,
     TermType => 24,
+    EOR => 25,
     // Negotiate About Window Size
     Naws => 31,
     Charset => 42,
