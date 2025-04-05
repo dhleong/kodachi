@@ -89,7 +89,7 @@ impl Default for TelnetOptionsManager {
         // Build the negotiator, adding in extra options not managed by a Handler
         let negotiator = negotiator_builder
             .accept_will(TelnetOption::EOR)
-            // .accept_will(TelnetOption::MCCP2)
+            .accept_will(TelnetOption::MCCP2)
             .build();
 
         TelnetOptionsManager {
