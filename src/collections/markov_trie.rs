@@ -72,7 +72,7 @@ impl<T: Default + Hash + Eq + Clone> MarkovTransitions<T> {
         remaining_depth: usize,
     ) {
         let next_value = &sequence[0];
-        if stop_words.map_or(false, |stop_words| stop_words.contains(&next_value)) {
+        if stop_words.is_some_and(|stop_words| stop_words.contains(next_value)) {
             return;
         }
 
@@ -173,7 +173,7 @@ mod tests {
         process(&mut trie, "I don't care");
         process(&mut trie, "Take my land");
 
-        return trie;
+        trie
     }
 
     fn query_vec<'a>(source: &'a MarkovTrie<String>, query: &[String]) -> Vec<&'a String> {

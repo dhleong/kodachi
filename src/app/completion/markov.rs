@@ -21,7 +21,7 @@ impl MarkovCompletionSource {
 impl CompletionSource for MarkovCompletionSource {
     type Iter<'a> = <QueryNext<'a, String> as IntoIterator>::IntoIter;
 
-    fn suggest<'a>(&'a self, params: CompletionParams) -> Self::Iter<'a> {
+    fn suggest(&self, params: CompletionParams) -> Self::Iter<'_> {
         let words: Vec<String> = params
             .words_before_cursor()
             .iter()
@@ -60,7 +60,6 @@ mod tests {
         assert_eq!(
             source
                 .suggest(params)
-                .into_iter()
                 .next()
                 .expect("Expected to have a suggestion")
                 .to_string(),

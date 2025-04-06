@@ -13,9 +13,9 @@ pub struct WordIndexSelectorFactory<
 }
 
 impl WordIndexSelectorFactory {
-    pub fn with_weights_by_index(weights_by_index: Vec<(u8, u8)>) -> Self {
+    pub fn with_weights_by_index(weights_by_index: impl Into<Vec<(u8, u8)>>) -> Self {
         Self {
-            weights_by_index,
+            weights_by_index: weights_by_index.into(),
             random: ThreadRngRandomnessSource,
         }
     }

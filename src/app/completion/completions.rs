@@ -23,7 +23,7 @@ impl Default for Completions {
             source: DuplexCompletionSource::new(
                 SentCompletionSource::default(),
                 FilteringCompletionSource(RecencyCompletionSource::default()),
-                WordIndexSelectorFactory::with_weights_by_index(vec![
+                WordIndexSelectorFactory::with_weights_by_index([
                     // First word? Prefer commandCompletions ALWAYS; We'll still
                     // fallback to output if commandCompletion doesn't have anything
                     (100, 0),

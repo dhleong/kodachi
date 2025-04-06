@@ -27,7 +27,7 @@ impl RecencyCompletionSource {
         let words_regex = Regex::new(r"(\w+)").unwrap();
         self.history.insert_many(
             words_regex
-                .find_iter(&line)
+                .find_iter(line)
                 .map(|m| m.as_str().to_lowercase()),
         );
     }
@@ -36,7 +36,7 @@ impl RecencyCompletionSource {
 impl CompletionSource for RecencyCompletionSource {
     type Iter<'a> = ritelinked::linked_hash_set::Iter<'a, String>;
 
-    fn suggest<'a>(&'a self, _params: CompletionParams) -> Self::Iter<'a> {
+    fn suggest(&self, _params: CompletionParams) -> Self::Iter<'_> {
         self.history.iter()
     }
 }

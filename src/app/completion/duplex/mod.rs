@@ -43,9 +43,12 @@ impl<A: CompletionSource, B: CompletionSource, SF: DuplexSelectorFactory>
 impl<A: CompletionSource, B: CompletionSource, SF: DuplexSelectorFactory> CompletionSource
     for DuplexCompletionSource<A, B, SF>
 {
-    type Iter<'a> = DuplexIter<A::Iter<'a>, B::Iter<'a>, SF::Selector> where Self: 'a;
+    type Iter<'a>
+        = DuplexIter<A::Iter<'a>, B::Iter<'a>, SF::Selector>
+    where
+        Self: 'a;
 
-    fn suggest<'a>(&'a self, params: super::CompletionParams) -> Self::Iter<'a> {
+    fn suggest(&self, params: super::CompletionParams) -> Self::Iter<'_> {
         DuplexIter {
             first: self.first.suggest(params.clone()),
             second: self.second.suggest(params.clone()),

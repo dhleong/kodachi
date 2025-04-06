@@ -8,7 +8,7 @@ impl<S: CompletionSource> CompletionSource for FilteringCompletionSource<S> {
     where
         Self: 'a;
 
-    fn suggest<'a>(&'a self, params: CompletionParams) -> Self::Iter<'a> {
+    fn suggest(&self, params: CompletionParams) -> Self::Iter<'_> {
         Filtered(self.0.suggest(params.clone()), params)
     }
 }
@@ -51,14 +51,14 @@ mod tests {
 
     fn assert_params_accept(params: &CompletionParams, candidate: &str, should_accept: bool) {
         let did_accept = candidate_matches_params(params, candidate);
-        if did_accept != should_accept {
-            let verb = if should_accept { "accept" } else { "reject" };
-            assert!(
-                false,
-                "Expected {:?} to {} {:?} but it did not",
-                params, verb, candidate
-            );
-        }
+        let verb = if should_accept { "accept" } else { "reject" };
+        assert!(
+            did_accept == should_accept,
+            "Expected {:?} to {} {:?} but it did not",
+            params,
+            verb,
+            candidate
+        );
     }
 
     #[test]

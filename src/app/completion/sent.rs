@@ -19,7 +19,7 @@ impl Default for SentCompletionSource {
         Self(DuplexCompletionSource::new(
             FilteringCompletionSource(MarkovCompletionSource::default()),
             FilteringCompletionSource(RecencyCompletionSource::default()),
-            WordIndexSelectorFactory::with_weights_by_index(vec![
+            WordIndexSelectorFactory::with_weights_by_index([
                 // The markov trie has a max depth of 5; at that point, we start to suspect
                 // that it's not a structured command, so we let recency have more weight
                 (100, 0),
@@ -41,7 +41,7 @@ impl CompletionSource for SentCompletionSource {
         WordIndexSelectorFactory,
     > as CompletionSource>::Iter<'a>;
 
-    fn suggest<'a>(&'a self, params: CompletionParams) -> Self::Iter<'a> {
+    fn suggest(&self, params: CompletionParams) -> Self::Iter<'_> {
         self.0.suggest(params)
     }
 }
