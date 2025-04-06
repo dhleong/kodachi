@@ -1,6 +1,6 @@
 use crate::collections::markov_trie::{MarkovTrie, QueryNext};
 
-use super::{CompletionParams, CompletionSource};
+use super::{tokens::Tokens, CompletionParams, CompletionSource};
 
 #[derive(Default)]
 pub struct MarkovCompletionSource {
@@ -9,12 +9,7 @@ pub struct MarkovCompletionSource {
 
 impl MarkovCompletionSource {
     pub fn process_line<S: AsRef<str>>(&mut self, line: S) {
-        let words: Vec<String> = line
-            .as_ref()
-            .split_whitespace()
-            .map(|s| s.to_lowercase())
-            .collect();
-        self.trie.add_sequence(&words);
+        self.trie.add_sequence(&Tokens::from(line.as_ref()));
     }
 }
 

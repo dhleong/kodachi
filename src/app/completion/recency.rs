@@ -1,8 +1,6 @@
-use regex::Regex;
-
 use crate::app::history::History;
 
-use super::{CompletionParams, CompletionSource};
+use super::{tokens::Tokens, CompletionParams, CompletionSource};
 
 const DEFAULT_RECENCY_CAPACITY: usize = 5000;
 
@@ -24,12 +22,7 @@ impl RecencyCompletionSource {
     }
 
     pub fn process_line(&mut self, line: &str) {
-        let words_regex = Regex::new(r"(\w+)").unwrap();
-        self.history.insert_many(
-            words_regex
-                .find_iter(line)
-                .map(|m| m.as_str().to_lowercase()),
-        );
+        self.history.insert_many(&Tokens::significant_from(line));
     }
 }
 

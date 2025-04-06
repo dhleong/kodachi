@@ -43,19 +43,10 @@ impl<T: Default + Hash + Eq + Clone> MarkovTrie<T> {
         }
     }
 
-    pub fn add_sequence(&mut self, sequence: &[T]) {
-        if sequence.is_empty() {
-            return;
-        }
-
-        let limited = if sequence.len() > self.max_depth {
-            &sequence[0..self.max_depth]
-        } else {
-            sequence
-        };
-
+    pub fn add_sequence(&mut self, sequence: impl IntoIterator<Item = T>) {
+        let iter = sequence.into_iter().take(self.max_depth);
         self.root
-            .add_sequence(limited, self.stop_words.as_ref(), self.max_depth);
+            .add_sequence(iter, self.stop_words.as_ref(), self.max_depth);
     }
 }
 
@@ -67,16 +58,18 @@ struct MarkovTransitions<T> {
 impl<T: Default + Hash + Eq + Clone> MarkovTransitions<T> {
     fn add_sequence(
         &mut self,
-        sequence: &[T],
+        mut sequence: impl Iterator<Item = T>,
         stop_words: Option<&HashSet<T>>,
         remaining_depth: usize,
     ) {
-        let next_value = &sequence[0];
-        if stop_words.is_some_and(|stop_words| stop_words.contains(next_value)) {
+        let Some(next_value) = sequence.next() else {
+            return;
+        };
+        if stop_words.is_some_and(|stop_words| stop_words.contains(&next_value)) {
             return;
         }
 
-        let transition = if let Some(existing) = self.transitions.get_mut(next_value) {
+        let transition = if let Some(existing) = self.transitions.get_mut(&next_value) {
             existing
         } else {
             self.transitions
@@ -86,13 +79,9 @@ impl<T: Default + Hash + Eq + Clone> MarkovTransitions<T> {
         transition.incoming_count += 1;
 
         if let Some(new_remaining_depth) = remaining_depth.checked_sub(1) {
-            if sequence.len() > 1 {
-                transition.transitions.add_sequence(
-                    &sequence[1..],
-                    stop_words,
-                    new_remaining_depth,
-                );
-            }
+            transition
+                .transitions
+                .add_sequence(sequence, stop_words, new_remaining_depth);
         }
     }
 
@@ -158,8 +147,7 @@ mod tests {
     use super::*;
 
     fn process(trie: &mut MarkovTrie<String>, phrase: &str) {
-        let vec: Vec<String> = phrase.split_whitespace().map(|s| s.to_string()).collect();
-        trie.add_sequence(&vec);
+        trie.add_sequence(phrase.split_whitespace().map(|s| s.to_string()));
     }
 
     fn trie() -> MarkovTrie<String> {

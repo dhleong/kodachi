@@ -6,6 +6,7 @@ mod filtering;
 pub mod markov;
 pub mod recency;
 mod sent;
+mod tokens;
 pub mod transforms;
 
 #[derive(Clone, Debug, Deserialize)]
