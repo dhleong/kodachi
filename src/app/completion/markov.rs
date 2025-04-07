@@ -17,11 +17,7 @@ impl CompletionSource for MarkovCompletionSource {
     type Iter<'a> = <QueryNext<'a, String> as IntoIterator>::IntoIter;
 
     fn suggest(&self, params: CompletionParams) -> Self::Iter<'_> {
-        let words: Vec<String> = params
-            .words_before_cursor()
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
+        let words: Vec<String> = params.tokens_before_cursor();
         self.trie.query_next(&words).into_iter()
     }
 }
@@ -66,6 +62,16 @@ mod tests {
     fn sequence_completion_test() {
         let source = source();
         let params = CompletionParams::from_line_to_cursor("take m");
+        assert_eq!(suggest_vec(&source, params.clone()), vec!["my", "me"]);
+
+        // Do it one more time to prove it wasn't a fluke
+        assert_eq!(suggest_vec(&source, params), vec!["my", "me"]);
+    }
+
+    #[test]
+    fn case_insensitivity_test() {
+        let source = source();
+        let params = CompletionParams::from_line_to_cursor("TAKE M");
         assert_eq!(suggest_vec(&source, params.clone()), vec!["my", "me"]);
 
         // Do it one more time to prove it wasn't a fluke
