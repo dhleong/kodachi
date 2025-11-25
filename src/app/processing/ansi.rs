@@ -26,15 +26,15 @@ impl AsRef<[u8]> for AnsiMut {
     }
 }
 
-impl Into<BytesMut> for AnsiMut {
-    fn into(self) -> BytesMut {
-        self.0
+impl From<AnsiMut> for BytesMut {
+    fn from(val: AnsiMut) -> Self {
+        val.0
     }
 }
 
-impl Into<Ansi> for AnsiMut {
-    fn into(self) -> Ansi {
-        Ansi::from_bytes(self.0.freeze())
+impl From<AnsiMut> for Ansi {
+    fn from(val: AnsiMut) -> Self {
+        Ansi::from_bytes(val.0.freeze())
     }
 }
 
@@ -139,9 +139,9 @@ impl From<BytesMut> for Ansi {
     }
 }
 
-impl Into<Bytes> for Ansi {
-    fn into(self) -> Bytes {
-        self.bytes
+impl From<Ansi> for Bytes {
+    fn from(val: Ansi) -> Self {
+        val.bytes
     }
 }
 
@@ -150,9 +150,9 @@ impl Add for Ansi {
 
     fn add(self, rhs: Self) -> Self::Output {
         // Avoid copying if one or the other is empty
-        if self.bytes.len() == 0 {
+        if self.bytes.is_empty() {
             rhs
-        } else if rhs.bytes.len() == 0 {
+        } else if rhs.bytes.is_empty() {
             self
         } else {
             let len = self.bytes.len() + rhs.bytes.len();
@@ -198,7 +198,7 @@ impl Ansi {
         // Cache the result:
         let stripped = strip_ansi(self.bytes.clone());
         self.stripped = Some(stripped.clone());
-        return stripped;
+        stripped
     }
 
     // Returns an Ansi instance, which shares its backing data with this Ansi instance, but whose
@@ -220,7 +220,7 @@ impl Ansi {
                 }
             }
         }
-        return self.clone();
+        self.clone()
     }
 }
 
@@ -354,6 +354,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::bool_assert_comparison)] // I think it's slightly more readable here
     fn detect_incomplete_ansi_codes() {
         assert_eq!(AnsiMut::from("grayskull\x1b").has_incomplete_code(), true);
         assert_eq!(AnsiMut::from("grayskull\x1b[").has_incomplete_code(), true);
