@@ -9,13 +9,21 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 #[derive(Clone, Default)]
 pub struct AnsiMut(BytesMut);
 
+/// Converts as much of the input type to utf8 as is valid to do.
+fn maximally_as_utf8<T: AsRef<[u8]> + Debug>(s: &T) -> &str {
+    match std::str::from_utf8(s.as_ref()) {
+        Ok(valid) => valid,
+        Err(error) => std::str::from_utf8(&s.as_ref()[0..error.valid_up_to()])
+            .map_err(|err| format!("Error parsing {s:?} into utf8: {err:?}"))
+            .unwrap(),
+    }
+}
+
 impl Deref for AnsiMut {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        std::str::from_utf8(&self.0)
-            .map_err(|err| format!("Error parsing {:?} into utf8: {:?}", self.0, err))
-            .unwrap()
+        maximally_as_utf8(&self.0)
     }
 }
 
@@ -110,7 +118,7 @@ impl Deref for Ansi {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        std::str::from_utf8(&self.bytes).unwrap()
+        maximally_as_utf8(&self.bytes)
     }
 }
 
@@ -227,7 +235,7 @@ impl Ansi {
 fn strip_ansi(bytes: Bytes) -> AnsiStripped {
     // NOTE: It'd be nice if we could reuse Bytes ranges from self.bytes to avoid excessive
     // copying---esp if there is actually no Ansi in self.bytes
-    let raw = std::str::from_utf8(&bytes).unwrap();
+    let raw = maximally_as_utf8(&bytes); // TODO: Is this safe to use here?
     let mut without_ansi = String::new();
     let mut ansi_ranges = Vec::new();
 
@@ -287,7 +295,7 @@ impl Debug for AnsiStripped {
 
 impl Display for AnsiStripped {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = std::str::from_utf8(&self.value).unwrap();
+        let s = maximally_as_utf8(&self.value);
         Display::fmt(s, f)
     }
 }
@@ -296,6 +304,8 @@ impl Deref for AnsiStripped {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
+        // NOTE: We should already have stripped invalid utf8 sequences when converting to
+        // AnsiStripped
         std::str::from_utf8(&self.value).unwrap()
     }
 }
@@ -371,7 +381,8 @@ mod tests {
 
     #[test]
     fn deref_ansi_mut_safely() {
-        let bytes: &[u8] = b"\r\xc3\x28";
+        // NOTE: This is likely an incomplete sequence of some kind, eg: \xe2\x96\x84
+        let bytes: &[u8] = b"\r\xe2";
         let ansi = AnsiMut::from_bytes(BytesMut::from(bytes));
         assert!(ansi.starts_with("\r"));
     }
