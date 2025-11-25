@@ -149,11 +149,9 @@ impl TextProcessor {
 
     fn clean_trailing_cr(&mut self) {
         // Handle trailing carriage returns from previous lines:
-        if self.pending_line.starts_with('\r') {
+        if self.pending_line.valid_utf8().starts_with('\r') {
             // This is particularly important for matchers of whole lines, such as prompts
-            let mut old_bytes = self.pending_line.take_bytes();
-            let trimmed_bytes = old_bytes.split_off(1);
-            self.pending_line = AnsiMut::from_bytes(trimmed_bytes);
+            self.pending_line.drop_leading_bytes(1);
         }
     }
 

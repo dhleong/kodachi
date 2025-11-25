@@ -10,21 +10,17 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 pub struct AnsiMut(BytesMut);
 
 /// Converts as much of the input type to utf8 as is valid to do.
-fn maximally_as_utf8<T: AsRef<[u8]> + Debug>(s: &T) -> &str {
+fn valid_utf8_bytes_count<T: AsRef<[u8]> + Debug>(s: &T) -> usize {
     match std::str::from_utf8(s.as_ref()) {
-        Ok(valid) => valid,
-        Err(error) => std::str::from_utf8(&s.as_ref()[0..error.valid_up_to()])
-            .map_err(|err| format!("Error parsing {s:?} into utf8: {err:?}"))
-            .unwrap(),
+        Ok(_) => s.as_ref().len(),
+        Err(error) => error.valid_up_to(),
     }
 }
 
-impl Deref for AnsiMut {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        maximally_as_utf8(&self.0)
-    }
+fn maximally_as_utf8<T: AsRef<[u8]> + Debug>(s: &T) -> &str {
+    std::str::from_utf8(&s.as_ref()[0..valid_utf8_bytes_count(s)])
+        .map_err(|err| format!("Error parsing {s:?} into utf8: {err:?}"))
+        .unwrap()
 }
 
 impl AsRef<[u8]> for AnsiMut {
@@ -61,24 +57,41 @@ impl AnsiMut {
         Self::from_bytes(bytes.into())
     }
 
+    /// Deref this AnsiMut and get as much valid utf8 str as is available.
+    /// NOTE: This MAY NOT represent the entire contents of this AnsiMut instance, since
+    /// we could be still pending more bytes to "complete" utf8 sequences at the end
+    pub fn valid_utf8(&self) -> &str {
+        maximally_as_utf8(&self.0)
+    }
+
     pub fn put_slice(&mut self, bytes: &[u8]) {
         self.0.put_slice(bytes)
     }
 
-    pub fn take_bytes(&mut self) -> BytesMut {
-        self.0.split()
-    }
-
     pub fn take(&mut self) -> Ansi {
-        let bytes = self.take_bytes();
+        let bytes = self.take_valid_utf8_bytes();
         Ansi::from_bytes(bytes.freeze())
     }
 
+    /// Drop the `count` bytes at the beginning of this AnsiMut instance (IE: `[0, count)`) and
+    /// return them. This instance retains the bytes from `[count, ...]`
+    pub fn drop_leading_bytes(&mut self, count: usize) -> BytesMut {
+        self.0.split_to(count)
+    }
+
     pub fn has_incomplete_code(&self) -> bool {
+        if valid_utf8_bytes_count(&self.0) < self.0.len() {
+            return true;
+        }
+
         // Would be nice if this didn't require so much copying:
         let arr: &[u8] = &self.0;
         let bytes = (&arr[..]).copy_to_bytes(arr.len());
         strip_ansi(bytes).has_incomplete
+    }
+
+    fn take_valid_utf8_bytes(&mut self) -> BytesMut {
+        self.0.split_to(valid_utf8_bytes_count(&self.0))
     }
 }
 
@@ -118,7 +131,7 @@ impl Deref for Ansi {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        maximally_as_utf8(&self.bytes)
+        std::str::from_utf8(&self.bytes).unwrap()
     }
 }
 
@@ -383,7 +396,10 @@ mod tests {
     fn deref_ansi_mut_safely() {
         // NOTE: This is likely an incomplete sequence of some kind, eg: \xe2\x96\x84
         let bytes: &[u8] = b"\r\xe2";
-        let ansi = AnsiMut::from_bytes(BytesMut::from(bytes));
+        let mut ansi_mut = AnsiMut::from_bytes(BytesMut::from(bytes));
+        assert!(ansi_mut.has_incomplete_code());
+
+        let ansi = ansi_mut.take();
         assert!(ansi.starts_with("\r"));
     }
 
