@@ -54,15 +54,13 @@ pub struct Matcher {
 }
 
 impl Matcher {
-    pub fn try_match(&self, mut subject: Ansi) -> MatchResult {
+    pub fn try_match(&self, subject: Ansi) -> MatchResult {
         let stripped: AnsiStripped = subject.trim_trailing_newlines().strip_ansi();
         if let Some(found) = self.pattern.captures(&stripped) {
             let context = self.extract_match_context(&stripped, found);
 
             let mut remaining = if self.options.consume {
-                let consumed_range = stripped.get_original_range(context.full_match_range.clone());
-                subject.slice(0..consumed_range.start)
-                    + subject.slice(consumed_range.end..subject.len())
+                subject.without_stripped_match_range(&stripped, context.full_match_range.clone())
             } else {
                 subject
             };
@@ -160,7 +158,7 @@ mod tests {
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.indexed[&1].plain, "anything");
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 
@@ -183,7 +181,7 @@ mod tests {
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.indexed[&1].plain, "anything");
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 
@@ -206,7 +204,7 @@ mod tests {
             assert_eq!(&context.indexed[&0].plain, "say 'anything'");
             assert_eq!(&context.named[&"message".to_string()].plain, "anything");
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 
@@ -234,7 +232,7 @@ mod tests {
                 "\x1b[32manything\x1b[m"
             );
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 
@@ -265,7 +263,7 @@ mod tests {
                 "\x1b[32manything\x1b[m"
             );
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 
@@ -296,7 +294,7 @@ mod tests {
                 "\x1b[32manything\x1b[m"
             );
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 
@@ -321,7 +319,7 @@ mod tests {
             assert_eq!(remaining, None);
             assert_eq!(&context.indexed[&0].plain, "For the honor of Grayskull!");
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 
@@ -338,7 +336,7 @@ mod tests {
         {
             assert_eq!(&context.named[&"burrito".to_string()].plain, "alpastor");
         } else {
-            panic!("Expected {:?} to match... but it didn't", matcher);
+            panic!("Expected {matcher:?} to match... but it didn't");
         }
     }
 }

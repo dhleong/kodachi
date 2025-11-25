@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bytes::Buf;
+use bytes::{Buf, Bytes};
 
 use crate::{
     app::{
@@ -107,11 +107,9 @@ pub trait ProcessorOutputReceiverFactory: Clone + Send {
 impl TextProcessor {
     pub fn process<R: ProcessorOutputReceiver>(
         &mut self,
-        text: Ansi,
+        mut bytes: Bytes,
         receiver: &mut R,
     ) -> io::Result<()> {
-        let mut bytes = text.into_inner();
-
         while bytes.has_remaining() {
             // Read up until a newline from text; push that onto pending_line...
             let (read, has_full_line) =
@@ -149,11 +147,9 @@ impl TextProcessor {
 
     fn clean_trailing_cr(&mut self) {
         // Handle trailing carriage returns from previous lines:
-        if self.pending_line.starts_with('\r') {
+        if self.pending_line.valid_utf8().starts_with('\r') {
             // This is particularly important for matchers of whole lines, such as prompts
-            let mut old_bytes = self.pending_line.take_bytes();
-            let trimmed_bytes = old_bytes.split_off(1);
-            self.pending_line = AnsiMut::from_bytes(trimmed_bytes);
+            self.pending_line.drop_leading_bytes(1);
         }
     }
 
@@ -180,7 +176,7 @@ impl TextProcessor {
 
             (MatcherMode::FullLine, full_line)
         } else {
-            (MatcherMode::PartialLine, self.pending_line.clone().into())
+            (MatcherMode::PartialLine, self.pending_line.clone().take())
         };
 
         let to_print = self.perform_and_handle_match(to_match, match_mode)?;

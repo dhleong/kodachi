@@ -6,6 +6,7 @@ use std::{
     sync::Mutex,
 };
 
+use bytes::Bytes;
 use crossterm::{
     event::{Event, EventStream},
     terminal,
@@ -15,12 +16,9 @@ use futures::{FutureExt as _, StreamExt as _};
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
-        processing::{
-            ansi::Ansi,
-            text::{
-                ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage,
-                TextProcessor, WindowSizeSource,
-            },
+        processing::text::{
+            ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage, TextProcessor,
+            WindowSizeSource,
         },
         processors::register_processors,
         LockableState,
@@ -89,7 +87,7 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
                     let processor = &connection
                         .state
                         .processor;
-                    handle_received_text(receiver, processor, Ansi::from_bytes(data))?;
+                    handle_received_text(receiver, processor, data)?;
                 },
 
                 TransportEvent::Event(data) => {
@@ -209,7 +207,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
 pub fn handle_received_text<R: ProcessorOutputReceiver>(
     receiver: &mut R,
     processor: &Mutex<TextProcessor>,
-    text: Ansi,
+    text: Bytes,
 ) -> io::Result<()> {
     receiver.begin_chunk()?;
 

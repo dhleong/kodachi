@@ -1,3 +1,5 @@
+use bytes::Bytes;
+
 use crate::app::matchers::MatcherSpec;
 use crate::app::processing::text::ProcessorOutputReceiver;
 use crate::app::{Id, LockableState};
@@ -19,7 +21,7 @@ struct TestBed<R: ProcessorOutputReceiver> {
 }
 
 impl<R: ProcessorOutputReceiver> TestBed<R> {
-    fn receive(&mut self, to_receive: &str) -> io::Result<()> {
+    fn receive(&mut self, to_receive: &'static str) -> io::Result<()> {
         let processor = &self
             .state
             .lock()
@@ -27,7 +29,7 @@ impl<R: ProcessorOutputReceiver> TestBed<R> {
             .connections
             .get_processor(self.id)
             .unwrap();
-        handle_received_text(&mut self.ui, processor, to_receive.into())
+        handle_received_text(&mut self.ui, processor, Bytes::from(to_receive))
     }
 
     fn send(&mut self, to_send: &str) -> io::Result<()> {

@@ -36,7 +36,7 @@ impl SendTextProcessor {
         F: 'static + Future<Output = io::Result<ProcessResult>> + Send + Sync,
     {
         if matcher.options.consume {
-            panic!("Matcher ({:?}) is unexpectedly `consume`", matcher);
+            panic!("Matcher ({matcher:?}) is unexpectedly `consume`");
         }
 
         self.matchers.push(RegisteredMatcher {

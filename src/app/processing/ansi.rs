@@ -6,17 +6,24 @@ use std::{
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+// Represents a mutable Bytes string containing Ansi sequences. Because it is mutable,
+// and expected to be used for *constructing* Ansi instances, it *may* contain invalid
+// ansi or utf8 sequences.
 #[derive(Clone, Default)]
 pub struct AnsiMut(BytesMut);
 
-impl Deref for AnsiMut {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        std::str::from_utf8(&self.0)
-            .map_err(|err| format!("Error parsing {:?} into utf8: {:?}", self.0, err))
-            .unwrap()
+/// Converts as much of the input type to utf8 as is valid to do.
+fn valid_utf8_bytes_count<T: AsRef<[u8]> + Debug>(s: &T) -> usize {
+    match std::str::from_utf8(s.as_ref()) {
+        Ok(_) => s.as_ref().len(),
+        Err(error) => error.valid_up_to(),
     }
+}
+
+fn maximally_as_utf8<T: AsRef<[u8]> + Debug>(s: &T) -> &str {
+    std::str::from_utf8(&s.as_ref()[0..valid_utf8_bytes_count(s)])
+        .map_err(|err| format!("Error parsing {s:?} into utf8: {err:?}"))
+        .unwrap()
 }
 
 impl AsRef<[u8]> for AnsiMut {
@@ -29,12 +36,6 @@ impl AsRef<[u8]> for AnsiMut {
 impl From<AnsiMut> for BytesMut {
     fn from(val: AnsiMut) -> Self {
         val.0
-    }
-}
-
-impl From<AnsiMut> for Ansi {
-    fn from(val: AnsiMut) -> Self {
-        Ansi::from_bytes(val.0.freeze())
     }
 }
 
@@ -53,27 +54,50 @@ impl AnsiMut {
         Self::from_bytes(bytes.into())
     }
 
+    pub fn into_inner(self) -> BytesMut {
+        self.0
+    }
+
+    /// "Deref" this AnsiMut and get as much valid utf8 str as is available.
+    /// NOTE: This MAY NOT represent the entire contents of this AnsiMut instance, since
+    /// we could be still pending more bytes to "complete" utf8 sequences at the end
+    pub fn valid_utf8(&self) -> &str {
+        maximally_as_utf8(&self.0)
+    }
+
     pub fn put_slice(&mut self, bytes: &[u8]) {
         self.0.put_slice(bytes)
     }
 
-    pub fn take_bytes(&mut self) -> BytesMut {
-        self.0.split()
-    }
-
     pub fn take(&mut self) -> Ansi {
-        let bytes = self.take_bytes();
+        let bytes = self.take_valid_utf8_bytes();
         Ansi::from_bytes(bytes.freeze())
     }
 
+    /// Drop the `count` bytes at the beginning of this AnsiMut instance (IE: `[0, count)`) and
+    /// return them. This instance retains the bytes from `[count, ...]`
+    pub fn drop_leading_bytes(&mut self, count: usize) -> BytesMut {
+        self.0.split_to(count)
+    }
+
     pub fn has_incomplete_code(&self) -> bool {
+        if valid_utf8_bytes_count(&self.0) < self.0.len() {
+            return true;
+        }
+
         // Would be nice if this didn't require so much copying:
         let arr: &[u8] = &self.0;
         let bytes = (&arr[..]).copy_to_bytes(arr.len());
         strip_ansi(bytes).has_incomplete
     }
+
+    fn take_valid_utf8_bytes(&mut self) -> BytesMut {
+        self.0.split_to(valid_utf8_bytes_count(&self.0))
+    }
 }
 
+// Represents a Bytes string containing *valid* Ansi sequences. Is NOT expected to contain any
+// partial Ansi or utf8 sequences.
 #[derive(Clone)]
 pub struct Ansi {
     bytes: Bytes,
@@ -110,6 +134,8 @@ impl Deref for Ansi {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
+        // NOTE: We should already have stripped invalid utf8 sequences when converting to
+        // Ansi from AnsiMut; Ansi should never contain invalid utf8 sequences!
         std::str::from_utf8(&self.bytes).unwrap()
     }
 }
@@ -121,21 +147,15 @@ impl AsRef<[u8]> for Ansi {
     }
 }
 
-impl From<&str> for Ansi {
-    fn from(source: &str) -> Self {
-        AnsiMut::from(source).into()
+impl From<&'static str> for Ansi {
+    fn from(source: &'static str) -> Self {
+        Ansi::from_bytes(Bytes::from_static(source.as_bytes()))
     }
 }
 
 impl From<String> for Ansi {
     fn from(source: String) -> Self {
-        source.as_str().into()
-    }
-}
-
-impl From<BytesMut> for Ansi {
-    fn from(source: BytesMut) -> Self {
-        Ansi::from_bytes(source.into())
+        Ansi::from_bytes(Bytes::from(source))
     }
 }
 
@@ -167,15 +187,11 @@ impl Ansi {
         Self::from("")
     }
 
-    pub fn from_bytes(bytes: Bytes) -> Self {
+    fn from_bytes(bytes: Bytes) -> Self {
         Self {
             bytes,
             stripped: None,
         }
-    }
-
-    pub fn from<T: Into<Bytes>>(bytes: T) -> Self {
-        Self::from_bytes(bytes.into())
     }
 
     pub fn as_bytes(&self) -> Bytes {
@@ -186,7 +202,20 @@ impl Ansi {
         self.bytes
     }
 
-    pub fn slice(&mut self, range: impl RangeBounds<usize>) -> Ansi {
+    /// This is a very niche method designed to avoid exposing a potentially dangerous
+    /// "unbounded slice" method, while being as efficient as possible. Here, the caller
+    /// is attesting that match_range is a range within stripped, which came from calling
+    /// strip_ansi on this Ansi instance.
+    pub fn without_stripped_match_range(
+        &self,
+        stripped: &AnsiStripped,
+        match_range: Range<usize>,
+    ) -> Ansi {
+        let consumed_range = stripped.get_original_range(match_range);
+        self.slice(0..consumed_range.start) + self.slice(consumed_range.end..self.bytes.len())
+    }
+
+    fn slice(&self, range: impl RangeBounds<usize>) -> Ansi {
         Ansi::from_bytes(self.bytes.slice(range))
     }
 
@@ -227,6 +256,8 @@ impl Ansi {
 fn strip_ansi(bytes: Bytes) -> AnsiStripped {
     // NOTE: It'd be nice if we could reuse Bytes ranges from self.bytes to avoid excessive
     // copying---esp if there is actually no Ansi in self.bytes
+    // NOTE: We not need maximally_as_utf8 here, as we are only called from Ansi, which *must*
+    // have valid utf8 bytes.
     let raw = std::str::from_utf8(&bytes).unwrap();
     let mut without_ansi = String::new();
     let mut ansi_ranges = Vec::new();
@@ -287,7 +318,7 @@ impl Debug for AnsiStripped {
 
 impl Display for AnsiStripped {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = std::str::from_utf8(&self.value).unwrap();
+        let s = maximally_as_utf8(&self.value);
         Display::fmt(s, f)
     }
 }
@@ -369,8 +400,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn deref_ansi_mut_utf8_safely() {
+        // NOTE: This is likely an incomplete sequence of some kind, eg: \xe2\x96\x84
+        let bytes: &[u8] = b"\r\xe2";
+        let mut ansi_mut = AnsiMut::from_bytes(BytesMut::from(bytes));
+        assert!(ansi_mut.has_incomplete_code());
+
+        let ansi = ansi_mut.take();
+        assert!(ansi.starts_with("\r"));
+
+        // NOTE: The AnsiMut instance retains the invalid utf8 bytes
+        assert_eq!(ansi_mut.as_ref(), b"\xe2");
+
+        // If we "finish" the utf8 sequence, we can now take it:
+        ansi_mut.put_slice(b"\x96\x84");
+        let remainder = ansi_mut.take();
+        assert_eq!(remainder.as_bytes().as_ref(), b"\xe2\x96\x84");
+
+        // ... and the AnsiMut will be empty
+        assert!(ansi_mut.into_inner().is_empty());
+    }
+
     #[cfg(test)]
-    mod striped_ansi {
+    mod stripped_ansi {
         use super::*;
 
         #[test]
