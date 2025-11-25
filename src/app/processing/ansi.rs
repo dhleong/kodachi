@@ -369,8 +369,15 @@ mod tests {
         );
     }
 
+    #[test]
+    fn deref_ansi_mut_safely() {
+        let bytes: &[u8] = b"\r\xc3\x28";
+        let ansi = AnsiMut::from_bytes(BytesMut::from(bytes));
+        assert!(ansi.starts_with("\r"));
+    }
+
     #[cfg(test)]
-    mod striped_ansi {
+    mod stripped_ansi {
         use super::*;
 
         #[test]
