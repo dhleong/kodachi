@@ -1,4 +1,4 @@
-use std::io::{self, stdout, BufRead, BufReader, Write};
+use std::io::{self, stdout, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
@@ -20,7 +20,10 @@ use cli::stdio::StdinReader;
 use crossterm::style::{Print, ResetColor};
 use logging::KodachiLogger;
 
-async fn run_with<TInput: BufRead, TResponse: 'static + Write + Send>(
+use crate::daemon::input::bufread::LinesRequestSource;
+use crate::daemon::DaemonRequestSource;
+
+async fn run_with<TInput: DaemonRequestSource, TResponse: 'static + Write + Send>(
     cli: Cli,
     input: TInput,
     response: TResponse,
@@ -48,7 +51,7 @@ async fn run_with<TInput: BufRead, TResponse: 'static + Write + Send>(
 async fn run(cli: Cli) -> io::Result<()> {
     match &cli.command {
         Commands::Stdio { .. } => {
-            let input = StdinReader::stdin();
+            let input = LinesRequestSource::from(StdinReader::stdin());
             let response = io::stderr();
             run_with(cli, input, response).await
         }
@@ -58,7 +61,7 @@ async fn run(cli: Cli) -> io::Result<()> {
                 Ok(socket) => socket,
                 Err(e) => panic!("Invalid unix socket: {e}"),
             };
-            let input = BufReader::new(socket.try_clone().unwrap());
+            let input = LinesRequestSource::from(BufReader::new(socket.try_clone().unwrap()));
             let response = socket;
             run_with(cli, input, response).await
         }

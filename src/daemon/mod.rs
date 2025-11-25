@@ -1,11 +1,12 @@
 use std::{
     future::Future,
-    io::{self, BufRead, Write},
+    io::{self, Write},
 };
 
 pub mod channel;
 mod commands;
 pub mod handlers;
+pub mod input;
 pub mod notifications;
 pub mod protocol;
 pub mod requests;
@@ -33,13 +34,17 @@ where
     });
 }
 
+pub trait DaemonRequestSource {
+    async fn next(&mut self) -> io::Result<Option<Request>>;
+}
+
 pub async fn daemon<
     TUI: ProcessorOutputReceiverFactory + 'static,
-    TInput: BufRead,
+    TInput: DaemonRequestSource,
     TResponse: 'static + Write + Send,
 >(
     ui: TUI,
-    input: TInput,
+    mut input: TInput,
     response: TResponse,
 ) -> io::Result<()> {
     let shared_state = LockableState::default();
@@ -47,17 +52,7 @@ pub async fn daemon<
     let request_ids = RequestIdGenerator::default();
     let channels = ChannelSource::new(Box::new(response), request_ids, to_listeners.clone());
 
-    for read in input.lines() {
-        let raw_json = read?;
-        let request: Request = match serde_json::from_str(&raw_json) {
-            Ok(request) => request,
-            Err(err) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("Unable to parse input `{raw_json}`: {err}"),
-                ));
-            }
-        };
+    while let Some(request) = input.next().await? {
         let state = shared_state.clone();
 
         match request {
