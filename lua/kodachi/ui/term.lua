@@ -10,8 +10,8 @@ local M = {
 ---@param opts {socket_name:string, on_exit:any}
 function M.spawn_unix(opts)
   -- NOTE: Neovim does not correctly persist output if the window resizes smaller
-  -- than the width of the text, so we use tmux to save it
-  local tmux_wrap = vim.fn.has('nvim')
+  -- than the width of the text, so we use tmux to save it (if available)
+  local tmux_wrap = vim.fn.has('nvim') and vim.fn.executable('tmux')
 
   -- TODO If not debug, ensure the release executable is compiled/up-to-date
 
