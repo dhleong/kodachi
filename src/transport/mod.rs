@@ -1,13 +1,14 @@
-use std::{collections::HashMap, io};
+use std::{collections::HashMap, io, path::Path};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::Serialize;
 
-use crate::net::Uri;
+use crate::{net::Uri, transport::replay::ReplayTransport};
 
 use self::telnet::TelnetTransport;
 
+mod replay;
 pub mod telnet;
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -49,6 +50,13 @@ pub struct BoxedTransport(Box<dyn Transport + Send>);
 impl BoxedTransport {
     pub fn from<T: 'static + Transport + Send>(transport: T) -> BoxedTransport {
         BoxedTransport(Box::new(transport))
+    }
+
+    pub async fn replay(path: &Path, buffer_size: usize) -> io::Result<BoxedTransport> {
+        let stream = ReplayTransport::for_file(path).await?;
+        Ok(BoxedTransport::from(
+            TelnetTransport::connect_with_stream(stream, buffer_size).await?,
+        ))
     }
 
     pub async fn connect_uri(uri: Uri, buffer_size: usize) -> io::Result<BoxedTransport> {

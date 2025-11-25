@@ -146,7 +146,6 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     data: commands::Connect,
 ) -> io::Result<()> {
     let mut connection = state.lock().unwrap().connections.create();
-    let uri = Uri::from_string(&data.uri)?;
     let connection_id = connection.id;
 
     if let Some(config) = data.config {
@@ -158,16 +157,21 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     let mut receiver = ui.create(receiver_state.clone(), connection_id, notifier.clone());
     let processor_receiver = notifier.for_connection(connection_id);
 
-    let transport = match BoxedTransport::connect_uri(uri, 4096).await {
-        Ok(transport) => transport,
-        Err(err) => {
-            receiver.begin_chunk()?;
-            receiver.system(SystemMessage::ConnectionStatus(format!(
-                "Failed to connect: {err}\n",
-            )))?;
-            receiver.end_chunk()?;
-            receiver.notification(DaemonNotification::Disconnected)?;
-            return Ok(());
+    let transport = if let Some(replay_path) = data.replay {
+        BoxedTransport::replay(&replay_path, 4096).await?
+    } else {
+        let uri = Uri::from_string(&data.uri)?;
+        match BoxedTransport::connect_uri(uri, 4096).await {
+            Ok(transport) => transport,
+            Err(err) => {
+                receiver.begin_chunk()?;
+                receiver.system(SystemMessage::ConnectionStatus(format!(
+                    "Failed to connect: {err}\n",
+                )))?;
+                receiver.end_chunk()?;
+                receiver.notification(DaemonNotification::Disconnected)?;
+                return Ok(());
+            }
         }
     };
 

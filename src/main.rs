@@ -21,6 +21,7 @@ use crossterm::style::{Print, ResetColor};
 use logging::KodachiLogger;
 
 use crate::daemon::input::bufread::LinesRequestSource;
+use crate::daemon::input::replay::DumpReplayRequestSource;
 use crate::daemon::DaemonRequestSource;
 
 async fn run_with<TInput: DaemonRequestSource, TResponse: 'static + Write + Send>(
@@ -63,6 +64,12 @@ async fn run(cli: Cli) -> io::Result<()> {
             };
             let input = LinesRequestSource::from(BufReader::new(socket.try_clone().unwrap()));
             let response = socket;
+            run_with(cli, input, response).await
+        }
+
+        Commands::ReplayDump { path, .. } => {
+            let input = DumpReplayRequestSource::for_path(path.clone());
+            let response = io::stderr();
             run_with(cli, input, response).await
         }
 

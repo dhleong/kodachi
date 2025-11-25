@@ -42,13 +42,13 @@ impl TelnetTransport<TlsStream<TcpStream>> {
         let tcp = TcpStream::connect((host, port)).await?;
         let connector = match native_tls::TlsConnector::builder().build() {
             Ok(connector) => connector,
-            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err)),
+            Err(err) => return Err(io::Error::other(err)),
         };
         let cx = TlsConnector::from(connector);
 
         let stream = match cx.connect(host, tcp).await {
             Ok(stream) => stream,
-            Err(err) => return Err(io::Error::new(io::ErrorKind::Other, err)),
+            Err(err) => return Err(io::Error::other(err)),
         };
 
         Self::connect_with_stream(stream, buffer_size).await
@@ -56,7 +56,7 @@ impl TelnetTransport<TlsStream<TcpStream>> {
 }
 
 impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
-    async fn connect_with_stream(mut stream: S, buffer_size: usize) -> io::Result<Self> {
+    pub(crate) async fn connect_with_stream(mut stream: S, buffer_size: usize) -> io::Result<Self> {
         let buffer = BytesMut::with_capacity(buffer_size);
         let mut options = TelnetOptionsManager::default();
         options.on_connected(&mut stream).await?;

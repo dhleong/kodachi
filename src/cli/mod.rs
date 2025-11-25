@@ -1,9 +1,11 @@
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand, ValueEnum};
 
 pub mod stdio;
 pub mod ui;
 
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[clap(author, version, about, propagate_version = true)]
 pub struct Cli {
     #[clap(subcommand)]
@@ -21,7 +23,7 @@ pub enum UiType {
     External,
 }
 
-#[derive(Subcommand, Clone, PartialEq)]
+#[derive(Subcommand, Clone, Debug, PartialEq)]
 pub enum UiConfig {
     Stdout,
 
@@ -32,7 +34,7 @@ pub enum UiConfig {
     },
 }
 
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, Debug, PartialEq)]
 pub enum Commands {
     /// Run in daemon mode using stdio streams
     Stdio {
@@ -48,6 +50,15 @@ pub enum Commands {
         ui: Option<UiConfig>,
     },
 
+    /// Run in daemon mode, loading a KODACHI_DUMP file
+    #[clap(hide = true)]
+    ReplayDump {
+        path: PathBuf,
+
+        #[clap(subcommand)]
+        ui: Option<UiConfig>,
+    },
+
     #[clap(hide = true)]
     Testbed,
 }
@@ -57,6 +68,7 @@ impl Commands {
         match self {
             Self::Stdio { ui } => ui.clone().unwrap_or(UiConfig::Stdout),
             Self::Unix { ui, .. } => ui.clone().unwrap_or(UiConfig::Stdout),
+            Self::ReplayDump { ui, .. } => ui.clone().unwrap_or(UiConfig::Stdout),
             Self::Testbed => panic!("Testbed doesn't support UI config"),
         }
     }

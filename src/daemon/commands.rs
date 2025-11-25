@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 use crate::app::{
@@ -13,6 +15,8 @@ pub struct Connect {
 
     #[serde(flatten)]
     pub config: Option<ConnectionConfig>,
+
+    pub replay: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
