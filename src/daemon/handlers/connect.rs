@@ -163,8 +163,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
         Err(err) => {
             receiver.begin_chunk()?;
             receiver.system(SystemMessage::ConnectionStatus(format!(
-                "Failed to connect: {}\n",
-                err
+                "Failed to connect: {err}\n",
             )))?;
             receiver.end_chunk()?;
             receiver.notification(DaemonNotification::Disconnected)?;
@@ -185,7 +184,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
                 let message = if error.kind() == io::ErrorKind::UnexpectedEof {
                     "Disconnected.".to_string()
                 } else {
-                    format!("Disconnected: {}", error)
+                    format!("Disconnected: {error}")
                 };
                 receiver.begin_chunk()?;
                 receiver.system(SystemMessage::ConnectionStatus(message))?;

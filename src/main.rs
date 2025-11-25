@@ -56,7 +56,7 @@ async fn run(cli: Cli) -> io::Result<()> {
         Commands::Unix { path, .. } => {
             let socket = match UnixStream::connect(path) {
                 Ok(socket) => socket,
-                Err(e) => panic!("Invalid unix socket: {}", e),
+                Err(e) => panic!("Invalid unix socket: {e}"),
             };
             let input = BufReader::new(socket.try_clone().unwrap());
             let response = socket;

@@ -28,7 +28,7 @@ where
 {
     tokio::spawn(async {
         if let Err(e) = handler.await {
-            panic!("ERR: {}", e);
+            panic!("ERR: {e}");
         }
     });
 }
@@ -54,7 +54,7 @@ pub async fn daemon<
             Err(err) => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("Unable to parse input `{}`: {}", raw_json, err),
+                    format!("Unable to parse input `{raw_json}`: {err}"),
                 ));
             }
         };
