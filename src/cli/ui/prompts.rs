@@ -35,7 +35,7 @@ impl PromptsState {
         while self.values.len() <= index {
             self.values.push(None);
         }
-        self.values[index] = Some(content.trim_end_matches("\r\n").into());
+        self.values[index] = Some(content.trim_trailing_newlines());
     }
 }
 

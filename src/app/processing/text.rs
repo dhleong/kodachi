@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bytes::Buf;
+use bytes::{Buf, Bytes};
 
 use crate::{
     app::{
@@ -107,11 +107,9 @@ pub trait ProcessorOutputReceiverFactory: Clone + Send {
 impl TextProcessor {
     pub fn process<R: ProcessorOutputReceiver>(
         &mut self,
-        text: Ansi,
+        mut bytes: Bytes,
         receiver: &mut R,
     ) -> io::Result<()> {
-        let mut bytes = text.into_inner();
-
         while bytes.has_remaining() {
             // Read up until a newline from text; push that onto pending_line...
             let (read, has_full_line) =
@@ -178,7 +176,7 @@ impl TextProcessor {
 
             (MatcherMode::FullLine, full_line)
         } else {
-            (MatcherMode::PartialLine, self.pending_line.clone().into())
+            (MatcherMode::PartialLine, self.pending_line.clone().take())
         };
 
         let to_print = self.perform_and_handle_match(to_match, match_mode)?;

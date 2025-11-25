@@ -6,6 +6,9 @@ use std::{
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
+// Represents a mutable Bytes string containing Ansi sequences. Because it is mutable,
+// and expected to be used for *constructing* Ansi instances, it *may* contain invalid
+// ansi or utf8 sequences.
 #[derive(Clone, Default)]
 pub struct AnsiMut(BytesMut);
 
@@ -36,12 +39,6 @@ impl From<AnsiMut> for BytesMut {
     }
 }
 
-impl From<AnsiMut> for Ansi {
-    fn from(val: AnsiMut) -> Self {
-        Ansi::from_bytes(val.0.freeze())
-    }
-}
-
 impl<T: AsRef<str>> From<T> for AnsiMut {
     fn from(source: T) -> Self {
         Self::from_bytes(BytesMut::from(source.as_ref()))
@@ -55,6 +52,10 @@ impl AnsiMut {
 
     pub fn from<T: Into<BytesMut>>(bytes: T) -> Self {
         Self::from_bytes(bytes.into())
+    }
+
+    pub fn into_inner(self) -> BytesMut {
+        self.0
     }
 
     /// Deref this AnsiMut and get as much valid utf8 str as is available.
@@ -95,6 +96,8 @@ impl AnsiMut {
     }
 }
 
+// Represents a Bytes string containing *valid* Ansi sequences. Is NOT expected to contain any
+// partial Ansi or utf8 sequences.
 #[derive(Clone)]
 pub struct Ansi {
     bytes: Bytes,
@@ -142,21 +145,15 @@ impl AsRef<[u8]> for Ansi {
     }
 }
 
-impl From<&str> for Ansi {
-    fn from(source: &str) -> Self {
-        AnsiMut::from(source).into()
+impl From<&'static str> for Ansi {
+    fn from(source: &'static str) -> Self {
+        Ansi::from_bytes(Bytes::from_static(source.as_bytes()))
     }
 }
 
 impl From<String> for Ansi {
     fn from(source: String) -> Self {
-        source.as_str().into()
-    }
-}
-
-impl From<BytesMut> for Ansi {
-    fn from(source: BytesMut) -> Self {
-        Ansi::from_bytes(source.into())
+        Ansi::from_bytes(Bytes::from(source))
     }
 }
 
@@ -188,15 +185,11 @@ impl Ansi {
         Self::from("")
     }
 
-    pub fn from_bytes(bytes: Bytes) -> Self {
+    fn from_bytes(bytes: Bytes) -> Self {
         Self {
             bytes,
             stripped: None,
         }
-    }
-
-    pub fn from<T: Into<Bytes>>(bytes: T) -> Self {
-        Self::from_bytes(bytes.into())
     }
 
     pub fn as_bytes(&self) -> Bytes {
