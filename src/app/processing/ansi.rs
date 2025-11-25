@@ -58,7 +58,7 @@ impl AnsiMut {
         self.0
     }
 
-    /// Deref this AnsiMut and get as much valid utf8 str as is available.
+    /// "Deref" this AnsiMut and get as much valid utf8 str as is available.
     /// NOTE: This MAY NOT represent the entire contents of this AnsiMut instance, since
     /// we could be still pending more bytes to "complete" utf8 sequences at the end
     pub fn valid_utf8(&self) -> &str {
@@ -134,6 +134,8 @@ impl Deref for Ansi {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
+        // NOTE: We should already have stripped invalid utf8 sequences when converting to
+        // Ansi from AnsiMut; Ansi should never contain invalid utf8 sequences!
         std::str::from_utf8(&self.bytes).unwrap()
     }
 }
@@ -200,7 +202,20 @@ impl Ansi {
         self.bytes
     }
 
-    pub fn slice(&mut self, range: impl RangeBounds<usize>) -> Ansi {
+    /// This is a very niche method designed to avoid exposing a potentially dangerous
+    /// "unbounded slice" method, while being as efficient as possible. Here, the caller
+    /// is attesting that match_range is a range within stripped, which came from calling
+    /// strip_ansi on this Ansi instance.
+    pub fn without_stripped_match_range(
+        &self,
+        stripped: &AnsiStripped,
+        match_range: Range<usize>,
+    ) -> Ansi {
+        let consumed_range = stripped.get_original_range(match_range);
+        self.slice(0..consumed_range.start) + self.slice(consumed_range.end..self.bytes.len())
+    }
+
+    fn slice(&self, range: impl RangeBounds<usize>) -> Ansi {
         Ansi::from_bytes(self.bytes.slice(range))
     }
 
@@ -241,7 +256,9 @@ impl Ansi {
 fn strip_ansi(bytes: Bytes) -> AnsiStripped {
     // NOTE: It'd be nice if we could reuse Bytes ranges from self.bytes to avoid excessive
     // copying---esp if there is actually no Ansi in self.bytes
-    let raw = maximally_as_utf8(&bytes); // TODO: Is this safe to use here?
+    // NOTE: We not need maximally_as_utf8 here, as we are only called from Ansi, which *must*
+    // have valid utf8 bytes.
+    let raw = std::str::from_utf8(&bytes).unwrap();
     let mut without_ansi = String::new();
     let mut ansi_ranges = Vec::new();
 
@@ -310,8 +327,6 @@ impl Deref for AnsiStripped {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        // NOTE: We should already have stripped invalid utf8 sequences when converting to
-        // AnsiStripped
         std::str::from_utf8(&self.value).unwrap()
     }
 }
