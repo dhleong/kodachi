@@ -401,7 +401,7 @@ mod tests {
     }
 
     #[test]
-    fn deref_ansi_mut_safely() {
+    fn deref_ansi_mut_utf8_safely() {
         // NOTE: This is likely an incomplete sequence of some kind, eg: \xe2\x96\x84
         let bytes: &[u8] = b"\r\xe2";
         let mut ansi_mut = AnsiMut::from_bytes(BytesMut::from(bytes));
@@ -409,6 +409,17 @@ mod tests {
 
         let ansi = ansi_mut.take();
         assert!(ansi.starts_with("\r"));
+
+        // NOTE: The AnsiMut instance retains the invalid utf8 bytes
+        assert_eq!(ansi_mut.as_ref(), b"\xe2");
+
+        // If we "finish" the utf8 sequence, we can now take it:
+        ansi_mut.put_slice(b"\x96\x84");
+        let remainder = ansi_mut.take();
+        assert_eq!(remainder.as_bytes().as_ref(), b"\xe2\x96\x84");
+
+        // ... and the AnsiMut will be empty
+        assert!(ansi_mut.into_inner().is_empty());
     }
 
     #[cfg(test)]
