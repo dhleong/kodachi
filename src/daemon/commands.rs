@@ -41,6 +41,11 @@ pub enum ClientRequest {
     Send {
         connection_id: Id,
         text: String,
+
+        /// Unless `false`, `text` will be stored in the "send history" associated
+        /// with the connection_id, and can be retrieved later via GetHistory or
+        /// ScrollHistory, and may be provided as a suggestion in resposne to CompleteComposer.
+        persist: Option<bool>,
     },
 
     ConfigureConnection {

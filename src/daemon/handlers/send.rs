@@ -29,7 +29,13 @@ async fn process_aliases(
     (channel, result)
 }
 
-pub async fn handle(channel: Channel, mut state: LockableState, connection_id: Id, text: String) {
+pub async fn handle(
+    channel: Channel,
+    mut state: LockableState,
+    connection_id: Id,
+    text: String,
+    persist: bool,
+) {
     let (channel, text_result) =
         process_aliases(channel, state.clone(), connection_id, text.clone()).await;
     let to_send = match text_result {
@@ -52,15 +58,17 @@ pub async fn handle(channel: Channel, mut state: LockableState, connection_id: I
         false
     };
 
-    // After sending successfully, process the input text
-    if let Some(connection) = state.lock().unwrap().connections.get_state(connection_id) {
-        // Add to send history
-        let mut sent = connection.sent.lock().unwrap();
-        sent.insert(text.clone());
+    // After sending successfully, process the input text (unless disabled)
+    if persist {
+        if let Some(connection) = state.lock().unwrap().connections.get_state(connection_id) {
+            // Add to send history
+            let mut sent = connection.sent.lock().unwrap();
+            sent.insert(text.clone());
 
-        // Process for completions
-        let mut completions = connection.completions.lock().unwrap();
-        completions.process_outgoing(text);
+            // Process for completions
+            let mut completions = connection.completions.lock().unwrap();
+            completions.process_outgoing(text);
+        }
     }
 
     channel.respond(DaemonResponse::SendResult { sent });

@@ -125,8 +125,15 @@ fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
         ClientRequest::Send {
             connection_id: connection,
             text,
+            persist,
         } => {
-            tokio::spawn(handlers::send::handle(channel, state, connection, text));
+            tokio::spawn(handlers::send::handle(
+                channel,
+                state,
+                connection,
+                text,
+                persist.unwrap_or(true),
+            ));
         }
 
         ClientRequest::CompleteComposer {
