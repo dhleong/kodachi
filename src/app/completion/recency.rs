@@ -27,17 +27,19 @@ impl RecencyCompletionSource {
         let words_regex = Regex::new(r"(\w+)").unwrap();
         self.history.insert_many(
             words_regex
-                .find_iter(&line)
+                .find_iter(line)
                 .map(|m| m.as_str().to_lowercase()),
         );
     }
 }
 
 impl CompletionSource for RecencyCompletionSource {
-    type Iter<'a> = ritelinked::linked_hash_set::Iter<'a, String>;
+    type Iter<'a> = std::iter::Rev<ritelinked::linked_hash_set::Iter<'a, String>>;
 
     fn suggest<'a>(&'a self, _params: CompletionParams) -> Self::Iter<'a> {
-        self.history.iter()
+        // NOTE: We need to suggest in reverse order so the most recently received content is
+        // suggested *first*
+        self.history.iter().rev()
     }
 }
 
@@ -50,7 +52,7 @@ mod tests {
         let mut completions = RecencyCompletionSource::with_capacity(2);
         completions.process_line("for the honor");
         let suggestions: Vec<&String> = completions.suggest(CompletionParams::empty()).collect();
-        assert_eq!(suggestions, vec!["the", "honor"]);
+        assert_eq!(suggestions, vec!["honor", "the"]);
     }
 
     #[test]
@@ -58,6 +60,14 @@ mod tests {
         let mut completions = RecencyCompletionSource::with_capacity(2);
         completions.process_line("For The HONOR");
         let suggestions: Vec<&String> = completions.suggest(CompletionParams::empty()).collect();
-        assert_eq!(suggestions, vec!["the", "honor"]);
+        assert_eq!(suggestions, vec!["honor", "the"]);
+    }
+
+    #[test]
+    fn recency_test() {
+        let mut completions = RecencyCompletionSource::with_capacity(10);
+        completions.process_line("take my love take my land");
+        let suggestions: Vec<&String> = completions.suggest(CompletionParams::empty()).collect();
+        assert_eq!(suggestions, vec!["land", "my", "take", "love"]);
     }
 }

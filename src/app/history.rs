@@ -92,8 +92,10 @@ mod tests {
 
     #[test]
     fn version_overflow_test() {
-        let mut history = History::default();
-        history.version = u64::MAX;
+        let mut history = History {
+            version: u64::MAX,
+            ..Default::default()
+        };
         history.insert("String");
         assert_eq!(history.version, 0);
     }
