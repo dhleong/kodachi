@@ -57,7 +57,7 @@ pub fn build_simple_matcher_regex(mut source: &str) -> Result<String, MatcherCom
 
     let mut last_var_end = 0;
     let mut last_index: Option<usize> = None;
-    for capture in VAR_REGEX.captures_iter(source).into_iter() {
+    for capture in VAR_REGEX.captures_iter(source) {
         let var = if let Some(var) = unpack_var(source, &capture) {
             var
         } else {

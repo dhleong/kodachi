@@ -109,10 +109,7 @@ impl TelnetOptionsManager {
     }
 
     pub async fn recv_event(&mut self) -> Option<EventData> {
-        match self.events.recv().await {
-            Ok(event) => Some(event),
-            _ => None,
-        }
+        self.events.recv().await.ok()
     }
 
     pub async fn notify<S: AsyncWrite + Unpin + Send>(

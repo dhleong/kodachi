@@ -9,7 +9,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 // Represents a mutable Bytes string containing Ansi sequences. Because it is mutable,
 // and expected to be used for *constructing* Ansi instances, it *may* contain invalid
 // ansi or utf8 sequences.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AnsiMut(BytesMut);
 
 /// Converts as much of the input type to utf8 as is valid to do.
@@ -70,8 +70,21 @@ impl AnsiMut {
     }
 
     pub fn take(&mut self) -> Ansi {
-        let bytes = self.take_valid_utf8_bytes();
-        Ansi::from_bytes(bytes.freeze())
+        let cnt = valid_utf8_bytes_count(&self.0);
+        if cnt == self.0.len() {
+            // Valid utf8
+            let bytes = self.0.split();
+            Ansi::from_bytes(bytes.freeze())
+        } else if self.0.iter().skip(cnt).any(|c| *c == b'\n') {
+            // Invalid utf8
+            let bytes = self.0.split();
+            let lossy = String::from_utf8_lossy(&bytes);
+            Ansi::from_bytes(Bytes::from(lossy.to_string()))
+        } else {
+            // Possibly incomplete utf8; only take what's valid
+            let bytes = self.0.split_to(cnt);
+            Ansi::from_bytes(bytes.freeze())
+        }
     }
 
     /// Drop the `count` bytes at the beginning of this AnsiMut instance (IE: `[0, count)`) and
@@ -81,7 +94,12 @@ impl AnsiMut {
     }
 
     pub fn has_incomplete_code(&self) -> bool {
-        if valid_utf8_bytes_count(&self.0) < self.0.len() {
+        let cnt = valid_utf8_bytes_count(&self.0);
+        if cnt < self.0.len() {
+            if self.0.iter().position(|c| *c == b'\n') > Some(cnt) {
+                // Probably *not* incomplete utf8, but rather *invalid* utf8.
+                return false;
+            }
             return true;
         }
 
@@ -89,10 +107,6 @@ impl AnsiMut {
         let arr: &[u8] = &self.0;
         let bytes = (&arr[..]).copy_to_bytes(arr.len());
         strip_ansi(bytes).has_incomplete
-    }
-
-    fn take_valid_utf8_bytes(&mut self) -> BytesMut {
-        self.0.split_to(valid_utf8_bytes_count(&self.0))
     }
 }
 

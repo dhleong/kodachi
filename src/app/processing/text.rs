@@ -368,4 +368,15 @@ mod tests {
         assert_text_eq(&receiver.outputs[0], "Everything\n");
         assert_text_eq(&receiver.outputs[1], "Is\n");
     }
+
+    #[test]
+    fn text_processor_invalid_utf8() {
+        let mut processor = TextProcessor::default();
+        let mut receiver = TextReceiver::default();
+        let bytes: &[u8] = b"You\xb4ve encountered latin1\r\n";
+        processor.process(bytes.into(), &mut receiver).unwrap();
+
+        assert_eq!(receiver.outputs.len(), 1);
+        assert_text_eq(&receiver.outputs[0], "You\u{fffd}ve encountered latin1\r\n");
+    }
 }
