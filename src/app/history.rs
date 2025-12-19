@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 const DEFAULT_HISTORY_CAPACITY: usize = 10000;
 
-#[derive(Clone, Copy, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 pub enum HistoryScrollDirection {
     Older,
     Newer,

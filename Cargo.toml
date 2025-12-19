@@ -41,3 +41,6 @@ ritelinked = "0.3.2"
 rand = "0.8.5"
 itertools = "0.10.5"
 futures = "0.3.31"
+
+[dev-dependencies]
+assert_matches = "1.5.0"

@@ -65,9 +65,10 @@ impl ProcessorOutputReceiver for ExternalUI {
         self.send_external_ui(ExternalUINotification::ClearPartialLine)
     }
 
-    fn text(&mut self, text: Ansi) -> std::io::Result<()> {
+    fn text(&mut self, mut text: Ansi) -> std::io::Result<()> {
         self.send_external_ui(ExternalUINotification::Text {
             ansi: text.to_string(),
+            plain: Some(text.strip_ansi().to_string()),
         })
     }
 

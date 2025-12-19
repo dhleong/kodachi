@@ -31,7 +31,7 @@ pub struct ConnectionConfig {
     pub auto_prompts: Option<bool>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientRequest {
     Connect(Connect),
@@ -124,7 +124,7 @@ pub enum ClientRequest {
     },
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientNotification {
     Quit,

@@ -14,7 +14,7 @@ use super::{
     responses::{DaemonResponse, ResponseToServerRequest},
 };
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum Request {
     ForResponse {
@@ -67,7 +67,7 @@ impl RequestIdGenerator {
         let id = *lock;
         let (next_id, _) = id.overflowing_add(1);
         *lock = next_id;
-        return id;
+        id
     }
 }
 
@@ -98,6 +98,7 @@ mod tests {
                 notification: DaemonNotification::ExternalUI {
                     data: ExternalUINotification::Text {
                         ansi: "Welcome!".to_string(),
+                        plain: None,
                     },
                 },
             })
@@ -125,6 +126,8 @@ mod tests {
 
     #[cfg(test)]
     mod deserialization_tests {
+        use assert_matches::assert_matches;
+
         use crate::{app::formatters::FormatterSpec, daemon::commands::AliasReplacement};
 
         use super::*;
@@ -132,23 +135,17 @@ mod tests {
         #[test]
         fn request_test() {
             let mut r: Request = serde_json::from_str(r#"{"type":"Quit"}"#).unwrap();
-            match r {
-                Request::Notification(ClientNotification::Quit) => {}
-                _ => assert!(false, "Expected Quit Notification"),
-            }
+            assert_matches!(r, Request::Notification(ClientNotification::Quit));
 
             r = serde_json::from_str(r#"{"id": 9001, "type":"Disconnect", "connection_id": 42}"#)
                 .unwrap();
-            match r {
+            assert_matches!(
+                r,
                 Request::ForResponse {
-                    id,
-                    payload: ClientRequest::Disconnect { connection_id },
-                } => {
-                    assert_eq!(id, 9001);
-                    assert_eq!(connection_id, 42);
+                    id: 9001,
+                    payload: ClientRequest::Disconnect { connection_id: 42 },
                 }
-                _ => assert!(false, "Expected Disconnect Rquest"),
-            }
+            );
         }
 
         #[test]
@@ -167,25 +164,17 @@ mod tests {
             )
             .unwrap();
 
-            let (id, connection_id, _matcher, replacement) = match r {
+            assert_matches!(
+                r,
                 Request::ForResponse {
-                    id,
-                    payload:
-                        ClientRequest::RegisterAlias {
-                            connection_id,
-                            matcher,
-                            replacement,
-                        },
-                } => (id, connection_id, matcher, replacement),
-                _ => {
-                    assert!(false, "Expected RegisterAlias");
-                    panic!();
+                    id: 9001,
+                    payload: ClientRequest::RegisterAlias {
+                        connection_id: 42,
+                        replacement: AliasReplacement::Handler { handler_id: 22 },
+                        ..
+                    },
                 }
-            };
-
-            assert_eq!(id, 9001);
-            assert_eq!(connection_id, 42);
-            assert_eq!(replacement, AliasReplacement::Handler { handler_id: 22 });
+            );
         }
 
         #[test]
@@ -204,28 +193,19 @@ mod tests {
             )
             .unwrap();
 
-            let (id, connection_id, _matcher, replacement) = match r {
+            assert_matches!(
+                r,
                 Request::ForResponse {
-                    id,
-                    payload:
-                        ClientRequest::RegisterAlias {
-                            connection_id,
-                            matcher,
-                            replacement,
+                    id: 9001,
+                    payload: ClientRequest::RegisterAlias {
+                        connection_id: 42,
+                        replacement: AliasReplacement::Simple {
+                            replacement_pattern: FormatterSpec::Simple(simple_pattern)
                         },
-                } => (id, connection_id, matcher, replacement),
-                _ => {
-                    assert!(false, "Expected RegisterAlias");
-                    panic!();
-                }
-            };
-
-            assert_eq!(id, 9001);
-            assert_eq!(connection_id, 42);
-            assert_eq!(
-                replacement,
-                AliasReplacement::Simple {
-                    replacement_pattern: FormatterSpec::Simple("make burrito".to_string())
+                        ..
+                    },
+                } => {
+                    assert_eq!(simple_pattern, "make burrito".to_string());
                 }
             );
         }

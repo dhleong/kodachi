@@ -38,7 +38,7 @@ pub enum ClientResponse {
     AliasMatchHandled { replacement: Option<String> },
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ResponseToServerRequest {
     pub request_id: Id,
 
