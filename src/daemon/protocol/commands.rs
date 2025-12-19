@@ -1,11 +1,11 @@
-use serde::Deserialize;
+use std::path::PathBuf;
 
-use crate::{
-    app::{
-        completion::CompletionParams, formatters::FormatterSpec, history::HistoryScrollDirection,
-        matchers::MatcherSpec, Id,
-    },
-    daemon::protocol::replay::ReplayConfig,
+use serde::Deserialize;
+use tokio::sync::oneshot;
+
+use crate::app::{
+    completion::CompletionParams, formatters::FormatterSpec, history::HistoryScrollDirection,
+    matchers::MatcherSpec, Id,
 };
 
 use super::protocol::cursors::HistoryCursor;

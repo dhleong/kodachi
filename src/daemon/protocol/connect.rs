@@ -141,7 +141,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     ui: TUI,
     channel: Channel,
     mut state: LockableState,
-    mut data: commands::Connect,
+    data: commands::Connect,
 ) -> io::Result<()> {
     let mut connection = state.lock().unwrap().connections.create();
     let connection_id = connection.id;

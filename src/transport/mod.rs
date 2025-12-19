@@ -1,10 +1,10 @@
-use std::{collections::HashMap, io, path::Path};
+use std::{collections::HashMap, io};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use serde::Serialize;
 
-use crate::{net::Uri, transport::replay::ReplayTransport};
+use crate::{daemon::protocol::replay::ReplayConfig, net::Uri, transport::replay::ReplayTransport};
 
 use self::telnet::TelnetTransport;
 
@@ -52,8 +52,8 @@ impl BoxedTransport {
         BoxedTransport(Box::new(transport))
     }
 
-    pub async fn replay(path: &Path, buffer_size: usize) -> io::Result<BoxedTransport> {
-        let stream = ReplayTransport::for_file(path).await?;
+    pub async fn replay(config: ReplayConfig, buffer_size: usize) -> io::Result<BoxedTransport> {
+        let stream = ReplayTransport::for_replay(config).await?;
         Ok(BoxedTransport::from(
             TelnetTransport::connect_with_stream(stream, buffer_size).await?,
         ))

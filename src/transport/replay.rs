@@ -1,22 +1,30 @@
-use std::{io, path::Path, task::Poll};
+use std::{io, task::Poll};
 
 use pin_project::pin_project;
 use tokio::{
     fs,
     io::{AsyncRead, AsyncWrite},
     pin,
+    sync::oneshot,
 };
+
+use crate::daemon::protocol::replay::ReplayConfig;
 
 #[pin_project]
 pub struct ReplayTransport {
     #[pin]
     file: fs::File,
+    #[pin]
+    on_complete: Option<oneshot::Sender<()>>,
 }
 
 impl ReplayTransport {
-    pub async fn for_file(path: &Path) -> io::Result<Self> {
-        let file = fs::File::open(path).await?;
-        Ok(ReplayTransport { file })
+    pub async fn for_replay(config: ReplayConfig) -> io::Result<Self> {
+        let file = fs::File::open(config.path).await?;
+        Ok(ReplayTransport {
+            file,
+            on_complete: Some(config.on_complete),
+        })
     }
 }
 
@@ -26,7 +34,19 @@ impl AsyncRead for ReplayTransport {
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        self.project().file.as_mut().poll_read(cx, buf)
+        let original_len = buf.filled().len();
+        let mut proj = self.project();
+        let result = proj.file.as_mut().poll_read(cx, buf);
+        let new_len = buf.filled().len();
+
+        let likely_eof = original_len == new_len;
+        if likely_eof && matches!(result, Poll::Ready(Ok(()))) {
+            if let Some(on_complete) = proj.on_complete.as_mut().take() {
+                let _ = on_complete.send(());
+            }
+        }
+
+        result
     }
 }
 

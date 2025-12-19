@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 pub mod cursors;
+pub(crate) mod replay;
 
 use crate::app::Id;
 
