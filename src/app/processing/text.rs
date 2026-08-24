@@ -234,7 +234,7 @@ impl TextProcessor {
         Ok(())
     }
 
-    fn perform_match(&mut self, mut to_match: Ansi, mode: MatcherMode) -> PerformMatchResult {
+    fn perform_match(&mut self, mut to_match: Ansi, mode: MatcherMode) -> PerformMatchResult<'_> {
         for m in &mut self.matchers {
             if mode < m.mode {
                 continue;

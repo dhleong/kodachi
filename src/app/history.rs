@@ -48,7 +48,7 @@ impl<T: Eq + Hash> History<T> {
         self.on_modified();
     }
 
-    pub fn iter(&self) -> ritelinked::linked_hash_set::Iter<T> {
+    pub fn iter(&self) -> ritelinked::linked_hash_set::Iter<'_, T> {
         self.entries.iter()
     }
 

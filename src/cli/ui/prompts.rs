@@ -18,7 +18,7 @@ impl PromptsState {
         self.values.is_empty()
     }
 
-    pub fn iter(&self) -> std::slice::Iter<Option<Ansi>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, Option<Ansi>> {
         self.values.iter()
     }
 
@@ -51,7 +51,7 @@ impl Clearable for PromptGroups {
 }
 
 impl PromptGroups {
-    pub fn entry(&mut self, group_id: Id) -> Entry<Id, PromptsState> {
+    pub fn entry(&mut self, group_id: Id) -> Entry<'_, Id, PromptsState> {
         self.groups.entry(group_id)
     }
 

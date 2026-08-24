@@ -4,7 +4,6 @@ use pin_project::pin_project;
 use tokio::{
     fs,
     io::{AsyncRead, AsyncWrite},
-    pin,
     sync::oneshot,
 };
 
