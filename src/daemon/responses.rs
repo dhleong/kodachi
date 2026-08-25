@@ -14,6 +14,7 @@ pub enum DaemonResponse {
 
     Connecting {
         connection_id: Id,
+        persisted_output_lines: Option<usize>,
     },
     SendResult {
         sent: bool,

@@ -102,6 +102,6 @@ impl Connections {
     fn allocate_id(&mut self) -> Id {
         let id = self.next_id;
         self.next_id += 1;
-        return id;
+        id
     }
 }

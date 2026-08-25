@@ -61,7 +61,7 @@ pub async fn daemon<
                 payload,
             } => {
                 let channel = channels.create_with_request_id(request_id);
-                dispatch_request(ui.clone(), state, channel, payload);
+                dispatch_request(ui.clone(), state, channel, payload).await;
             }
 
             Request::Response(response) => {
@@ -93,13 +93,17 @@ pub async fn daemon<
     Ok(())
 }
 
-fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
+async fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
     ui: TUI,
     state: LockableState,
     channel: Channel,
     payload: ClientRequest,
 ) {
     match payload {
+        ClientRequest::Identify(data) => {
+            handlers::identify::handle(state, data).await;
+        }
+
         ClientRequest::Connect(data) => {
             launch(handlers::connect::handle(ui, channel, state, data));
         }

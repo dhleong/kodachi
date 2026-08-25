@@ -4,6 +4,7 @@ pub mod configure_connection;
 pub mod connect;
 pub mod disconnect;
 pub mod get_history;
+pub mod identify;
 pub mod register_alias;
 pub mod register_prompt;
 pub mod register_trigger;

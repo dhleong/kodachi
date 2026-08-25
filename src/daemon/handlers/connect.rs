@@ -16,6 +16,7 @@ use futures::{FutureExt as _, StreamExt as _};
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
+        persistence::{receiver::PersistentOutputHandlingReceiver, PersistedLines},
         processing::text::{
             ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage, TextProcessor,
             WindowSizeSource,
@@ -146,13 +147,32 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     let mut connection = state.lock().unwrap().connections.create();
     let connection_id = connection.id;
 
-    if let Some(config) = data.config {
-        apply_config(&mut connection.state, &config);
+    let mut persisted_output: Option<PersistedLines> = None;
+    if let Some(config) = data.config.as_ref() {
+        apply_config(&mut connection.state, config);
+
+        if let Some(key) = config.persisted_output_key.as_ref() {
+            let path = state.persisted_state_path("output-history", key).await;
+            let lines = PersistedLines::load(path).await?;
+            persisted_output = Some(lines.clone());
+            state
+                .lock()
+                .unwrap()
+                .persisted_output
+                .insert(key.to_string(), lines);
+        }
     }
 
-    let notifier = channel.respond(DaemonResponse::Connecting { connection_id });
+    let notifier = channel.respond(DaemonResponse::Connecting {
+        connection_id,
+        persisted_output_lines: persisted_output.as_ref().map(|output| output.len()),
+    });
     let receiver_state = connection.state.ui_state.clone();
-    let mut receiver = ui.create(receiver_state.clone(), connection_id, notifier.clone());
+    let base_receiver = ui.create(receiver_state.clone(), connection_id, notifier.clone());
+    let mut receiver = PersistentOutputHandlingReceiver {
+        base: base_receiver,
+        persisted_output,
+    };
     let processor_receiver = notifier.for_connection(connection_id);
 
     let transport = if let Some(replay) = data.replay.take() {
@@ -199,7 +219,13 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     }
 
     receiver.notification(DaemonNotification::Disconnected)?;
-    state.lock().unwrap().connections.drop(connection_id);
+    let mut lock = state.lock().unwrap();
+    lock.connections.drop(connection_id);
+    if let Some(config) = data.config.as_ref() {
+        if let Some(key) = config.persisted_output_key.as_ref() {
+            state.lock().unwrap().persisted_output.remove(key);
+        }
+    }
 
     Ok(())
 }
