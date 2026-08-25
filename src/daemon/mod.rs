@@ -163,6 +163,16 @@ async fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
             ));
         }
 
+        ClientRequest::GetPersistedOutput {
+            key,
+            start_line,
+            end_line,
+        } => {
+            tokio::spawn(handlers::get_persisted_output::handle(
+                channel, state, key, start_line, end_line,
+            ));
+        }
+
         ClientRequest::RegisterAlias {
             connection_id,
             matcher,

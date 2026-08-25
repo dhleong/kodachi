@@ -88,6 +88,13 @@ pub enum ClientRequest {
         cursor: Option<HistoryCursor>,
     },
 
+    GetPersistedOutput {
+        key: String,
+        start_line: usize,
+        /// Inclusive
+        end_line: usize,
+    },
+
     /// Request suggestions to complete some word in the composer
     CompleteComposer {
         connection_id: Id,
