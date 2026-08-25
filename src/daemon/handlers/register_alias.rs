@@ -74,7 +74,7 @@ async fn register_formatter_matcher(
 
 pub async fn handle(
     channel: Channel,
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
     replacement: AliasReplacement,

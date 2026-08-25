@@ -70,7 +70,7 @@ pub fn run() -> io::Result<()> {
         .create_with_request_id(0)
         .respond(DaemonResponse::OkResult);
 
-    let mut state = LockableState::default();
+    let state = LockableState::default();
     let connection = state.lock().unwrap().connections.create();
     let ui = AnsiTerminalWriteUI::create(connection.state.ui_state.clone(), 0, notifier, out);
 

@@ -14,7 +14,7 @@ pub fn apply_config(connection: &mut ConnectionState, config: &ConnectionConfig)
 
 pub async fn handle(
     channel: Channel,
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     config: ConnectionConfig,
 ) -> io::Result<()> {

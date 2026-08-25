@@ -5,7 +5,7 @@ use crate::{
 
 pub async fn handle(
     channel: Channel,
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     default_limit: usize,
     provided_cursor: Option<HistoryCursor>,

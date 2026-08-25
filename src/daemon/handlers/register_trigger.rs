@@ -13,7 +13,7 @@ use crate::{
 
 pub async fn handle(
     channel: Channel,
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
     handler_id: Id,

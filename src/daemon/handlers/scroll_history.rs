@@ -15,7 +15,7 @@ pub async fn handle(
 }
 
 pub fn try_handle(
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     direction: HistoryScrollDirection,
     content: String,
@@ -98,7 +98,7 @@ mod tests {
 
     impl TestContext {
         fn empty() -> Self {
-            let mut state = LockableState::default();
+            let state = LockableState::default();
             let conn = state.lock().unwrap().connections.create();
             let connection_id = conn.id;
             TestContext {
@@ -108,7 +108,7 @@ mod tests {
         }
 
         fn with_history(entries: Vec<String>) -> Self {
-            let mut empty = Self::empty();
+            let empty = Self::empty();
 
             empty
                 .state

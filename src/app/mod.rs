@@ -22,7 +22,7 @@ pub struct State {
 pub struct LockableState(Arc<Mutex<State>>);
 
 impl LockableState {
-    pub fn lock(&mut self) -> LockResult<MutexGuard<'_, State>> {
+    pub fn lock(&self) -> LockResult<MutexGuard<'_, State>> {
         self.0.lock()
     }
 }

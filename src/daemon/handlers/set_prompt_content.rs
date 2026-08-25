@@ -38,7 +38,7 @@ pub async fn handle(
 
 pub fn try_handle<N: ConnectionNotifier>(
     mut receiver: Option<&mut N>,
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     group_id: Id,
     prompt_index: usize,

@@ -20,7 +20,7 @@ pub async fn handle(channel: Channel, state: LockableState, connection_id: Id, g
 
 pub fn try_handle<N: ConnectionNotifier>(
     receiver: Option<&mut N>,
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     group_id: Id,
 ) -> io::Result<()> {

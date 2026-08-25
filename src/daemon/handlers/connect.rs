@@ -140,7 +140,7 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
 pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     ui: TUI,
     channel: Channel,
-    mut state: LockableState,
+    state: LockableState,
     mut data: commands::Connect,
 ) -> io::Result<()> {
     let mut connection = state.lock().unwrap().connections.create();

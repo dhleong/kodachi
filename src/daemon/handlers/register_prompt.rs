@@ -14,7 +14,7 @@ use super::set_prompt_content;
 
 pub fn try_handle(
     channel: Option<&Channel>,
-    mut state: LockableState,
+    state: LockableState,
     connection_id: Id,
     matcher: MatcherSpec,
     group_id: Id,
