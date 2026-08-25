@@ -52,7 +52,7 @@ pub struct TextProcessor {
     pending_line: AnsiMut,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SystemMessage {
     ConnectionStatus(String),
     LocalSend(String),

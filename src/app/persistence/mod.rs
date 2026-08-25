@@ -17,7 +17,7 @@ use tokio::{
 
 use crate::app::processing::{ansi::Ansi, text::SystemMessage};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PersistablePart {
     Ansi(String),
     SystemMessage(SystemMessage),
@@ -53,10 +53,22 @@ pub struct PersistedLines {
 }
 
 impl PersistedLines {
+    fn with_state(state: PersistedLinesInternal) -> io::Result<PersistedLines> {
+        Ok(PersistedLines {
+            state: Arc::new(Mutex::new(state)),
+        })
+    }
+
     pub async fn load(path: PathBuf) -> io::Result<PersistedLines> {
         let mut internal = PersistedLinesInternal::new(path);
 
-        let file = File::open(&internal.path).await?;
+        let file = match File::open(&internal.path).await {
+            Ok(file) => file,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                return PersistedLines::with_state(internal)
+            }
+            Err(err) => return Err(err),
+        };
         let reader = BufReader::new(file);
 
         let mut offset = 0;
@@ -70,15 +82,14 @@ impl PersistedLines {
             offset += len as u64;
         }
 
-        Ok(PersistedLines {
-            state: Arc::new(Mutex::new(internal)),
-        })
+        PersistedLines::with_state(internal)
     }
 
     pub fn len(&self) -> usize {
         self.state.lock().unwrap().offsets.len()
     }
 
+    #[allow(clippy::await_holding_lock)]
     pub async fn load_line_range(
         &self,
         range: RangeInclusive<usize>,
@@ -107,12 +118,12 @@ impl PersistedLines {
             } else {
                 state.offsets[i + 1]
             };
-            let len = end - start - 1; // ignore the newline
+            let len = end - start;
 
             bytes.clear();
             bytes.resize(len as usize, 0);
 
-            reader.read_exact(bytes.as_mut()).await;
+            reader.read_exact(bytes.as_mut()).await?;
 
             let reader = flexbuffers::Reader::get_root(bytes.as_ref()).unwrap();
             lines_read.push(PersistableLine::deserialize(reader).unwrap());
@@ -146,7 +157,10 @@ impl PersistedLines {
             return Ok(());
         }
 
-        let file = std::fs::File::options().append(true).open(&state.path)?;
+        let file = std::fs::File::options()
+            .create(true)
+            .append(true)
+            .open(&state.path)?;
         let mut writer = BufWriter::new(file);
         let mut serializer = flexbuffers::FlexbufferSerializer::new();
 
@@ -167,5 +181,36 @@ impl PersistedLines {
         writer.flush()?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::env::temp_dir;
+
+    use crate::app::{
+        persistence::{PersistablePart, PersistedLines},
+        processing::ansi::Ansi,
+    };
+
+    #[tokio::test]
+    async fn test_roundtrip() {
+        let mut file = temp_dir();
+        file.push("test_roundtrip");
+        let _ = tokio::fs::remove_file(&file).await;
+
+        let lines = PersistedLines::load(file.clone()).await.unwrap();
+        lines.push_empty_line();
+        lines.append_to_last_line(&Ansi::from("\u{001b}[32mhi"));
+        lines.flush().unwrap();
+
+        let rt = PersistedLines::load(file).await.unwrap();
+        assert_eq!(rt.len(), 1);
+        let loaded = rt.load_line_range(0..=0).await.unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(
+            loaded[0].parts[0],
+            PersistablePart::Ansi("\u{001b}[32mhi".to_string())
+        );
     }
 }
