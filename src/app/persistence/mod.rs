@@ -150,9 +150,15 @@ impl PersistedLines {
 
     pub fn append_to_last_line(&self, text: &Ansi) {
         let mut state = self.state.lock().unwrap();
-        if let Some(last) = state.pending.last_mut() {
-            last.parts.push(PersistablePart::Ansi(text.to_string()));
+        if state.pending.is_empty() {
+            state.pending.push(Default::default());
         }
+        state
+            .pending
+            .last_mut()
+            .unwrap()
+            .parts
+            .push(PersistablePart::Ansi(text.to_string()));
     }
 
     pub fn flush(&self) -> io::Result<()> {
@@ -204,17 +210,17 @@ mod test {
         let _ = tokio::fs::remove_file(&file).await;
 
         let lines = PersistedLines::load(file.clone()).await.unwrap();
+        lines.append_to_last_line(&Ansi::from("\x1b[32mhi"));
         lines.push_empty_line();
-        lines.append_to_last_line(&Ansi::from("\u{001b}[32mhi"));
         lines.flush().unwrap();
 
         let rt = PersistedLines::load(file).await.unwrap();
-        assert_eq!(rt.len(), 1);
+        assert_eq!(rt.len(), 2);
         let loaded = rt.load_line_range(0..=0).await.unwrap();
         assert_eq!(loaded.len(), 1);
         assert_eq!(
             loaded[0].parts[0],
-            PersistablePart::Ansi("\u{001b}[32mhi".to_string())
+            PersistablePart::Ansi("\x1b[32mhi".to_string())
         );
     }
 }
