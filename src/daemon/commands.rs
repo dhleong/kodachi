@@ -52,8 +52,6 @@ pub struct ConnectionConfig {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientRequest {
-    Identify(Identify),
-
     Connect(Connect),
     Disconnect {
         connection_id: Id,
@@ -154,6 +152,8 @@ pub enum ClientRequest {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientNotification {
+    Identify(Identify),
+
     Quit,
 
     WindowSize {

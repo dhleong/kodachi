@@ -69,6 +69,10 @@ pub async fn daemon<
                 to_listeners.send(response).ok();
             }
 
+            Request::Notification(ClientNotification::Identify(data)) => {
+                handlers::identify::handle(state, data).await;
+            }
+
             Request::Notification(ClientNotification::Clear { connection_id }) => {
                 tokio::spawn(handlers::clear::handle(state, connection_id));
             }
@@ -100,10 +104,6 @@ async fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
     payload: ClientRequest,
 ) {
     match payload {
-        ClientRequest::Identify(data) => {
-            handlers::identify::handle(state, data).await;
-        }
-
         ClientRequest::Connect(data) => {
             launch(handlers::connect::handle(ui, channel, state, data));
         }
@@ -168,9 +168,8 @@ async fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
             start_line,
             end_line,
         } => {
-            tokio::spawn(handlers::get_persisted_output::handle(
-                channel, state, key, start_line, end_line,
-            ));
+            // Not ideal that we can't spawn this...
+            handlers::get_persisted_output::handle(channel, state, key, start_line, end_line).await;
         }
 
         ClientRequest::RegisterAlias {
