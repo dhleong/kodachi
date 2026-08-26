@@ -79,7 +79,7 @@ impl PersistedLines {
         let mut lines = reader.lines();
         while let Some(line) = lines.next_line().await? {
             // NOTE: This *is* byte length, surprisingly
-            let len = line.len();
+            let len = line.len() + 1; // +1 for \n
 
             internal.offsets.push(offset);
             internal.eof += len as u64;
@@ -116,7 +116,7 @@ impl PersistedLines {
         let mut bytes = BytesMut::new();
         let mut lines_read = Vec::with_capacity(range.end() - range.start());
         for i in range {
-            let start = state.offsets[0];
+            let start = state.offsets[i];
             let end = if i == state.offsets.len() - 1 {
                 state.eof
             } else {
@@ -129,8 +129,10 @@ impl PersistedLines {
 
             reader.read_exact(bytes.as_mut()).await?;
 
-            let reader = flexbuffers::Reader::get_root(bytes.as_ref()).unwrap();
-            lines_read.push(PersistableLine::deserialize(reader).unwrap());
+            // let reader = flexbuffers::Reader::get_root(bytes.as_ref()).unwrap();
+            // lines_read.push(PersistableLine::deserialize(reader).unwrap());
+            let line: PersistableLine = serde_json::from_slice(bytes.as_ref())?;
+            lines_read.push(line);
         }
 
         Ok(lines_read)
@@ -172,16 +174,17 @@ impl PersistedLines {
             .append(true)
             .open(&state.path)?;
         let mut writer = BufWriter::new(file);
-        let mut serializer = flexbuffers::FlexbufferSerializer::new();
+        // let mut serializer = flexbuffers::FlexbufferSerializer::new();
 
         let mut pending = vec![];
         mem::swap(&mut state.pending, &mut pending);
 
         for line in pending.into_iter() {
-            serializer.reset();
-            line.serialize(&mut serializer).unwrap();
-            let bytes = serializer.view();
-            writer.write_all(bytes)?;
+            // serializer.reset();
+            // line.serialize(&mut serializer).unwrap();
+            // let bytes = serializer.view();
+            let bytes = serde_json::to_vec(&line)?;
+            writer.write_all(&bytes)?;
             writer.write_all(b"\n")?;
 
             let eof = state.eof;
@@ -212,15 +215,21 @@ mod test {
         let lines = PersistedLines::load(file.clone()).await.unwrap();
         lines.append_to_last_line(&Ansi::from("\x1b[32mhi"));
         lines.push_empty_line();
+        lines.append_to_last_line(&Ansi::from("there"));
+        lines.push_empty_line();
         lines.flush().unwrap();
 
         let rt = PersistedLines::load(file).await.unwrap();
-        assert_eq!(rt.len(), 2);
-        let loaded = rt.load_line_range(0..=0).await.unwrap();
-        assert_eq!(loaded.len(), 1);
+        assert_eq!(rt.len(), 3);
+        let loaded = rt.load_line_range(0..=1).await.unwrap();
+        assert_eq!(loaded.len(), 2);
         assert_eq!(
             loaded[0].parts[0],
             PersistablePart::Ansi("\x1b[32mhi".to_string())
+        );
+        assert_eq!(
+            loaded[1].parts[0],
+            PersistablePart::Ansi("there".to_string())
         );
     }
 }
