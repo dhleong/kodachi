@@ -165,6 +165,10 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
 
     let notifier = channel.respond(DaemonResponse::Connecting {
         connection_id,
+        persisted_output_key: data
+            .config
+            .as_ref()
+            .and_then(|config| config.persisted_output_key.clone()),
         persisted_output_lines: persisted_output.as_ref().map(|output| output.len()),
     });
     let receiver_state = connection.state.ui_state.clone();

@@ -24,5 +24,11 @@ pub async fn handle(
         }
     };
 
-    channel.respond(crate::daemon::responses::DaemonResponse::PersistedOutputResult { lines });
+    channel.respond(
+        crate::daemon::responses::DaemonResponse::PersistedOutputResult {
+            start_line,
+            end_line,
+            lines,
+        },
+    );
 }

@@ -14,6 +14,7 @@ pub enum DaemonResponse {
 
     Connecting {
         connection_id: Id,
+        persisted_output_key: Option<String>,
         persisted_output_lines: Option<usize>,
     },
     SendResult {
@@ -24,6 +25,8 @@ pub enum DaemonResponse {
         words: Vec<String>,
     },
     PersistedOutputResult {
+        start_line: usize,
+        end_line: usize,
         lines: Vec<PersistableLine>,
     },
     HistoryResult {
