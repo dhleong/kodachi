@@ -11,7 +11,7 @@ use std::{
 use bytes::BytesMut;
 use serde::{Deserialize, Serialize};
 use tokio::{
-    fs::File,
+    fs::{self, File},
     io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, BufReader},
 };
 
@@ -65,7 +65,11 @@ impl PersistedLines {
         let file = match File::open(&internal.path).await {
             Ok(file) => file,
             Err(err) if err.kind() == io::ErrorKind::NotFound => {
-                return PersistedLines::with_state(internal)
+                // New file
+                if let Some(parent) = internal.path.parent() {
+                    fs::create_dir_all(parent).await?;
+                }
+                return PersistedLines::with_state(internal);
             }
             Err(err) => return Err(err),
         };
