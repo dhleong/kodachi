@@ -12,15 +12,14 @@ impl<T: ProcessorOutputReceiver> ProcessorOutputReceiver for PersistentOutputHan
 
     fn new_line(&mut self) -> std::io::Result<()> {
         if let Some(output) = self.persisted_output.as_ref() {
+            // NOTE: Flush only when we've confirmed a new line has started
+            output.flush()?;
             output.push_empty_line();
         }
         self.base.new_line()
     }
 
     fn finish_line(&mut self) -> std::io::Result<()> {
-        if let Some(output) = self.persisted_output.as_ref() {
-            output.flush()?;
-        }
         self.base.finish_line()
     }
 
