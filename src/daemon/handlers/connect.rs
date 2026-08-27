@@ -169,7 +169,9 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
             .config
             .as_ref()
             .and_then(|config| config.persisted_output_key.clone()),
-        persisted_output_lines: persisted_output.as_ref().map(|output| output.len()),
+        persisted_output_lines: persisted_output
+            .as_ref()
+            .map(|output| output.persisted_len()),
     });
     let receiver_state = connection.state.ui_state.clone();
     let base_receiver = ui.create(receiver_state.clone(), connection_id, notifier.clone());

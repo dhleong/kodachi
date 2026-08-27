@@ -1,10 +1,11 @@
 pub mod receiver;
 
 use std::{
-    io::{self, BufWriter, Write as _},
+    collections::VecDeque,
+    io::{self, BufWriter, Seek, Write as _},
     mem,
     ops::RangeInclusive,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
@@ -16,6 +17,9 @@ use tokio::{
 };
 
 use crate::app::processing::{ansi::Ansi, text::SystemMessage};
+
+const DEFAULT_SCROLLBACK_SIZE: u32 = 20_000;
+const SCROLLBACK_LIMIT_HYSTERESIS: f32 = 1.15;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PersistablePart {
@@ -31,18 +35,20 @@ pub struct PersistableLine {
 #[derive(Default)]
 struct PersistedLinesInternal {
     path: PathBuf,
-    offsets: Vec<u64>,
+    offsets: VecDeque<u64>,
     eof: u64,
     pending: Vec<PersistableLine>,
+    limit: u32,
 }
 
 impl PersistedLinesInternal {
-    fn new(path: PathBuf) -> Self {
+    fn new(path: PathBuf, limit: u32) -> Self {
         Self {
             path,
-            offsets: vec![],
+            offsets: Default::default(),
             eof: 0,
             pending: Default::default(),
+            limit,
         }
     }
 }
@@ -60,7 +66,11 @@ impl PersistedLines {
     }
 
     pub async fn load(path: PathBuf) -> io::Result<PersistedLines> {
-        let mut internal = PersistedLinesInternal::new(path);
+        PersistedLines::load_with_limit(path, DEFAULT_SCROLLBACK_SIZE).await
+    }
+
+    pub async fn load_with_limit(path: PathBuf, limit: u32) -> io::Result<PersistedLines> {
+        let mut internal = PersistedLinesInternal::new(path, limit);
 
         let file = match File::open(&internal.path).await {
             Ok(file) => file,
@@ -81,7 +91,7 @@ impl PersistedLines {
             // NOTE: This *is* byte length, surprisingly
             let len = line.len() + 1; // +1 for \n
 
-            internal.offsets.push(offset);
+            internal.offsets.push_back(offset);
             internal.eof += len as u64;
             offset += len as u64;
         }
@@ -89,7 +99,7 @@ impl PersistedLines {
         PersistedLines::with_state(internal)
     }
 
-    pub fn len(&self) -> usize {
+    pub fn persisted_len(&self) -> usize {
         self.state.lock().unwrap().offsets.len()
     }
 
@@ -167,10 +177,26 @@ impl PersistedLines {
             return Ok(());
         }
 
+        if !state.offsets.is_empty()
+            && state.offsets.len() + state.pending.len()
+                > (state.limit as f32 * SCROLLBACK_LIMIT_HYSTERESIS) as usize
+        {
+            self.flush_rotate(&mut state)
+        } else {
+            let path = state.path.clone();
+            self.flush_incremental(&mut state, &path)
+        }
+    }
+
+    fn flush_incremental<P: AsRef<Path>>(
+        &self,
+        state: &mut PersistedLinesInternal,
+        path: &P,
+    ) -> io::Result<()> {
         let file = std::fs::File::options()
             .create(true)
             .append(true)
-            .open(&state.path)?;
+            .open(path)?;
         let mut writer = BufWriter::new(file);
 
         let mut pending = vec![];
@@ -182,10 +208,39 @@ impl PersistedLines {
             writer.write_all(b"\n")?;
 
             let eof = state.eof;
-            state.offsets.push(eof);
+            state.offsets.push_back(eof);
             state.eof += bytes.len() as u64 + 1; // +1 for \n
         }
         writer.flush()?;
+
+        Ok(())
+    }
+
+    fn flush_rotate(&self, state: &mut PersistedLinesInternal) -> io::Result<()> {
+        let to_rotate = state.limit as usize - state.pending.len();
+        let new_0th_idx = state.offsets.len() - to_rotate;
+        let start_offset = state.offsets[new_0th_idx];
+        let initial_eof = state.eof - start_offset;
+
+        let mut source = std::fs::File::open(&state.path)?;
+        source.seek(io::SeekFrom::Start(start_offset))?;
+
+        let pending_path = state.path.with_extension(".pending");
+        let mut tmp = std::fs::File::create(&pending_path)?;
+        std::io::copy(&mut source, &mut tmp)?;
+
+        state.eof = initial_eof;
+        for _ in 0..new_0th_idx {
+            state.offsets.pop_front();
+        }
+        state.offsets.iter_mut().for_each(|v| *v -= start_offset);
+
+        if !state.pending.is_empty() {
+            self.flush_incremental(state, &pending_path)?;
+        }
+
+        // Swap in the rotated file
+        std::fs::rename(pending_path, &state.path)?;
 
         Ok(())
     }
@@ -214,7 +269,7 @@ mod test {
         lines.flush().unwrap();
 
         let rt = PersistedLines::load(file).await.unwrap();
-        assert_eq!(rt.len(), 3);
+        assert_eq!(rt.persisted_len(), 3);
         let loaded = rt.load_line_range(0..=1).await.unwrap();
         assert_eq!(loaded.len(), 2);
         assert_eq!(
@@ -225,5 +280,56 @@ mod test {
             loaded[1].parts[0],
             PersistablePart::Ansi("there".to_string())
         );
+    }
+
+    #[tokio::test]
+    async fn test_rotate() {
+        let limit = 10;
+        let retainable = 11; // allowed per hysteresis
+
+        let mut file = temp_dir();
+        file.push("test_rotate");
+        let _ = tokio::fs::remove_file(&file).await;
+
+        let lines = PersistedLines::load_with_limit(file.clone(), limit)
+            .await
+            .unwrap();
+        lines.append_to_last_line(&Ansi::from("#0"));
+        for i in 1..retainable {
+            lines.push_empty_line();
+            lines.append_to_last_line(&Ansi::from(format!("#{i}")));
+        }
+        lines.flush().unwrap();
+
+        let loaded0 = lines.load_line_range(0..=1).await.unwrap();
+        assert_eq!(loaded0.len(), 2);
+        assert_eq!(loaded0[0].parts[0], PersistablePart::Ansi("#0".to_string()));
+        assert_eq!(loaded0[1].parts[0], PersistablePart::Ansi("#1".to_string()));
+
+        let rt = PersistedLines::load_with_limit(file.clone(), limit)
+            .await
+            .unwrap();
+        assert_eq!(rt.persisted_len(), retainable);
+
+        // Now, append another line, forcing a rotate
+        rt.push_empty_line();
+        rt.append_to_last_line(&Ansi::from("nth"));
+        rt.flush().unwrap();
+        assert_eq!(rt.persisted_len() as u32, limit);
+
+        let loaded = rt.load_line_range(0..=1).await.unwrap();
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].parts[0], PersistablePart::Ansi("#2".to_string()));
+        assert_eq!(loaded[1].parts[0], PersistablePart::Ansi("#3".to_string()));
+
+        // After hitting the hysteresis limit, we prune down to
+        // the "actual" limit
+        let rt2 = PersistedLines::load_with_limit(file, limit).await.unwrap();
+        assert_eq!(rt2.persisted_len(), limit as usize);
+
+        let loaded2 = rt.load_line_range(0..=1).await.unwrap();
+        assert_eq!(loaded2.len(), 2);
+        assert_eq!(loaded2[0].parts[0], PersistablePart::Ansi("#2".to_string()));
+        assert_eq!(loaded2[1].parts[0], PersistablePart::Ansi("#3".to_string()));
     }
 }
