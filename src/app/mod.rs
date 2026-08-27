@@ -32,12 +32,17 @@ pub struct State {
 #[derive(Default, Clone)]
 pub struct LockableState(Arc<Mutex<State>>);
 
+pub struct StatePath<'a> {
+    pub key: &'a str,
+    pub kind: &'a str,
+}
+
 impl LockableState {
     pub fn lock(&self) -> LockResult<MutexGuard<'_, State>> {
         self.0.lock()
     }
 
-    pub async fn persisted_state_path(&self, kind: &str, key: &str) -> PathBuf {
+    pub async fn persisted_state_path(&self, path: StatePath<'_>) -> PathBuf {
         let app_name = self
             .lock()
             .unwrap()
@@ -46,10 +51,10 @@ impl LockableState {
             .unwrap_or_else(|| "kodachi".to_string());
 
         let strategy = choose_base_strategy().unwrap();
-        let mut path = strategy.data_dir();
-        path.push(app_name);
-        path.push(kind);
-        path.push(key);
-        path
+        let mut file_path = strategy.data_dir();
+        file_path.push(app_name);
+        file_path.push(path.key);
+        file_path.push(path.kind);
+        file_path
     }
 }

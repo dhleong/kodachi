@@ -22,7 +22,7 @@ use crate::{
             WindowSizeSource,
         },
         processors::register_processors,
-        LockableState,
+        LockableState, StatePath,
     },
     daemon::{
         channel::Channel, commands, notifications::DaemonNotification, responses::DaemonResponse,
@@ -152,7 +152,12 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
         apply_config(&mut connection.state, config);
 
         if let Some(key) = config.persisted_output_key.as_ref() {
-            let path = state.persisted_state_path("output-history", key).await;
+            let path = state
+                .persisted_state_path(StatePath {
+                    key,
+                    kind: "output-history",
+                })
+                .await;
             let lines = PersistedLines::load(path).await?;
             persisted_output = Some(lines.clone());
             state

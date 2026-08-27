@@ -1,5 +1,5 @@
 use crate::{
-    app::{persistence::PersistedLines, LockableState},
+    app::{persistence::PersistedLines, LockableState, StatePath},
     daemon::channel::Channel,
 };
 
@@ -19,7 +19,12 @@ pub async fn handle(
             shared
         } else {
             // One-off test/fetch (?)
-            let path = state.persisted_state_path("output-history", &key).await;
+            let path = state
+                .persisted_state_path(StatePath {
+                    key: &key,
+                    kind: "output-history",
+                })
+                .await;
             PersistedLines::load(path).await.unwrap()
         }
     };
