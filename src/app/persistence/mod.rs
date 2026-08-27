@@ -129,8 +129,6 @@ impl PersistedLines {
 
             reader.read_exact(bytes.as_mut()).await?;
 
-            // let reader = flexbuffers::Reader::get_root(bytes.as_ref()).unwrap();
-            // lines_read.push(PersistableLine::deserialize(reader).unwrap());
             let line: PersistableLine = serde_json::from_slice(bytes.as_ref())?;
             lines_read.push(line);
         }
@@ -174,15 +172,11 @@ impl PersistedLines {
             .append(true)
             .open(&state.path)?;
         let mut writer = BufWriter::new(file);
-        // let mut serializer = flexbuffers::FlexbufferSerializer::new();
 
         let mut pending = vec![];
         mem::swap(&mut state.pending, &mut pending);
 
         for line in pending.into_iter() {
-            // serializer.reset();
-            // line.serialize(&mut serializer).unwrap();
-            // let bytes = serializer.view();
             let bytes = serde_json::to_vec(&line)?;
             writer.write_all(&bytes)?;
             writer.write_all(b"\n")?;
