@@ -151,24 +151,43 @@ impl PersistedLines {
         state.pending.push(Default::default());
     }
 
-    pub fn clear_last_line(&self) {
+    pub fn clear_partial_last_line(&self) {
         let mut state = self.state.lock().unwrap();
         if let Some(last) = state.pending.last_mut() {
-            last.parts.clear();
+            match last.parts.last() {
+                Some(PersistablePart::Ansi(s)) if s.contains("\n") => {
+                    // newline makes this a "full line"; just make a new line
+                    // Not very DRY but it's one line; calling the above
+                    // would require re-entrant locks
+                    state.pending.push(Default::default());
+                }
+                Some(PersistablePart::SystemMessage(_)) => {
+                    // System messages at the end get treated as
+                    // a "full line"; as above.
+                    state.pending.push(Default::default());
+                }
+                _ => {
+                    // Partial line; clear
+                    last.parts.clear();
+                }
+            }
         }
     }
 
-    pub fn append_to_last_line(&self, text: &Ansi) {
+    pub fn append_text_to_last_line(&self, text: &Ansi) {
+        self.append_part_to_last_line(PersistablePart::Ansi(text.to_string()))
+    }
+
+    pub fn append_system_to_last_line(&self, message: &SystemMessage) {
+        self.append_part_to_last_line(PersistablePart::SystemMessage(message.clone()))
+    }
+
+    fn append_part_to_last_line(&self, part: PersistablePart) {
         let mut state = self.state.lock().unwrap();
         if state.pending.is_empty() {
             state.pending.push(Default::default());
         }
-        state
-            .pending
-            .last_mut()
-            .unwrap()
-            .parts
-            .push(PersistablePart::Ansi(text.to_string()));
+        state.pending.last_mut().unwrap().parts.push(part);
     }
 
     pub fn flush(&self) -> io::Result<()> {
@@ -262,9 +281,9 @@ mod test {
         let _ = tokio::fs::remove_file(&file).await;
 
         let lines = PersistedLines::load(file.clone()).await.unwrap();
-        lines.append_to_last_line(&Ansi::from("\x1b[32mhi"));
+        lines.append_text_to_last_line(&Ansi::from("\x1b[32mhi"));
         lines.push_empty_line();
-        lines.append_to_last_line(&Ansi::from("there"));
+        lines.append_text_to_last_line(&Ansi::from("there"));
         lines.push_empty_line();
         lines.flush().unwrap();
 
@@ -294,10 +313,10 @@ mod test {
         let lines = PersistedLines::load_with_limit(file.clone(), limit)
             .await
             .unwrap();
-        lines.append_to_last_line(&Ansi::from("#0"));
+        lines.append_text_to_last_line(&Ansi::from("#0"));
         for i in 1..retainable {
             lines.push_empty_line();
-            lines.append_to_last_line(&Ansi::from(format!("#{i}")));
+            lines.append_text_to_last_line(&Ansi::from(format!("#{i}")));
         }
         lines.flush().unwrap();
 
@@ -313,7 +332,7 @@ mod test {
 
         // Now, append another line, forcing a rotate
         rt.push_empty_line();
-        rt.append_to_last_line(&Ansi::from("nth"));
+        rt.append_text_to_last_line(&Ansi::from("nth"));
         rt.flush().unwrap();
         assert_eq!(rt.persisted_len() as u32, limit);
 

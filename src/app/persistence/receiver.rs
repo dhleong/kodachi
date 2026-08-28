@@ -25,20 +25,22 @@ impl<T: ProcessorOutputReceiver> ProcessorOutputReceiver for PersistentOutputHan
 
     fn clear_partial_line(&mut self) -> std::io::Result<()> {
         if let Some(output) = self.persisted_output.as_ref() {
-            output.clear_last_line();
+            output.clear_partial_last_line();
         }
         self.base.clear_partial_line()
     }
 
     fn text(&mut self, text: crate::app::processing::ansi::Ansi) -> std::io::Result<()> {
         if let Some(output) = self.persisted_output.as_ref() {
-            output.append_to_last_line(&text);
+            output.append_text_to_last_line(&text);
         }
         self.base.text(text)
     }
 
     fn system(&mut self, text: crate::app::processing::text::SystemMessage) -> std::io::Result<()> {
-        // TODO: Add to persisted_output?
+        if let Some(output) = self.persisted_output.as_ref() {
+            output.append_system_to_last_line(&text);
+        }
         self.base.system(text)
     }
 
