@@ -61,12 +61,16 @@ pub async fn daemon<
                 payload,
             } => {
                 let channel = channels.create_with_request_id(request_id);
-                dispatch_request(ui.clone(), state, channel, payload);
+                dispatch_request(ui.clone(), state, channel, payload).await;
             }
 
             Request::Response(response) => {
                 // NOTE: We ignore errors here; there may be no listeners, and that's okay
                 to_listeners.send(response).ok();
+            }
+
+            Request::Notification(ClientNotification::Identify(data)) => {
+                handlers::identify::handle(state, data).await;
             }
 
             Request::Notification(ClientNotification::Clear { connection_id }) => {
@@ -93,7 +97,7 @@ pub async fn daemon<
     Ok(())
 }
 
-fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
+async fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
     ui: TUI,
     state: LockableState,
     channel: Channel,
@@ -157,6 +161,15 @@ fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
                 limit,
                 cursor,
             ));
+        }
+
+        ClientRequest::GetPersistedOutput {
+            key,
+            start_line,
+            end_line,
+        } => {
+            // Not ideal that we can't spawn this...
+            handlers::get_persisted_output::handle(channel, state, key, start_line, end_line).await;
         }
 
         ClientRequest::RegisterAlias {

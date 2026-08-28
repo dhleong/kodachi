@@ -11,6 +11,11 @@ use crate::{
 use super::protocol::cursors::HistoryCursor;
 
 #[derive(Debug, Deserialize)]
+pub struct Identify {
+    pub app_name: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Connect {
     pub uri: String,
 
@@ -32,6 +37,16 @@ pub enum AliasReplacement {
 #[derive(Debug, Default, Deserialize, PartialEq, Eq)]
 pub struct ConnectionConfig {
     pub auto_prompts: Option<bool>,
+
+    /// If provided, output from this connection will be
+    /// persisted to a file with the given key. Key selection
+    /// is left to the client; the key must be unique across
+    /// connections, and is stored in:
+    ///
+    ///   ~/.local/share/<app_name>/output-history/<key>
+    ///
+    /// History at this key will always append to existing history
+    pub persisted_output_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,6 +84,13 @@ pub enum ClientRequest {
         direction: HistoryScrollDirection,
         content: String,
         cursor: Option<HistoryCursor>,
+    },
+
+    GetPersistedOutput {
+        key: String,
+        start_line: usize,
+        /// Inclusive
+        end_line: usize,
     },
 
     /// Request suggestions to complete some word in the composer
@@ -130,6 +152,8 @@ pub enum ClientRequest {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientNotification {
+    Identify(Identify),
+
     Quit,
 
     WindowSize {

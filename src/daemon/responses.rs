@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::app::Id;
+use crate::app::{persistence::PersistableLine, Id};
 
 use super::protocol::cursors::HistoryCursor;
 
@@ -14,6 +14,8 @@ pub enum DaemonResponse {
 
     Connecting {
         connection_id: Id,
+        persisted_output_key: Option<String>,
+        persisted_output_lines: Option<usize>,
     },
     SendResult {
         sent: bool,
@@ -21,6 +23,11 @@ pub enum DaemonResponse {
 
     CompleteResult {
         words: Vec<String>,
+    },
+    PersistedOutputResult {
+        start_line: usize,
+        end_line: usize,
+        lines: Vec<PersistableLine>,
     },
     HistoryResult {
         entries: Vec<String>,

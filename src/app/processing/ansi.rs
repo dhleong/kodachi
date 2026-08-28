@@ -415,6 +415,14 @@ mod tests {
     }
 
     #[test]
+    fn ansi_to_string_works() {
+        let bytes: &[u8] = b"grayskull\x1b[32m";
+        let mut ansi_mut = AnsiMut::from_bytes(BytesMut::from(bytes));
+        let ansi = ansi_mut.take();
+        assert_eq!(ansi.to_string(), "grayskull\x1b[32m");
+    }
+
+    #[test]
     fn deref_ansi_mut_utf8_safely() {
         // NOTE: This is likely an incomplete sequence of some kind, eg: \xe2\x96\x84
         let bytes: &[u8] = b"\r\xe2";

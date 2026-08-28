@@ -4,6 +4,7 @@ use std::{
 };
 
 use bytes::{Buf, Bytes};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     app::{
@@ -51,6 +52,7 @@ pub struct TextProcessor {
     pending_line: AnsiMut,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SystemMessage {
     ConnectionStatus(String),
     LocalSend(String),
