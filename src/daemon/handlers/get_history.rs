@@ -20,7 +20,7 @@ pub async fn handle(
             return;
         };
 
-    let history = connection.sent.lock().unwrap();
+    let history = connection.sent.lock().await;
 
     // If the history version doesn't match, throw away the cursor
     let version = history.version();

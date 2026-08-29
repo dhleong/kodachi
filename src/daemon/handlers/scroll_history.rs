@@ -11,10 +11,10 @@ pub async fn handle(
     content: String,
     cursor: Option<HistoryCursor>,
 ) {
-    channel.respond(try_handle(state, connection_id, direction, content, cursor));
+    channel.respond(try_handle(state, connection_id, direction, content, cursor).await);
 }
 
-pub fn try_handle(
+pub async fn try_handle(
     state: LockableState,
     connection_id: Id,
     direction: HistoryScrollDirection,
@@ -30,7 +30,7 @@ pub fn try_handle(
             };
         };
 
-    let history = connection.sent.lock().unwrap();
+    let history = connection.sent.lock().await;
 
     // NOTE: If the history version doesn't match, throw away the cursor
     let version = history.version();
@@ -107,7 +107,7 @@ mod tests {
             }
         }
 
-        fn with_history(entries: Vec<String>) -> Self {
+        async fn with_history(entries: Vec<String>) -> Self {
             let empty = Self::empty();
 
             empty
@@ -119,13 +119,13 @@ mod tests {
                 .unwrap()
                 .sent
                 .lock()
-                .unwrap()
+                .await
                 .insert_many(entries);
 
             return empty;
         }
 
-        fn insert(&mut self, entry: String) {
+        async fn insert(&mut self, entry: String) {
             self.state
                 .lock()
                 .unwrap()
@@ -134,11 +134,11 @@ mod tests {
                 .unwrap()
                 .sent
                 .lock()
-                .unwrap()
+                .await
                 .insert(entry);
         }
 
-        fn try_handle(
+        async fn try_handle(
             &mut self,
             direction: HistoryScrollDirection,
             content: String,
@@ -151,22 +151,29 @@ mod tests {
                 content,
                 cursor,
             )
+            .await
         }
 
-        fn older(
+        async fn older(
             &mut self,
             content: String,
             cursor: Option<HistoryCursor>,
         ) -> (String, Option<HistoryCursor>) {
-            unpack_response(self.try_handle(HistoryScrollDirection::Older, content, cursor))
+            unpack_response(
+                self.try_handle(HistoryScrollDirection::Older, content, cursor)
+                    .await,
+            )
         }
 
-        fn newer(
+        async fn newer(
             &mut self,
             content: String,
             cursor: Option<HistoryCursor>,
         ) -> (String, Option<HistoryCursor>) {
-            unpack_response(self.try_handle(HistoryScrollDirection::Newer, content, cursor))
+            unpack_response(
+                self.try_handle(HistoryScrollDirection::Newer, content, cursor)
+                    .await,
+            )
         }
     }
 
@@ -180,58 +187,64 @@ mod tests {
         }
     }
 
-    #[test]
-    fn scroll_older_empty_test() {
-        let (new_content, cursor) =
-            TestContext::empty().older("For the honor of grayskull!".to_string(), None);
+    #[tokio::test]
+    async fn scroll_older_empty_test() {
+        let (new_content, cursor) = TestContext::empty()
+            .older("For the honor of grayskull!".to_string(), None)
+            .await;
 
         assert_eq!(new_content, "For the honor of grayskull!");
         assert_eq!(cursor, None);
     }
 
-    #[test]
-    fn scroll_newer_empty_test() {
-        let (new_content, cursor) =
-            TestContext::empty().newer("For the honor of grayskull!".to_string(), None);
+    #[tokio::test]
+    async fn scroll_newer_empty_test() {
+        let (new_content, cursor) = TestContext::empty()
+            .newer("For the honor of grayskull!".to_string(), None)
+            .await;
 
         assert_eq!(new_content, "For the honor of grayskull!");
         assert_eq!(cursor, None);
     }
 
-    #[test]
-    fn scroll_backwards_and_forwards_test() {
+    #[tokio::test]
+    async fn scroll_backwards_and_forwards_test() {
         let initial_content = "For the honor of grayskull!";
         let mut context =
-            TestContext::with_history(vec!["First".to_string(), "Second".to_string()]);
-        let (new_content, cursor1) = context.older(initial_content.to_string(), None);
+            TestContext::with_history(vec!["First".to_string(), "Second".to_string()]).await;
+        let (new_content, cursor1) = context.older(initial_content.to_string(), None).await;
         assert_eq!(new_content, "Second");
 
-        let (new_content, cursor2) = context.older(new_content.to_string(), cursor1);
+        let (new_content, cursor2) = context.older(new_content.to_string(), cursor1).await;
         assert_eq!(new_content, "First");
 
         // We've reached the end
-        let (new_content, cursor3) = context.older(new_content.to_string(), cursor2.clone());
+        let (new_content, cursor3) = context
+            .older(new_content.to_string(), cursor2.clone())
+            .await;
         assert_eq!(new_content, "First");
         assert_eq!(cursor3.clone(), cursor2.clone());
 
-        let (new_content, cursor4) = context.newer(new_content.to_string(), cursor3);
+        let (new_content, cursor4) = context.newer(new_content.to_string(), cursor3).await;
         assert_eq!(new_content, "Second");
 
-        let (new_content, cursor5) = context.newer(new_content, cursor4);
+        let (new_content, cursor5) = context.newer(new_content, cursor4).await;
         assert_eq!(new_content, initial_content);
         assert_eq!(cursor5, None);
     }
 
-    #[test]
-    fn ignore_cursor_on_version_change() {
+    #[tokio::test]
+    async fn ignore_cursor_on_version_change() {
         let initial_content = "For the honor of grayskull!";
         let mut context =
-            TestContext::with_history(vec!["First".to_string(), "Second".to_string()]);
-        let (new_content, cursor1) = context.older(initial_content.to_string(), None);
+            TestContext::with_history(vec!["First".to_string(), "Second".to_string()]).await;
+        let (new_content, cursor1) = context.older(initial_content.to_string(), None).await;
         assert_eq!(new_content, "Second");
 
         context.insert("Third".to_string());
-        let (new_content, cursor2) = context.older(new_content.to_string(), cursor1.clone());
+        let (new_content, cursor2) = context
+            .older(new_content.to_string(), cursor1.clone())
+            .await;
         assert_eq!(new_content, "Third");
         assert_eq!(
             cursor2,

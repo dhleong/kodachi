@@ -25,7 +25,7 @@ pub struct ConnectionState {
     pub send_processor: Arc<tokio::sync::Mutex<SendTextProcessor>>,
     pub processor: Arc<Mutex<TextProcessor>>,
     pub completions: Arc<Mutex<Completions>>,
-    pub sent: Arc<Mutex<History<String>>>,
+    pub sent: Arc<tokio::sync::Mutex<History<String>>>,
     pub ui_state: Arc<Mutex<UiState>>,
 }
 

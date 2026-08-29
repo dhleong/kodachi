@@ -60,9 +60,10 @@ pub async fn handle(
 
     // After sending successfully, process the input text (unless disabled)
     if persist {
-        if let Some(connection) = state.lock().unwrap().connections.get_state(connection_id) {
+        let conn_maybe = state.lock().unwrap().connections.get_state(connection_id);
+        if let Some(connection) = conn_maybe {
             // Add to send history
-            let mut sent = connection.sent.lock().unwrap();
+            let mut sent = connection.sent.lock().await;
             sent.insert(text.clone());
 
             // Process for completions
