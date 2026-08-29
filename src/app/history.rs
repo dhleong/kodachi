@@ -8,7 +8,7 @@ use ritelinked::LinkedHashSet;
 use serde::Deserialize;
 use tokio::{
     fs::{self, File},
-    io::{AsyncBufReadExt as _, BufReader},
+    io::{AsyncBufReadExt as _, AsyncWriteExt, BufReader},
 };
 
 const DEFAULT_HISTORY_CAPACITY: usize = 10000;
@@ -99,6 +99,16 @@ impl History<String> {
             instance.insert(line);
         }
         Ok(instance)
+    }
+
+    pub async fn save_to(&self, path: &Path) -> io::Result<()> {
+        let mut file = File::open(path.with_extension(".tmp")).await?;
+        for line in self.iter() {
+            file.write_all(line.as_bytes()).await?;
+            file.write_all(b"\n").await?;
+        }
+        file.flush().await?;
+        Ok(())
     }
 }
 

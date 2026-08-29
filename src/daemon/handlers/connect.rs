@@ -229,6 +229,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
 
     receiver.notification(DaemonNotification::Connected)?;
 
+    let connection_state = connection.state.clone();
     let result = process_connection(transport, connection, &mut receiver).await;
     if let Err(error) = result {
         match error.kind() {
@@ -251,11 +252,30 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     }
 
     receiver.notification(DaemonNotification::Disconnected)?;
-    let mut lock = state.lock().unwrap();
-    lock.connections.drop(connection_id);
+    {
+        let mut lock = state.lock().unwrap();
+        lock.connections.drop(connection_id);
+    }
+
     if let Some(config) = data.config.as_ref() {
         if let Some(key) = config.persisted_output_key.as_ref() {
             state.lock().unwrap().persisted_output.remove(key);
+        }
+
+        // TODO: Would be a bit more robust to persist this regularly,
+        // perhaps with a debounce, but this is what Judo did and it's
+        // simple for now
+        if let Some(key) = config.persisted_input_key.as_ref() {
+            let path = state
+                .persisted_state_path(StatePath {
+                    key,
+                    kind: "input-history",
+                })
+                .await;
+
+            let sent_mutex = connection_state.sent.clone();
+            let history = sent_mutex.lock().await;
+            history.save_to(&path).await?;
         }
     }
 
