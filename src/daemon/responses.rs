@@ -14,6 +14,7 @@ pub enum DaemonResponse {
 
     Connecting {
         connection_id: Id,
+        nonce: Option<String>,
         persisted_output_key: Option<String>,
         persisted_output_lines: Option<usize>,
     },

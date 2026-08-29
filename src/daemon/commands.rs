@@ -19,6 +19,10 @@ pub struct Identify {
 pub struct Connect {
     pub uri: String,
 
+    /// If provided, will be echo'd back in the Connecting response,
+    /// to help differentiate multiple connection requests to the same URI
+    pub nonce: Option<String>,
+
     #[serde(flatten)]
     pub config: Option<ConnectionConfig>,
 

@@ -170,6 +170,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
 
     let notifier = channel.respond(DaemonResponse::Connecting {
         connection_id,
+        nonce: data.nonce,
         persisted_output_key: data
             .config
             .as_ref()
