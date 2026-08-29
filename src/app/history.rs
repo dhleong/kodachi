@@ -1,7 +1,15 @@
-use std::hash::Hash;
+use std::{
+    hash::Hash,
+    io::{self},
+    path::Path,
+};
 
 use ritelinked::LinkedHashSet;
 use serde::Deserialize;
+use tokio::{
+    fs::{self, File},
+    io::{AsyncBufReadExt as _, BufReader},
+};
 
 const DEFAULT_HISTORY_CAPACITY: usize = 10000;
 
@@ -63,6 +71,34 @@ impl<T: Eq + Hash> History<T> {
     fn on_modified(&mut self) {
         let (result, _overflowed) = self.version.overflowing_add(1);
         self.version = result;
+    }
+}
+
+impl History<String> {
+    pub async fn load(path: &Path) -> io::Result<Self> {
+        Self::load_with_capacity(path, DEFAULT_HISTORY_CAPACITY).await
+    }
+
+    pub async fn load_with_capacity(path: &Path, capacity: usize) -> io::Result<Self> {
+        let mut instance = Self::with_capacity(capacity);
+        let file = match File::open(&path).await {
+            Ok(file) => file,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                // New file
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).await?;
+                }
+                return Ok(instance);
+            }
+            Err(err) => return Err(err),
+        };
+        let reader = BufReader::new(file);
+
+        let mut lines = reader.lines();
+        while let Some(line) = lines.next_line().await? {
+            instance.insert(line);
+        }
+        Ok(instance)
     }
 }
 

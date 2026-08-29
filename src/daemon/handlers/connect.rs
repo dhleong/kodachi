@@ -16,6 +16,7 @@ use futures::{FutureExt as _, StreamExt as _};
 use crate::{
     app::{
         connections::{ConnectionReceiver, Outgoing},
+        history::History,
         persistence::{receiver::PersistentOutputHandlingReceiver, PersistedLines},
         processing::text::{
             ProcessorOutputReceiver, ProcessorOutputReceiverFactory, SystemMessage, TextProcessor,
@@ -148,6 +149,7 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
     let connection_id = connection.id;
 
     let mut persisted_output: Option<PersistedLines> = None;
+    let mut persisted_input_lines: Option<usize> = None;
     if let Some(config) = data.config.as_ref() {
         apply_config(&mut connection.state, config);
 
@@ -166,6 +168,19 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
                 .persisted_output
                 .insert(key.to_string(), lines);
         }
+
+        if let Some(key) = config.persisted_input_key.as_ref() {
+            let path = state
+                .persisted_state_path(StatePath {
+                    key,
+                    kind: "input-history",
+                })
+                .await;
+            let history = History::load(&path).await?;
+            persisted_input_lines = Some(history.len());
+            let mut history_state = connection.state.sent.lock().await;
+            *history_state = history;
+        }
     }
 
     let notifier = channel.respond(DaemonResponse::Connecting {
@@ -178,6 +193,11 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
         persisted_output_lines: persisted_output
             .as_ref()
             .map(|output| output.persisted_len()),
+        persisted_input_key: data
+            .config
+            .as_ref()
+            .and_then(|config| config.persisted_input_key.clone()),
+        persisted_input_lines,
     });
     let receiver_state = connection.state.ui_state.clone();
     let base_receiver = ui.create(receiver_state.clone(), connection_id, notifier.clone());
