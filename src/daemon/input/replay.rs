@@ -41,6 +41,7 @@ impl DaemonRequestSource for DumpReplayRequestSource {
             id: 0,
             payload: ClientRequest::Connect(Connect {
                 uri: "".to_string(),
+                nonce: None,
                 config: None,
                 replay: Some(ReplayConfig {
                     path: self.path.clone(),
