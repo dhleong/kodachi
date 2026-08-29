@@ -110,7 +110,7 @@ mod tests {
         async fn with_history(entries: Vec<String>) -> Self {
             let empty = Self::empty();
 
-            empty
+            let sent = empty
                 .state
                 .lock()
                 .unwrap()
@@ -118,24 +118,23 @@ mod tests {
                 .get_state(empty.connection_id)
                 .unwrap()
                 .sent
-                .lock()
-                .await
-                .insert_many(entries);
+                .clone();
+            sent.lock().await.insert_many(entries);
 
-            return empty;
+            empty
         }
 
         async fn insert(&mut self, entry: String) {
-            self.state
+            let sent = self
+                .state
                 .lock()
                 .unwrap()
                 .connections
                 .get_state(self.connection_id)
                 .unwrap()
                 .sent
-                .lock()
-                .await
-                .insert(entry);
+                .clone();
+            sent.lock().await.insert(entry);
         }
 
         async fn try_handle(
@@ -241,7 +240,7 @@ mod tests {
         let (new_content, cursor1) = context.older(initial_content.to_string(), None).await;
         assert_eq!(new_content, "Second");
 
-        context.insert("Third".to_string());
+        context.insert("Third".to_string()).await;
         let (new_content, cursor2) = context
             .older(new_content.to_string(), cursor1.clone())
             .await;
