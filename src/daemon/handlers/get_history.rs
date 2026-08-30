@@ -30,7 +30,10 @@ pub async fn handle(
         None
     };
 
-    let limit = request_cursor.as_ref().map_or(default_limit, |c| c.limit);
+    let mut limit = request_cursor.as_ref().map_or(default_limit, |c| c.limit);
+    if limit == 0 {
+        limit = history.len()
+    }
     let offset = request_cursor.as_ref().map_or(0, |c| c.offset);
 
     let mut entries: Vec<String> = history

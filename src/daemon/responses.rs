@@ -17,6 +17,8 @@ pub enum DaemonResponse {
         nonce: Option<String>,
         persisted_output_key: Option<String>,
         persisted_output_lines: Option<usize>,
+        persisted_input_key: Option<String>,
+        persisted_input_lines: Option<usize>,
     },
     SendResult {
         sent: bool,

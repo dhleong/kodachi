@@ -47,10 +47,24 @@ pub struct ConnectionConfig {
     /// is left to the client; the key must be unique across
     /// connections, and is stored in:
     ///
-    ///   ~/.local/share/<app_name>/output-history/<key>
+    ///   ~/.local/share/<app_name>/<key>/output-history
     ///
     /// History at this key will always append to existing history
     pub persisted_output_key: Option<String>,
+
+    /// If provided, input from this connection will be
+    /// persisted to a file with the given key. Key selection
+    /// is left to the client; the key must be unique across
+    /// connections, and is stored in:
+    ///
+    ///   ~/.local/share/<app_name>/<key>/input-history
+    ///
+    /// Persisted input history will be available through GetHistory
+    /// as normal.
+    ///
+    /// In general, the key *should* be the same as the one passed
+    /// for persisted_output_key (if any).
+    pub persisted_input_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

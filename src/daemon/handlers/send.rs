@@ -62,13 +62,16 @@ pub async fn handle(
     if persist {
         let conn_maybe = state.lock().unwrap().connections.get_state(connection_id);
         if let Some(connection) = conn_maybe {
-            // Add to send history
-            let mut sent = connection.sent.lock().await;
-            sent.insert(text.clone());
-
             // Process for completions
-            let mut completions = connection.completions.lock().unwrap();
-            completions.process_outgoing(text);
+            {
+                let mut completions = connection.completions.lock().unwrap();
+                completions.process_outgoing(&text);
+            }
+
+            // Add to send history
+            let sent_mutex = connection.sent.clone();
+            let mut sent = sent_mutex.lock().await;
+            sent.insert(text);
         }
     }
 
