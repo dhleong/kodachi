@@ -43,8 +43,8 @@ impl Completions {
         self.source.second.0.process_line(&line.strip_ansi())
     }
 
-    pub fn process_outgoing(&mut self, line: String) {
-        self.source.first.process_outgoing(&line);
+    pub fn process_outgoing(&mut self, line: &str) {
+        self.source.first.process_outgoing(line);
     }
 
     pub fn suggest(&self, params: CompletionParams) -> impl Iterator<Item = String> + '_ {

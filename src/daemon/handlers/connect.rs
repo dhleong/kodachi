@@ -179,6 +179,12 @@ pub async fn handle<TUI: ProcessorOutputReceiverFactory>(
             let history = History::load(&path).await?;
             persisted_input_lines = Some(history.len());
             let mut history_state = connection.state.sent.lock().await;
+
+            // Process loaded history for completions
+            let mut completions = connection.state.completions.lock().unwrap();
+            for line in history.iter() {
+                completions.process_outgoing(line);
+            }
             *history_state = history;
         }
     }
