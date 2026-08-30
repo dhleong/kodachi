@@ -102,12 +102,14 @@ impl History<String> {
     }
 
     pub async fn save_to(&self, path: &Path) -> io::Result<()> {
-        let mut file = File::open(path.with_extension(".tmp")).await?;
+        let pending_path = path.with_extension(".pending");
+        let mut file = File::create(&pending_path).await?;
         for line in self.iter() {
             file.write_all(line.as_bytes()).await?;
             file.write_all(b"\n").await?;
         }
         file.flush().await?;
+        tokio::fs::rename(&pending_path, path).await?;
         Ok(())
     }
 }
