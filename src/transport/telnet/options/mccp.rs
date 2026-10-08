@@ -1,5 +1,6 @@
 use std::{
     env,
+    ffi::OsStr,
     fs::File,
     io::{self, Write},
     mem,
@@ -160,21 +161,30 @@ pub struct CompressableStream<S: AsyncRead> {
     stream: State<S>,
     #[pin]
     dump_file: Option<File>,
+    #[pin]
+    dump_sent_file: Option<File>,
+}
+
+fn append_to_var_file<K: AsRef<OsStr>>(k: K) -> io::Result<Option<File>> {
+    if let Ok(filename) = env::var(k) {
+        if !filename.is_empty() {
+            Ok(Some(
+                File::options().append(true).create(true).open(filename)?,
+            ))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 impl<S: AsyncRead> CompressableStream<S> {
     pub fn new(stream: S) -> io::Result<Self> {
         Ok(CompressableStream {
             stream: State::Uncompressed(stream),
-            dump_file: if let Ok(filename) = env::var("KODACHI_DUMP") {
-                if !filename.is_empty() {
-                    Some(File::options().append(true).create(true).open(filename)?)
-                } else {
-                    None
-                }
-            } else {
-                None
-            },
+            dump_file: append_to_var_file("KODACHI_DUMP")?,
+            dump_sent_file: append_to_var_file("KODACHI_DUMP_SENT")?,
         })
     }
 
@@ -265,10 +275,14 @@ impl<S: AsyncRead + Unpin> AsyncRead for CompressableStream<S> {
 
 impl<S: AsyncWrite + AsyncRead> AsyncWrite for CompressableStream<S> {
     fn poll_write(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, std::io::Error>> {
+        if let Some(mut f) = self.as_mut().project().dump_sent_file.as_pin_mut() {
+            let _ = f.write_all(buf);
+        }
+
         self.project().stream.poll_write(cx, buf)
     }
 
