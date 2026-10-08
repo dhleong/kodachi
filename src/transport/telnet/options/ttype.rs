@@ -51,11 +51,8 @@ impl TelnetOptionHandler for TermTypeOptionHandler {
         negotiation: NegotiationType,
         _stream: DynWriteStream<'_>,
     ) -> io::Result<()> {
-        match negotiation {
-            NegotiationType::Dont => {
-                self.reset();
-            }
-            _ => {}
+        if let NegotiationType::Dont = negotiation {
+            self.reset();
         }
         Ok(())
     }

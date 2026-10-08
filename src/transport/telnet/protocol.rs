@@ -44,12 +44,14 @@ macro_rules! declare_type {
         }
     ) => {
         #[allow(dead_code)]
+        #[allow(clippy::upper_case_acronyms)]
         #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
         pub enum $type_name {
             $($name),*,
             Unknown(u8),
         }
 
+        #[allow(clippy::upper_case_acronyms)]
         impl $type_name {
             #[allow(dead_code)]
             pub fn from_byte(byte: u8) -> Self {
@@ -87,5 +89,6 @@ declare_type!(TelnetOption {
     MCCP2 => 86,
     MCCP3 => 87,
     MSP => 90,
+    MXP => 91,
     GMCP => 201,
 });
