@@ -1,5 +1,7 @@
 use std::{
-    io::{self},
+    env,
+    fs::File,
+    io::{self, Write},
     mem,
     task::Poll,
 };
@@ -156,13 +158,24 @@ impl<S: AsyncRead + AsyncWrite> AsyncWrite for State<S> {
 pub struct CompressableStream<S: AsyncRead> {
     #[pin]
     stream: State<S>,
+    #[pin]
+    dump_file: Option<File>,
 }
 
 impl<S: AsyncRead> CompressableStream<S> {
-    pub fn new(stream: S) -> Self {
-        CompressableStream {
+    pub fn new(stream: S) -> io::Result<Self> {
+        Ok(CompressableStream {
             stream: State::Uncompressed(stream),
-        }
+            dump_file: if let Ok(filename) = env::var("KODACHI_DUMP") {
+                if !filename.is_empty() {
+                    Some(File::options().append(true).create(true).open(filename)?)
+                } else {
+                    None
+                }
+            } else {
+                None
+            },
+        })
     }
 
     pub fn start_decompressing(&mut self, pending: Option<&mut BytesMut>) {
@@ -211,12 +224,13 @@ impl<S: AsyncRead + Unpin> AsyncRead for CompressableStream<S> {
         let len_before = buf.filled().len();
         // If we're in Compress mode and get nothing back, we should unpack back into Uncompressed
         let mut this = self.as_mut().project();
-        match this.stream.as_mut().poll_read(cx, buf) {
+        // let mut f = this.dump_file.as_mut();
+        let result = match this.stream.as_mut().poll_read(cx, buf) {
             Poll::Ready(Ok(())) => {
                 let is_eof = buf.filled().len() == len_before;
                 if is_eof && this.stream.is_compressed() {
                     self.stop_decompressing();
-                    self.project().stream.as_mut().poll_read(cx, buf)
+                    self.as_mut().project().stream.as_mut().poll_read(cx, buf)
                 } else {
                     Poll::Ready(Ok(()))
                 }
@@ -229,13 +243,23 @@ impl<S: AsyncRead + Unpin> AsyncRead for CompressableStream<S> {
                         // that gracefully
                         trace!(target: "mccp", "Ignoring compression error?");
                         self.stop_decompressing();
-                        self.project().stream.as_mut().poll_read(cx, buf)
+                        self.as_mut().project().stream.as_mut().poll_read(cx, buf)
                     }
                     Err(original) => Poll::Ready(Err(original)),
                 }
             }
             result => result,
+        };
+
+        if let Some(mut f) = self.as_mut().project().dump_file.as_pin_mut() {
+            let len_after = buf.filled().len();
+            if len_before < len_after {
+                let (_, new_bytes) = buf.filled().split_at(len_before);
+                let _ = f.write_all(new_bytes);
+            }
         }
+
+        result
     }
 }
 
@@ -321,7 +345,7 @@ mod tests {
         let stream = ZlibEncoder::new(Cursor::new(to_compress))
             .chain(Cursor::new(Bytes::from(" of Grayskull!")));
 
-        let mut compressable = CompressableStream::new(stream);
+        let mut compressable = CompressableStream::new(stream)?;
         compressable.start_decompressing(None);
 
         let mut result = String::default();
@@ -353,7 +377,7 @@ mod tests {
 
         let stream = Cursor::new(compressed);
 
-        let mut wrapper = CompressableStream::new(stream);
+        let mut wrapper = CompressableStream::new(stream)?;
         wrapper.start_decompressing(Some(&mut prefix));
 
         let mut dst = BytesMut::with_capacity(input.len() * 2);

@@ -1,4 +1,4 @@
-use std::io;
+use std::io::{self};
 
 use async_trait::async_trait;
 use bytes::BytesMut;
@@ -63,7 +63,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin + Send> TelnetTransport<S> {
 
         Ok(Self {
             buffer,
-            stream: CompressableStream::new(stream),
+            stream: CompressableStream::new(stream)?,
             telnet: TelnetProcessor::default(),
             options,
         })

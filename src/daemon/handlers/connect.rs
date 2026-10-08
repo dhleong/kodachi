@@ -1,8 +1,6 @@
 use std::{
-    env,
-    fs::File,
     future,
-    io::{self, Write},
+    io::{self},
     sync::Mutex,
 };
 
@@ -39,16 +37,6 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
     mut connection: ConnectionReceiver,
     receiver: &mut R,
 ) -> io::Result<()> {
-    let mut dump = if let Ok(filename) = env::var("KODACHI_DUMP") {
-        if !filename.is_empty() {
-            Some(File::options().append(true).create(true).open(filename)?)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
     let mut connected = true;
 
     // NOTE: It's a bit hacky to do it this way... but it's also
@@ -82,10 +70,6 @@ pub async fn process_connection<T: Transport, R: ProcessorOutputReceiver>(
         tokio::select! {
             incoming = transport.read() => match incoming? {
                 TransportEvent::Data(data) => {
-                    if let Some(f) = &mut dump {
-                        f.write_all(&data)?;
-                    }
-
                     let processor = &connection
                         .state
                         .processor;
