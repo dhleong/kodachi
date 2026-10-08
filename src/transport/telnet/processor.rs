@@ -33,7 +33,6 @@ impl TelnetEvent {
                 buf.put_slice(&[IAC, SB, option.byte()]);
                 buf.put(&mut bytes);
                 buf.put_slice(&[IAC, SE]);
-
                 stream.write_all_buf(&mut buf).await
             }
         }
@@ -58,19 +57,14 @@ impl Writable for TelnetEvent {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum State {
+    #[default]
     Data,
     InterpretAsCommand,
     Negotiate(NegotiationType),
     Subnegotiate,
     SubnegotiateIac,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self::Data
-    }
 }
 
 #[derive(Default)]
