@@ -1,6 +1,6 @@
 use std::io;
 
-use bytes::{Buf, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::net::writable::Writable;
@@ -22,24 +22,19 @@ impl TelnetEvent {
         log::trace!(target: "telnet", ">> {:?}", self);
         match self {
             TelnetEvent::Data(mut bytes) => stream.write_all_buf(&mut bytes).await,
-            TelnetEvent::Command(command) => {
-                stream.write_u8(IAC).await?;
-                stream.write_u8(command.byte()).await
-            }
+            TelnetEvent::Command(command) => stream.write_all(&[IAC, command.byte()]).await,
             TelnetEvent::Negotiate(negotiation, option) => {
-                stream.write_u8(IAC).await?;
-                stream.write_u8(negotiation.byte()).await?;
-                stream.write_u8(option.byte()).await
+                stream
+                    .write_all(&[IAC, negotiation.byte(), option.byte()])
+                    .await
             }
             TelnetEvent::Subnegotiate(option, mut bytes) => {
-                stream.write_u8(IAC).await?;
-                stream.write_u8(SB).await?;
+                let mut buf = BytesMut::with_capacity(5 + bytes.len());
+                buf.put_slice(&[IAC, SB, option.byte()]);
+                buf.put(&mut bytes);
+                buf.put_slice(&[IAC, SE]);
 
-                stream.write_u8(option.byte()).await?;
-                stream.write_all_buf(&mut bytes).await?;
-
-                stream.write_u8(IAC).await?;
-                stream.write_u8(SE).await
+                stream.write_all_buf(&mut buf).await
             }
         }
     }
