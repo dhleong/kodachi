@@ -15,6 +15,7 @@ enum OptionState {
     Accept(NegotiationType),
     Will,
     Do,
+    Ignore,
 }
 
 pub struct OptionsNegotiator {
@@ -71,13 +72,24 @@ impl OptionsNegotiator {
                     return Ok(());
                 }
 
+                (_, &OptionState::Ignore) => {
+                    // Already denied; this is a nop
+                    return Ok(());
+                }
+
                 _ => {} // Ignore and fall through below:
             }
         }
 
         let response_type = match negotiation {
-            NegotiationType::Do => Some(NegotiationType::Wont),
-            NegotiationType::Will => Some(NegotiationType::Dont),
+            NegotiationType::Do => {
+                self.options.insert(option, OptionState::Ignore);
+                Some(NegotiationType::Wont)
+            }
+            NegotiationType::Will => {
+                self.options.insert(option, OptionState::Ignore);
+                Some(NegotiationType::Dont)
+            }
             NegotiationType::Dont => {
                 if self.options.get(&option) == Some(&OptionState::Do) {
                     self.options
@@ -240,6 +252,30 @@ mod tests {
             .await?;
 
         TelnetEvent::Negotiate(NegotiationType::Will, TelnetOption::TermType)
+            .write_all(&mut expected_stream)
+            .await?;
+        assert_eq!(stream.sent, expected_stream.sent);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn will_after_wont_test() -> io::Result<()> {
+        // Server sends DO and we reply WONT; Server later sends WILL anyway; we should ignore
+        let mut handler = OptionsNegotiatorBuilder::default().build();
+
+        let mut stream = TestStream::new();
+
+        handler
+            .negotiate(NegotiationType::Do, TelnetOption::MXP, &mut stream)
+            .await?;
+
+        handler
+            .negotiate(NegotiationType::Will, TelnetOption::MXP, &mut stream)
+            .await?;
+
+        let mut expected_stream = TestStream::new();
+        TelnetEvent::Negotiate(NegotiationType::Wont, TelnetOption::MXP)
             .write_all(&mut expected_stream)
             .await?;
         assert_eq!(stream.sent, expected_stream.sent);
