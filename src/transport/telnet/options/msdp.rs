@@ -54,10 +54,11 @@ impl Readable for MsdpVar {
 
         let value = match ReadableMsdpVal::read(stream)? {
             ReadableMsdpVal::Ok(value) => value,
+            ReadableMsdpVal::None => TransportEventValue::String("".to_string()),
             unexpected => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("Expected MSDP_VAL but got {:?}", unexpected),
+                    format!("Expected MSDP_VAL (reading {name:?} but got {unexpected:?}"),
                 ));
             }
         };
@@ -136,7 +137,7 @@ impl Writable for MsdpVal {
         }
 
         match (self.0, self.1.flat_array) {
-            (TransportEventValue::String(s), _) => stream.write_all(&s.as_bytes()),
+            (TransportEventValue::String(s), _) => stream.write_all(s.as_bytes()),
             (TransportEventValue::Vec(items), false) => {
                 stream.write_all(&[MSDP_ARRAY_OPEN])?;
                 for item in items {
@@ -173,11 +174,11 @@ enum ReadableMsdpVal {
 impl Readable for ReadableMsdpVal {
     fn read<S: io::BufRead>(stream: &mut S) -> io::Result<Self> {
         let bytes = stream.fill_buf()?;
-        let header = match bytes.get(0) {
+        let header = match bytes.first() {
             Some(byte) => *byte,
             None => return Ok(ReadableMsdpVal::None),
         };
-        let next_byte = bytes.get(1).map(|byte| *byte);
+        let next_byte = bytes.get(1).cloned();
         stream.consume(1);
 
         match header {
@@ -211,7 +212,7 @@ impl Readable for ReadableMsdpVal {
                 let mut map = HashMap::new();
                 loop {
                     let buf = stream.fill_buf()?;
-                    if buf.get(0) == Some(&MSDP_TABLE_CLOSE) {
+                    if buf.first() == Some(&MSDP_TABLE_CLOSE) {
                         break;
                     }
 
@@ -239,7 +240,7 @@ impl Readable for ReadableMsdpVal {
                 let content = String::from_utf8_lossy(buf).to_string();
                 let value = TransportEventValue::String(content);
                 stream.consume(string_len);
-                return Ok(ReadableMsdpVal::Ok(value));
+                Ok(ReadableMsdpVal::Ok(value))
             }
         }
     }
@@ -309,11 +310,8 @@ impl TelnetOptionHandler for MsdpOptionHandler {
         let var: MsdpVar = MsdpVar::read(&mut data.reader())?;
         log::trace!(target: "telnet", "<< MSDP {:?} {:?}", var.0, var.1);
 
-        match var.0 {
-            MsdpName::Commands => {
-                // TODO stash capabilities
-            }
-            _ => {} // ignore
+        if let MsdpName::Commands = var.0 {
+            // TODO stash capabilities
         }
 
         self.events
@@ -390,6 +388,15 @@ mod tests {
                 TransportEventValue::String("REPORT".to_string()),
             )])),
         );
+        let source = original.clone().into_bytes();
+
+        let data = MsdpVar::read(&mut source.reader()).unwrap();
+        assert_eq!(data, original);
+    }
+
+    #[test]
+    fn read_empty_var_test() {
+        let original = MsdpVar(MsdpName::List, MsdpVal::string("".to_string()));
         let source = original.clone().into_bytes();
 
         let data = MsdpVar::read(&mut source.reader()).unwrap();
