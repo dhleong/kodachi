@@ -30,6 +30,10 @@ pub struct SendTextProcessor {
 }
 
 impl SendTextProcessor {
+    pub fn clear(&mut self) {
+        self.matchers.clear();
+    }
+
     pub fn register_matcher<R, F>(&mut self, matcher: Matcher, on_match: R)
     where
         R: 'static + (Fn(MatchContext) -> F) + Send + Sync,

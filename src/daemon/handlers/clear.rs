@@ -7,6 +7,7 @@ pub async fn handle(state: LockableState, connection_id: Id) {
     } else {
         return;
     };
+    state.send_processor.lock().await.clear();
     state.processor.lock().unwrap().clear();
     state.ui_state.lock().unwrap().clear();
 }
