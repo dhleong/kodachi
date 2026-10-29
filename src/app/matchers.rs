@@ -32,6 +32,7 @@ pub enum MatcherSpec {
     },
 }
 
+#[derive(Debug)]
 pub struct MatchedResult {
     pub remaining: Option<Ansi>,
     pub context: MatchContext,
@@ -41,6 +42,7 @@ pub struct MatchedResult {
     pub consumed: bool,
 }
 
+#[derive(Debug)]
 pub enum MatchResult {
     Ignored(Ansi),
 
@@ -139,6 +141,8 @@ impl TryInto<Matcher> for MatcherSpec {
 
 #[cfg(test)]
 mod tests {
+    use assert_matches::assert_matches;
+
     use super::*;
 
     #[test]
@@ -338,5 +342,17 @@ mod tests {
         } else {
             panic!("Expected {matcher:?} to match... but it didn't");
         }
+    }
+
+    #[test]
+    fn start_of_line_triggers_there() {
+        let spec = MatcherSpec::Simple {
+            options: Default::default(),
+            source: "^wrap $burrito".to_string(),
+        };
+        let input = "saranwrap alpastor";
+
+        let matcher: Matcher = spec.try_into().unwrap();
+        assert_matches!(matcher.try_match(input.into()), MatchResult::Ignored(_));
     }
 }

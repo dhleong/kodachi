@@ -43,7 +43,7 @@ pub fn unpack_var<'a>(source: &str, capture: &'a Captures) -> Option<SimpleVar<'
         VarLabel::Name(var_name)
     };
 
-    return Some(SimpleVar { range, label });
+    Some(SimpleVar { range, label })
 }
 
 pub fn build_simple_matcher_regex(mut source: &str) -> Result<String, MatcherCompileError> {
@@ -93,7 +93,7 @@ pub fn build_simple_matcher_regex(mut source: &str) -> Result<String, MatcherCom
         pattern.push_str(&regex::escape(&source[last_var_end..]));
     }
 
-    return Ok(pattern);
+    Ok(pattern)
 }
 
 #[cfg(test)]
