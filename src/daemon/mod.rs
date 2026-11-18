@@ -228,6 +228,18 @@ async fn dispatch_request<TUI: ProcessorOutputReceiverFactory + 'static>(
             ));
         }
 
+        ClientRequest::SetHistory {
+            connection_id,
+            entries,
+        } => {
+            tokio::spawn(handlers::set_history::handle(
+                channel,
+                state,
+                connection_id,
+                entries,
+            ));
+        }
+
         ClientRequest::SetPromptContent {
             connection_id,
             group_id,

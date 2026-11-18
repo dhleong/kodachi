@@ -40,6 +40,11 @@ impl<T: Eq + Hash> History<T> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.version = 0;
+    }
+
     pub fn insert(&mut self, entry: T) {
         self.insert_many(vec![entry]);
     }

@@ -97,6 +97,11 @@ pub enum ClientRequest {
         cursor: Option<HistoryCursor>,
     },
 
+    SetHistory {
+        connection_id: Id,
+        entries: Vec<String>,
+    },
+
     ScrollHistory {
         connection_id: Id,
         direction: HistoryScrollDirection,
